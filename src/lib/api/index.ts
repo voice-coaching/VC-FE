@@ -1,15 +1,9 @@
-import { mockApi } from "./mock";
 import { createRemoteApi } from "./remote";
 
-const mode = process.env.VITE_API_MODE ?? "mock";
-const baseUrl = process.env.VITE_API_BASE_URL ?? "/api";
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
-/**
- * The UI only imports this contract. Set VITE_API_MODE=remote when the backend
- * implements the endpoints documented in docs/API_INTEGRATION.md.
- */
-export const api = mode === "remote" ? createRemoteApi(baseUrl) : mockApi;
-export const apiMode = mode;
+/** API 명세서(ver.08/07)의 53개 엔드포인트를 구현한 원격 API 클라이언트입니다. */
+export const api = createRemoteApi(baseUrl);
 
 export { ApiError } from "./client";
 export type * from "./types";

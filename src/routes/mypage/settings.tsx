@@ -14,9 +14,9 @@ export default function AccountSettings() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    api.myPage
-      .getSnapshot()
-      .then(({ account }) => {
+    api.users
+      .getMe()
+      .then((account) => {
         setNickname(account.nickname);
         setEmail(account.email);
       })
@@ -53,10 +53,14 @@ export default function AccountSettings() {
           onClick={async () => {
             setSaving(true);
             try {
-              await api.myPage.updateProfile({ nickname: nickname.trim() });
+              await api.users.updateProfile({ nickname: nickname.trim() });
               setMessage("프로필을 저장했습니다.");
             } catch (reason) {
-              setMessage(reason instanceof Error ? reason.message : "저장하지 못했습니다.");
+              setMessage(
+                reason instanceof Error
+                  ? reason.message
+                  : "저장하지 못했습니다.",
+              );
             } finally {
               setSaving(false);
             }
@@ -77,10 +81,12 @@ export default function AccountSettings() {
         <button
           onClick={async () => {
             if (
-              !window.confirm("계정과 모든 학습 정보를 삭제할까요? 이 작업은 되돌릴 수 없습니다.")
+              !window.confirm(
+                "계정과 모든 학습 정보를 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+              )
             )
               return;
-            await api.auth.withdraw();
+            await api.users.withdraw();
             router.push("/");
           }}
           className="w-full py-3 text-xs font-semibold text-destructive underline"

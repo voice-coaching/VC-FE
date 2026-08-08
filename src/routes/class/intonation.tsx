@@ -1,11 +1,11 @@
-import { LessonList } from "./pronunciation";
+import { CourseCatalog } from "@/components/course-catalog";
 
 export default function IntonationPage() {
   return (
-    <LessonList
+    <CourseCatalog
+      type="INTONATION"
       title="억양 학습하기"
-      desc="문장의 리듬과 끝맺음을 다듬어요."
-      category="intonation"
+      description="문장의 리듬과 끝맺음을 단계별로 다듬어요."
     />
   );
 }

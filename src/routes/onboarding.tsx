@@ -5,22 +5,39 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { cn } from "@/lib/utils";
-import { GOAL_LABELS, LEVEL_LABELS, type Goal, type Level } from "@/lib/app-data";
+import {
+  GOAL_LABELS,
+  LEVEL_LABELS,
+  type Goal,
+  type Level,
+} from "@/lib/app-data";
 import { useProfile } from "@/lib/use-profile";
-import { api } from "@/lib/api";
 
 const IMPROVEMENT_AREAS = ["발음", "억양", "말하기 속도", "강세와 리듬"];
-const PRONUNCIATION_CONCERNS = ["받침", "된소리", "자음", "모음", "특정 고민 없음"];
+const PRONUNCIATION_CONCERNS = [
+  "받침",
+  "된소리",
+  "자음",
+  "모음",
+  "특정 고민 없음",
+];
 const LEARNING_SITUATIONS = ["발표", "대화", "면접", "방송", "회의"];
-const WEAKNESS = ["발음이 뭉개져요", "말이 너무 빨라요", "억양이 단조로워요", "발표만 하면 떨려요"];
+const WEAKNESS = [
+  "발음이 뭉개져요",
+  "말이 너무 빨라요",
+  "억양이 단조로워요",
+  "발표만 하면 떨려요",
+];
 
 export default function Onboarding() {
   const router = useRouter();
-  const { save } = useProfile();
+  const { profile, save } = useProfile();
   const [step, setStep] = useState(0);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [improvementAreas, setImprovementAreas] = useState<string[]>([]);
-  const [pronunciationConcerns, setPronunciationConcerns] = useState<string[]>([]);
+  const [pronunciationConcerns, setPronunciationConcerns] = useState<string[]>(
+    [],
+  );
   const [learningSituations, setLearningSituations] = useState<string[]>([]);
   const [level, setLevel] = useState<Level | null>(null);
   const [minutes, setMinutes] = useState(10);
@@ -32,30 +49,23 @@ export default function Onboarding() {
 
   const toggle = (setter: Dispatch<SetStateAction<string[]>>, value: string) =>
     setter((items) =>
-      items.includes(value) ? items.filter((item) => item !== value) : [...items, value],
+      items.includes(value)
+        ? items.filter((item) => item !== value)
+        : [...items, value],
     );
 
   useEffect(() => {
-    let active = true;
-    api.onboarding
-      .get()
-      .then((saved) => {
-        if (!active || !saved) return;
-        setName(saved.name);
-        setGoals(saved.goals);
-        setImprovementAreas(saved.improvementAreas);
-        setPronunciationConcerns(saved.pronunciationConcerns);
-        setLearningSituations(saved.learningSituations);
-        setLevel(saved.level);
-        setMinutes(saved.minutesPerDay);
-        setWeakness(saved.weakness);
-        setGoalDescription(saved.goalDescription ?? "");
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
+    if (!profile) return;
+    setName(profile.name);
+    setGoals(profile.goals);
+    setImprovementAreas(profile.improvementAreas);
+    setPronunciationConcerns(profile.pronunciationConcerns);
+    setLearningSituations(profile.learningSituations);
+    setLevel(profile.level);
+    setMinutes(profile.minutesPerDay);
+    setWeakness(profile.weakness);
+    setGoalDescription(profile.goalDescription ?? "");
+  }, [profile]);
 
   const steps = [
     {
@@ -66,7 +76,11 @@ export default function Onboarding() {
           items={Object.entries(GOAL_LABELS)}
           selected={goals}
           onSelect={(v) =>
-            setGoals((g) => (g.includes(v as Goal) ? g.filter((x) => x !== v) : [...g, v as Goal]))
+            setGoals((g) =>
+              g.includes(v as Goal)
+                ? g.filter((x) => x !== v)
+                : [...g, v as Goal],
+            )
           }
         />
       ),
@@ -77,7 +91,9 @@ export default function Onboarding() {
       hint: "복수 선택 가능",
       body: (
         <Options
-          items={IMPROVEMENT_AREAS.map((item) => [item, item] as [string, string])}
+          items={IMPROVEMENT_AREAS.map(
+            (item) => [item, item] as [string, string],
+          )}
           selected={improvementAreas}
           onSelect={(value) => toggle(setImprovementAreas, value)}
         />
@@ -89,7 +105,9 @@ export default function Onboarding() {
       hint: "복수 선택 가능",
       body: (
         <Options
-          items={PRONUNCIATION_CONCERNS.map((item) => [item, item] as [string, string])}
+          items={PRONUNCIATION_CONCERNS.map(
+            (item) => [item, item] as [string, string],
+          )}
           selected={pronunciationConcerns}
           onSelect={(value) => toggle(setPronunciationConcerns, value)}
         />
@@ -101,7 +119,9 @@ export default function Onboarding() {
       hint: "복수 선택 가능",
       body: (
         <Options
-          items={LEARNING_SITUATIONS.map((item) => [item, item] as [string, string])}
+          items={LEARNING_SITUATIONS.map(
+            (item) => [item, item] as [string, string],
+          )}
           selected={learningSituations}
           onSelect={(value) => toggle(setLearningSituations, value)}
         />
@@ -158,7 +178,9 @@ export default function Onboarding() {
                 onClick={() => setMinutes(m)}
                 className={cn(
                   "rounded-2xl py-4 text-sm font-semibold transition-colors",
-                  minutes === m ? "bg-foreground text-background" : "bg-surface",
+                  minutes === m
+                    ? "bg-foreground text-background"
+                    : "bg-surface",
                 )}
               >
                 {m}분
@@ -166,7 +188,9 @@ export default function Onboarding() {
             ))}
           </div>
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">이름</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              이름
+            </span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -190,7 +214,9 @@ export default function Onboarding() {
         progress={((step + 1) / steps.length) * 100}
       />
       <div className="flex min-h-[calc(100dvh-84px)] flex-col px-6 pb-10">
-        <h1 className="mt-6 text-2xl leading-snug font-bold whitespace-pre-line">{cur.q}</h1>
+        <h1 className="mt-6 text-2xl leading-snug font-bold whitespace-pre-line">
+          {cur.q}
+        </h1>
         <p className="mt-2 text-xs text-muted-foreground">{cur.hint}</p>
         <div className="mt-8 flex-1">{cur.body}</div>
         <button
@@ -208,19 +234,28 @@ export default function Onboarding() {
                 learningSituations,
                 level: level ?? "beginner",
                 minutesPerDay: minutes,
+                weeklySessions: 5,
                 weakness: weakness ?? WEAKNESS[0],
                 goalDescription: goalDescription.trim(),
               });
               router.push("/home");
             } catch (reason) {
-              setError(reason instanceof Error ? reason.message : "설문을 저장하지 못했습니다.");
+              setError(
+                reason instanceof Error
+                  ? reason.message
+                  : "설문을 저장하지 못했습니다.",
+              );
             } finally {
               setSaving(false);
             }
           }}
           className="w-full rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-30"
         >
-          {saving ? "저장 중…" : step < steps.length - 1 ? "계속" : "내 학습 시작하기"}
+          {saving
+            ? "저장 중…"
+            : step < steps.length - 1
+              ? "계속"
+              : "내 학습 시작하기"}
         </button>
         {error && (
           <p role="alert" className="mt-3 text-center text-xs text-destructive">

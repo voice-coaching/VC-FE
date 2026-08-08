@@ -21,9 +21,9 @@ npm i
 npm run dev
 ```
 
-기본 실행은 mock API를 사용합니다. 실제 백엔드 연결 방법과 명세 커버리지는
+API 명세서(ver.08/07)의 53개 엔드포인트를 사용합니다. 백엔드 연결 방법과 검증 결과는
 [`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md)와
-[`docs/FEATURE_COVERAGE.md`](docs/FEATURE_COVERAGE.md)를 참고하세요.
+[`docs/API_INTEGRATION_REPORT_2026-08-08.md`](docs/API_INTEGRATION_REPORT_2026-08-08.md)를 참고하세요.
 
 ## Built with
 

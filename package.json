@@ -10,6 +10,7 @@
     "start": "next start",
     "preview": "next start",
     "lint": "eslint .",
+    "verify:api": "tsx scripts/verify-api-contract.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -76,6 +77,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
+    "tsx": "^4.23.11",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1"
   }
