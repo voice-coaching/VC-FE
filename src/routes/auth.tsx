@@ -8,6 +8,7 @@ import { api, type SocialProvider } from "@/lib/api";
 import {
   createDevSession,
   DEV_ACCOUNT,
+  forceDevSession,
   isDevAccountEnabled,
 } from "@/lib/dev-account";
 
@@ -45,6 +46,10 @@ export default function Auth() {
   const devAccountEnabled = isDevAccountEnabled();
   const passwordValid =
     password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+
+  useEffect(() => {
+    if (forceDevSession()) router.replace("/home");
+  }, [router]);
 
   useEffect(() => {
     const code = searchParams.get("code");

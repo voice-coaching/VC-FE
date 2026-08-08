@@ -10,20 +10,24 @@ export const DEV_ACCOUNT = Object.freeze({
 
 const DEV_ACCESS_TOKEN = "ttobak-local-development-token";
 
-export function isDevAccountEnabled(nodeEnv = process.env.NODE_ENV) {
-  if (nodeEnv !== "development") return false;
-  return (
-    process.env.NEXT_PUBLIC_ENABLE_DEV_ACCOUNT === "true" ||
-    !process.env.NEXT_PUBLIC_API_BASE_URL
-  );
+export function isDevAccountEnabled(
+  _nodeEnv = process.env.NODE_ENV,
+  apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL,
+  flag = process.env.NEXT_PUBLIC_ENABLE_DEV_ACCOUNT,
+) {
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  return !apiBaseUrl;
 }
 
 export function createDevSession(
   input: LoginInput,
   nodeEnv = process.env.NODE_ENV,
+  apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL,
+  flag = process.env.NEXT_PUBLIC_ENABLE_DEV_ACCOUNT,
 ): AuthSession | null {
   if (
-    !isDevAccountEnabled(nodeEnv) ||
+    !isDevAccountEnabled(nodeEnv, apiBaseUrl, flag) ||
     input.email !== DEV_ACCOUNT.email ||
     input.password !== DEV_ACCOUNT.password
   ) {
@@ -43,6 +47,13 @@ export function createDevSession(
       onboardingCompleted: true,
     },
   };
+}
+
+export function forceDevSession() {
+  return createDevSession({
+    email: DEV_ACCOUNT.email,
+    password: DEV_ACCOUNT.password,
+  });
 }
 
 export function isDevSession() {
