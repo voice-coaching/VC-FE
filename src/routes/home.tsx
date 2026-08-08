@@ -6,15 +6,21 @@ import { Flame, Mic, PenLine, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { GOAL_LABELS } from "@/lib/app-data";
 import { api, type HomeDashboard } from "@/lib/api";
+import { DEV_DASHBOARD, isDevSession } from "@/lib/dev-account";
 import { useProfile } from "@/lib/use-profile";
 
 export default function Home() {
   const { profile } = useProfile();
   const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [devMode] = useState(isDevSession);
   const goal = profile?.goals[0];
 
   useEffect(() => {
+    if (devMode) {
+      setDashboard(DEV_DASHBOARD);
+      return;
+    }
     let active = true;
     api.home
       .get()
@@ -31,7 +37,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [devMode]);
 
   const firstRecommendation = dashboard?.recommendations[0];
 
@@ -46,6 +52,12 @@ export default function Home() {
           </span>
           예요.
         </p>
+        {devMode && (
+          <p className="mt-3 rounded-2xl bg-brand/10 px-4 py-3 text-xs text-brand-foreground">
+            개발용 로컬 세션입니다. 실제 학습 데이터는 백엔드 연결 후
+            표시됩니다.
+          </p>
+        )}
         {error && (
           <p role="alert" className="mt-3 text-xs text-destructive">
             {error}
@@ -88,7 +100,9 @@ export default function Home() {
           </Link>
         ) : (
           <p className="rounded-2xl border border-border px-5 py-4 text-sm text-muted-foreground">
-            추천 학습을 불러오는 중…
+            {devMode
+              ? "개발 계정에는 아직 추천 데이터가 없습니다."
+              : "추천 학습을 불러오는 중…"}
           </p>
         )}
 

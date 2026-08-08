@@ -7,6 +7,7 @@ import {
   type CurrentLevel,
   type OnboardingProfile as ApiProfile,
 } from "./api";
+import { DEV_PROFILE, isDevSession } from "./dev-account";
 
 const KEY = "voco.profile";
 
@@ -81,6 +82,13 @@ export function useProfile() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    if (isDevSession()) {
+      setProfile(DEV_PROFILE);
+      writeProfile(DEV_PROFILE);
+      setHydrated(true);
+      return;
+    }
+
     let active = true;
     Promise.all([api.onboarding.get(), api.users.getMe()])
       .then(([onboarding, user]) => {
@@ -101,6 +109,11 @@ export function useProfile() {
   }, []);
 
   const save = useCallback(async (value: OnboardingAnswers) => {
+    if (isDevSession()) {
+      writeProfile(value);
+      setProfile(value);
+      return value;
+    }
     await api.onboarding.save(toApi(value));
     if (value.name.trim())
       await api.users.updateProfile({ nickname: value.name.trim() });

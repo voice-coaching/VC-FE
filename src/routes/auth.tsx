@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
+import {
+  createDevSession,
+  DEV_ACCOUNT,
+  isDevAccountEnabled,
+} from "@/lib/dev-account";
 
 const SNS = [
   {
@@ -37,6 +42,7 @@ export default function Auth() {
   >("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const devAccountEnabled = isDevAccountEnabled();
   const passwordValid =
     password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
@@ -102,7 +108,8 @@ export default function Auth() {
                     termsAgreed: termsAccepted,
                     privacyAgreed: termsAccepted,
                   })
-                : await api.auth.signIn({ email, password });
+                : (createDevSession({ email, password }) ??
+                  (await api.auth.signIn({ email, password })));
             router.push(session.onboardingRequired ? "/onboarding" : "/home");
           } catch (reason) {
             setError(
@@ -222,6 +229,29 @@ export default function Auth() {
               ? "가입하고 설문 시작"
               : "로그인"}
         </button>
+
+        {devAccountEnabled && (
+          <div className="rounded-2xl border border-dashed border-brand/60 bg-brand/10 p-4 text-xs">
+            <p className="font-semibold">개발용 임시 계정</p>
+            <p className="mt-1 text-muted-foreground">
+              {DEV_ACCOUNT.email} / {DEV_ACCOUNT.password}
+            </p>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => {
+                const session = createDevSession({
+                  email: DEV_ACCOUNT.email,
+                  password: DEV_ACCOUNT.password,
+                });
+                if (session) router.push("/home");
+              }}
+              className="mt-3 rounded-full bg-brand px-4 py-2 font-semibold text-brand-foreground"
+            >
+              임시 계정으로 바로 로그인
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> SNS 계정으로 계속하기

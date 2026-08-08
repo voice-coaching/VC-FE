@@ -10,12 +10,27 @@
 # 백엔드 origin만 입력합니다. 경로의 /api는 클라이언트가 붙입니다.
 # 비워두면 프론트엔드와 동일한 origin을 사용합니다.
 NEXT_PUBLIC_API_BASE_URL=https://backend.example.com
+NEXT_PUBLIC_ENABLE_DEV_ACCOUNT=false
 
 NEXT_PUBLIC_GOOGLE_AUTH_URL=
 NEXT_PUBLIC_KAKAO_AUTH_URL=
 NEXT_PUBLIC_NAVER_AUTH_URL=
 NEXT_PUBLIC_APPLE_AUTH_URL=
 ```
+
+## 개발용 임시 계정
+
+백엔드와 DB가 없는 로컬 개발 환경에서는 다음 계정으로 로그인 화면을 확인할 수 있습니다.
+
+```text
+이메일: dev@ttobak.local
+비밀번호: Dev1234!
+```
+
+- `next dev`에서만 사용할 수 있으며 프로덕션 빌드에서는 비활성화됩니다.
+- `NEXT_PUBLIC_API_BASE_URL`이 비어 있으면 자동으로 활성화됩니다.
+- API 주소가 설정된 상태에서도 사용하려면 `NEXT_PUBLIC_ENABLE_DEV_ACCOUNT=true`를 설정합니다.
+- 로그인과 로컬 프로필·홈 화면 확인 용도이며 실제 서버 데이터는 만들지 않습니다.
 
 백엔드는 credential 요청을 허용해야 합니다. 프론트엔드는 모든 요청에 `credentials: include`를 사용하며, Access Token은 `Authorization: Bearer ...`, Refresh Token은 서버가 설정한 HttpOnly Cookie로 전송합니다.
 

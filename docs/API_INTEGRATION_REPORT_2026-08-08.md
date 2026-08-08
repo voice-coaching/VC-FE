@@ -97,17 +97,28 @@
 
 ## 검증 결과
 
-| 검증                  | 결과 | 증거                                                           |
-| --------------------- | ---- | -------------------------------------------------------------- |
-| API 계약 검증         | 통과 | `npm run verify:api` → `53/53 endpoints + token refresh retry` |
-| TypeScript            | 통과 | `npx tsc --noEmit`                                             |
-| 변경 파일 ESLint      | 통과 | 변경된 TS/TSX 전체 오류 0건                                    |
-| Next.js 프로덕션 빌드 | 통과 | Next.js 16.3.0, 17개 route 생성                                |
-| 브라우저 루트 화면    | 통과 | `HAS_CONTENT`, Next 오류 overlay 없음                          |
-| 브라우저 홈 화면      | 통과 | `HAS_CONTENT`, 탐색 링크 렌더링, Next 오류 overlay 없음        |
-| 패키지 취약점         | 통과 | `npm install` audit: 0 vulnerabilities                         |
+| 검증                      | 결과 | 증거                                                           |
+| ------------------------- | ---- | -------------------------------------------------------------- |
+| API 계약 검증             | 통과 | `npm run verify:api` → `53/53 endpoints + token refresh retry` |
+| 개발 계정 검증            | 통과 | `npm run verify:dev-account`                                   |
+| TypeScript                | 통과 | `npx tsc --noEmit`                                             |
+| 변경 파일 ESLint          | 통과 | 변경된 TS/TSX 전체 오류 0건                                    |
+| Next.js 프로덕션 빌드     | 통과 | Next.js 16.3.0, 17개 route 생성                                |
+| 브라우저 루트 화면        | 통과 | `HAS_CONTENT`, Next 오류 overlay 없음                          |
+| 브라우저 홈 화면          | 통과 | `HAS_CONTENT`, 탐색 링크 렌더링, Next 오류 overlay 없음        |
+| 개발 계정 브라우저 로그인 | 통과 | `/auth` 버튼 → `/home`, 로컬 토큰·개발 배너 확인               |
+| 패키지 취약점             | 통과 | `npm install` audit: 0 vulnerabilities                         |
 
 ## 라이브 백엔드 확인 상태
+
+### 개발용 임시 계정
+
+DB 없이 인증 화면과 기본 홈 화면을 확인할 수 있도록 개발 환경 전용 계정을 추가했습니다.
+
+- 이메일: `dev@ttobak.local`
+- 비밀번호: `Dev1234!`
+- 적용 범위: 로컬 로그인, 개발 세션, 로컬 프로필, 기본 홈 화면
+- 제한: 프로덕션에서는 비활성화되며 실제 API 데이터는 생성하지 않음
 
 현재 저장소와 환경에는 실제 백엔드 origin, 테스트 계정, OAuth 인가 URL이 제공되어 있지 않습니다. 따라서 이번 검증은 프론트엔드 계약·요청 생성·빌드·브라우저 렌더링까지 완료했으며, 실제 서버의 CORS/쿠키/S3/Grok 응답은 아직 확인하지 못했습니다.
 
