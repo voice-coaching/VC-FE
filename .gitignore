@@ -1,23 +1,7 @@
-# Dependencies
 node_modules/
-
-# Next.js build output
 .next/
 out/
-
-# Local environment files
 .env*
 !.env.example
-
-# Tooling and test output
-coverage/
-.vercel/
-.turbo/
-*.tsbuildinfo
 *.log
-
-# OS and editor files
-.DS_Store
-**/.DS_Store
-*.swp
-*.swo
+*.tsbuildinfo

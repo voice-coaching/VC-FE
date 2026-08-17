@@ -20,6 +20,7 @@ const expected = [
   "GET /api/practice-contents?type=SENTENCE&page=0&size=20",
   "GET /api/practice-contents/next?type=SENTENCE&excludeId=1",
   "GET /api/practice-contents/1",
+  "GET /api/practice-contents/1/recommendations?limit=5",
   "GET /api/practice-contents/1/reference-audios",
   "GET /api/reference-audios/1/playback-url",
   "GET /api/courses?type=PRONUNCIATION&page=0&size=20",
@@ -137,6 +138,7 @@ await api.home.getRecentTraining();
 await api.content.list({ type: "SENTENCE", page: 0, size: 20 });
 await api.content.getNext({ type: "SENTENCE", excludeId: 1 });
 await api.content.get(1);
+await api.content.getRecommendations(1, 5);
 await api.content.getReferenceAudios(1);
 await api.content.getReferenceAudioPlaybackUrl(1);
 await api.courses.list({ type: "PRONUNCIATION", page: 0, size: 20 });
@@ -191,8 +193,8 @@ await api.myPage.getWeaknessRecommendations({
 
 assert.equal(
   expected.length,
-  52,
-  "운영 Swagger 엔드포인트 수가 52개여야 합니다.",
+  53,
+  "Notion 명세 엔드포인트 수가 53개여야 합니다.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
@@ -247,5 +249,5 @@ assert.deepEqual(refreshCalls, [
 ]);
 
 console.log(
-  `API contract verification passed: ${expected.length}/${expected.length} Swagger endpoints + token refresh retry`,
+  `API contract verification passed: ${expected.length}/${expected.length} endpoints + token refresh retry`,
 );

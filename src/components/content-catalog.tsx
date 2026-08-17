@@ -4,33 +4,38 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
-import { api, type ContentKind, type Difficulty, type LearningContent } from "@/lib/api";
+import {
+  api,
+  type ContentType,
+  type Difficulty,
+  type PracticeContentSummary,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const DIFFICULTIES: Array<{ value: Difficulty | ""; label: string }> = [
   { value: "", label: "전체" },
-  { value: "beginner", label: "초급" },
-  { value: "intermediate", label: "중급" },
-  { value: "advanced", label: "고급" },
+  { value: "BEGINNER", label: "초급" },
+  { value: "INTERMEDIATE", label: "중급" },
+  { value: "ADVANCED", label: "고급" },
 ];
 
 const difficultyLabel: Record<Difficulty, string> = {
-  beginner: "초급",
-  intermediate: "중급",
-  advanced: "고급",
+  BEGINNER: "초급",
+  INTERMEDIATE: "중급",
+  ADVANCED: "고급",
 };
 
 export function ContentCatalog({
-  kind,
+  type,
   title,
   description,
 }: {
-  kind: ContentKind;
+  type: ContentType;
   title: string;
   description: string;
 }) {
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
-  const [items, setItems] = useState<LearningContent[]>([]);
+  const [items, setItems] = useState<PracticeContentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,13 +44,17 @@ export function ContentCatalog({
     setLoading(true);
     setError(null);
     api.content
-      .list({ kind, difficulty: difficulty || undefined })
+      .list({ type, difficulty: difficulty || undefined, page: 0, size: 20 })
       .then((result) => {
         if (active) setItems(result.items);
       })
       .catch((reason) => {
         if (active)
-          setError(reason instanceof Error ? reason.message : "콘텐츠를 불러오지 못했습니다.");
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "콘텐츠를 불러오지 못했습니다.",
+          );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -53,7 +62,7 @@ export function ContentCatalog({
     return () => {
       active = false;
     };
-  }, [difficulty, kind]);
+  }, [difficulty, type]);
 
   return (
     <AppShell>
@@ -78,7 +87,9 @@ export function ContentCatalog({
           ))}
         </div>
         {loading && (
-          <p className="py-12 text-center text-sm text-muted-foreground">콘텐츠를 불러오는 중…</p>
+          <p className="py-12 text-center text-sm text-muted-foreground">
+            콘텐츠를 불러오는 중…
+          </p>
         )}
         {error && (
           <p
@@ -97,15 +108,21 @@ export function ContentCatalog({
                 className="rounded-3xl border border-border p-5 transition-colors hover:bg-surface"
               >
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{item.title}</span>
                   <span>
-                    {difficultyLabel[item.difficulty]} · 약 {item.estimatedMinutes}분
+                    {item.contentType} · {item.category}
+                  </span>
+                  <span>
+                    {difficultyLabel[item.difficulty]} · 약{" "}
+                    {Math.max(1, Math.ceil(item.estimatedSeconds / 60))}분
                   </span>
                 </div>
-                <p className="mt-2 text-[16px] leading-relaxed font-semibold">{item.script}</p>
-                {item.source && (
-                  <p className="mt-2 text-[11px] text-muted-foreground">출처: {item.source}</p>
-                )}
+                <p className="mt-2 text-[16px] leading-relaxed font-semibold">
+                  {item.title}
+                </p>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {item.category} · 약{" "}
+                  {Math.max(1, Math.ceil(item.estimatedSeconds / 60))}분
+                </p>
               </Link>
             ))}
             {items.length === 0 && (

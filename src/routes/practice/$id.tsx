@@ -1,20 +1,51 @@
-import { AppShell } from "@/components/app-shell";
-import { TopBar } from "@/components/top-bar";
-import { PracticeSession } from "@/components/practice-session";
-import type { PracticeSentence } from "@/lib/app-data";
+"use client";
 
-export default function Practice({ sentence }: { sentence: PracticeSentence }) {
-  const back =
-    sentence.category === "pronunciation"
-      ? "/class/pronunciation"
-      : sentence.category === "intonation"
-        ? "/class/intonation"
-        : "/home";
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { PracticeSession } from "@/components/practice-session";
+import { TopBar } from "@/components/top-bar";
+import { api, type PracticeContent } from "@/lib/api";
+
+export default function Practice({ contentId }: { contentId: string }) {
+  const [content, setContent] = useState<PracticeContent | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api.content
+      .get(contentId)
+      .then((value) => active && setContent(value))
+      .catch(
+        (reason) =>
+          active &&
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "콘텐츠를 불러오지 못했습니다.",
+          ),
+      );
+    return () => {
+      active = false;
+    };
+  }, [contentId]);
 
   return (
     <AppShell nav={false}>
-      <TopBar to={back} progress={40} />
-      <PracticeSession sentence={sentence} />
+      <TopBar to="/home" progress={40} />
+      {error ? (
+        <p
+          role="alert"
+          className="px-5 py-12 text-center text-sm text-destructive"
+        >
+          {error}
+        </p>
+      ) : content ? (
+        <PracticeSession content={content} />
+      ) : (
+        <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+          콘텐츠를 불러오는 중…
+        </p>
+      )}
     </AppShell>
   );
 }

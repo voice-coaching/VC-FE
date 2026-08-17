@@ -267,7 +267,7 @@ function authSession(): AuthSession {
     onboardingRequired: false,
     user: {
       id: account.id,
-      email: account.email ?? undefined,
+      email: account.email,
       nickname: account.nickname,
       onboardingCompleted: true,
     },
@@ -450,6 +450,16 @@ export function createDevApi(): ApiContract {
               String(item.id) !== String(filters.excludeId ?? ""),
           ) ?? findContent(101),
         ),
+      getRecommendations: async (contentId, limit = 5) =>
+        contents
+          .filter((item) => String(item.id) !== String(contentId))
+          .slice(0, limit)
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            contentType: item.contentType,
+            similarityReason: "비슷한 학습 목표",
+          })),
       getReferenceAudios: async (contentId) => {
         const data: ReferenceAudio[] = [
           {

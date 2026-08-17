@@ -1,9 +1,5 @@
 # API ver.08/07 전체 연동 작업 보고서
 
-> 이 문서는 2026-08-08 당시 계약의 작업 기록입니다. 현재 계약은
-> [API_INTEGRATION.md](./API_INTEGRATION.md)를 기준으로 하며, 운영 Swagger에서 제거된
-> 콘텐츠별 추천 API를 포함한 아래 53개 목록은 현재 기준이 아닙니다.
-
 작업일: 2026-08-08  
 기준 명세: [Notion API 명세서(ver.08/07)](https://app.notion.com/p/3a4bf91c409e8310bfc001e014b3bdff)
 

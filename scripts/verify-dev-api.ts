@@ -62,6 +62,7 @@ const contentPage = await endpoint(
 assert.ok(contentPage.items.length > 0);
 await endpoint(api.content.get(101));
 await endpoint(api.content.getNext({ type: "SENTENCE", excludeId: 101 }));
+await endpoint(api.content.getRecommendations(101, 5));
 await endpoint(api.content.getReferenceAudios(101));
 await endpoint(api.content.getReferenceAudioPlaybackUrl(1));
 
@@ -134,7 +135,7 @@ await endpoint(api.myPage.deleteTrainingSession(400));
 await endpoint(api.auth.signOut());
 await endpoint(api.users.withdraw());
 
-assert.equal(endpointCount, 52);
+assert.equal(endpointCount, 53);
 console.log(
-  `Development API verification passed: ${endpointCount}/52 endpoints`,
+  `Development API verification passed: ${endpointCount}/53 endpoints`,
 );

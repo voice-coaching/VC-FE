@@ -1,13 +1,6 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-<<<<<<< Updated upstream
-import { useState, type ReactNode } from "react";
-
-export function Providers({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-=======
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { forceDevSession } from "@/lib/dev-account";
@@ -21,9 +14,15 @@ export function Providers({ children }: { children: ReactNode }) {
     // Access Token이 없거나 만료된 경우 보호 API의 401 처리에서 HttpOnly
     // Refresh Token 쿠키로 갱신하고 동일 요청을 한 번 재시도합니다.
     void api.users.getMe().catch(() => undefined);
+import { useEffect, useState, type ReactNode } from "react";
+import { forceDevSession } from "@/lib/dev-account";
+
+export function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  useEffect(() => {
+    forceDevSession();
   }, []);
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
->>>>>>> Stashed changes
 }
