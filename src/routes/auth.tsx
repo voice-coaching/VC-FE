@@ -1,10 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+<<<<<<< Updated upstream
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
+=======
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { TopBar } from "@/components/top-bar";
+import { api, type SocialProvider } from "@/lib/api";
+import {
+  createDevSession,
+  DEV_ACCOUNT,
+  forceDevSession,
+  isDevAccountEnabled,
+} from "@/lib/dev-account";
+import {
+  clearOAuthAttempt,
+  createOAuthAttempt,
+  getOAuthAuthorizationUrl,
+} from "@/lib/oauth";
+>>>>>>> Stashed changes
 
 const SNS = [
   { provider: "kakao", label: "카카오", cls: "bg-warning text-warning-foreground" },
@@ -13,7 +31,10 @@ const SNS = [
     label: "Google",
     cls: "border border-border bg-background text-foreground",
   },
+<<<<<<< Updated upstream
   { provider: "naver", label: "네이버", cls: "bg-success text-success-foreground" },
+=======
+>>>>>>> Stashed changes
 ] satisfies Array<{ provider: SocialProvider; label: string; cls: string }>;
 
 export default function Auth() {
@@ -28,7 +49,21 @@ export default function Auth() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+<<<<<<< Updated upstream
   const passwordValid = password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+=======
+  const devAccountEnabled = isDevAccountEnabled();
+  const passwordValid =
+    password.length >= 8 &&
+    password.length <= 72 &&
+    /[A-Za-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password);
+
+  useEffect(() => {
+    if (forceDevSession()) router.replace("/home");
+  }, [router]);
+>>>>>>> Stashed changes
 
   async function checkEmail() {
     if (!email) return;
@@ -115,7 +150,7 @@ export default function Auth() {
             />
             {mode === "signup" && password && !passwordValid && (
               <span className="text-[11px] text-destructive">
-                영문과 숫자를 포함해 8자 이상 입력해 주세요.
+                영문, 숫자, 특수문자를 포함해 8~72자로 입력해 주세요.
               </span>
             )}
           </label>
@@ -180,12 +215,28 @@ export default function Auth() {
                 setSubmitting(true);
                 setError(null);
                 try {
+<<<<<<< Updated upstream
                   const result = await api.auth.socialLogin(s.provider);
                   if (result.authorizationUrl) window.location.assign(result.authorizationUrl);
                   else if (result.session)
                     router.push(result.session.user.onboardingCompleted ? "/home" : "/onboarding");
                 } catch (reason) {
                   setError(reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.");
+=======
+                  const attempt = createOAuthAttempt(s.provider);
+                  const authorizationUrl = getOAuthAuthorizationUrl(
+                    s.provider,
+                    attempt,
+                  );
+                  window.location.assign(authorizationUrl);
+                } catch (reason) {
+                  clearOAuthAttempt(s.provider);
+                  setError(
+                    reason instanceof Error
+                      ? reason.message
+                      : "SNS 로그인에 실패했습니다.",
+                  );
+>>>>>>> Stashed changes
                 } finally {
                   setSubmitting(false);
                 }

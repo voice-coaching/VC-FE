@@ -32,6 +32,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
 
   return {
     auth: {
+<<<<<<< Updated upstream
       checkEmail: (email) => request(`/auth/email/check${query({ email })}`, { skipAuth: true }),
       signUp: (input) =>
         persistSession(request("/auth/signup", { method: "POST", body: input, skipAuth: true })),
@@ -47,6 +48,70 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             skipAuth: true,
           }),
         ),
+=======
+      checkEmail: (email) =>
+        request(`/api/auth/email-availability${query({ email })}`, {
+          skipAuth: true,
+        }),
+      async signUp(input) {
+        const data = await request<{
+          userId: Id;
+          email: string;
+          nickname: string;
+          accessToken: string;
+          tokenType: string;
+          expiresIn: number;
+          onboardingRequired: boolean;
+        }>("/api/auth/signup", { method: "POST", body: input, skipAuth: true });
+        return persistSession({
+          accessToken: data.accessToken,
+          tokenType: data.tokenType,
+          expiresIn: data.expiresIn,
+          onboardingRequired: data.onboardingRequired,
+          user: { id: data.userId, email: data.email, nickname: data.nickname },
+        });
+      },
+      async signIn(input) {
+        const data = await request<{
+          accessToken: string;
+          tokenType: string;
+          expiresIn: number;
+          user: { id: Id; nickname: string; onboardingCompleted: boolean };
+        }>("/api/auth/login", { method: "POST", body: input, skipAuth: true });
+        return persistSession({
+          ...data,
+          onboardingRequired: !data.user.onboardingCompleted,
+        });
+      },
+      async socialLogin(input) {
+        const data = await request<{
+          accessToken: string;
+          tokenType: string;
+          expiresIn: number;
+          isNewUser: boolean;
+          onboardingRequired: boolean;
+          user: { id: Id; email?: string; nickname: string };
+        }>("/api/auth/social-login", {
+          method: "POST",
+          body: input,
+          skipAuth: true,
+        });
+        return persistSession(data);
+      },
+      async refresh() {
+        const data = await request<{
+          accessToken: string;
+          tokenType: string;
+          expiresIn: number;
+        }>("/api/auth/token/refresh", {
+          method: "POST",
+          skipAuth: true,
+          skipRefresh: true,
+        });
+        saveAccessToken(data.accessToken);
+        return data;
+      },
+>>>>>>> Stashed changes
       async signOut() {
         try {
           await request("/auth/logout", { method: "POST" });
@@ -64,6 +129,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       save: (input) => request("/onboarding", { method: "PUT", body: input }),
     },
     content: {
+<<<<<<< Updated upstream
       list: (filters: ContentFilters = {}) =>
         request(`/contents${query(filters as Record<string, string | number | undefined>)}`),
       get: (id) => request(`/contents/${encodeURIComponent(id)}`),
@@ -72,6 +138,26 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       getPrevious: (id) =>
         request<LearningContent | null>(`/contents/${encodeURIComponent(id)}/previous`),
       getReferenceAudio: (id) => request(`/contents/${encodeURIComponent(id)}/reference-audio`),
+=======
+      list: (filters = {}) =>
+        request<PageResult<PracticeContentSummary>>(
+          `/api/practice-contents${query(filters)}`,
+        ),
+      get: (contentId) =>
+        request<PracticeContent>(`/api/practice-contents/${id(contentId)}`),
+      getNext: (filters) =>
+        request<PracticeContent>(
+          `/api/practice-contents/next${query(filters)}`,
+        ),
+      async getReferenceAudios(contentId) {
+        const data = await request<{ items: ReferenceAudio[] }>(
+          `/api/practice-contents/${id(contentId)}/reference-audios`,
+        );
+        return data.items;
+      },
+      getReferenceAudioPlaybackUrl: (audioId) =>
+        request(`/api/reference-audios/${id(audioId)}/playback-url`),
+>>>>>>> Stashed changes
     },
     practice: {
       async analyze(input, options) {

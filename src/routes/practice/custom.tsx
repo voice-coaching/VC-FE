@@ -42,6 +42,7 @@ export default function Custom() {
   return (
     <AppShell nav={false}>
       <TopBar to="/home" title="내 문장 연습" />
+<<<<<<< Updated upstream
       {sentence ? (
         <PracticeSession sentence={sentence} />
       ) : (
@@ -82,6 +83,23 @@ export default function Custom() {
             disabled={text.trim().length < 4}
             onClick={() => setSentence(buildSentence(text.trim()))}
             className="w-full rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-30"
+=======
+      <div className="px-5 pb-10">
+        <h1 className="text-2xl font-bold tracking-tight">
+          내 문장을 넣어서 연습하기
+        </h1>
+        <div className="mt-6 rounded-3xl bg-surface p-5">
+          <p className="text-sm font-semibold">
+            현재 API 버전에서는 준비 중인 기능입니다.
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            현재 운영 Swagger에 사용자 문장 생성 엔드포인트가 없어 임의의 콘텐츠
+            ID로 분석을 요청하지 않습니다.
+          </p>
+          <Link
+            href="/sentences"
+            className="mt-5 block rounded-full bg-foreground py-3.5 text-center text-xs font-semibold text-background"
+>>>>>>> Stashed changes
           >
             이 문장으로 연습 시작
           </button>

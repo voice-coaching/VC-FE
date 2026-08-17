@@ -1,5 +1,6 @@
 # 기능 명세 커버리지
 
+<<<<<<< Updated upstream
 기준: `기능 명세서 3a4fd927f58c8008ba3bd5c44b11ed31.pdf` 전체 10페이지.
 
 상태 정의:
@@ -34,3 +35,18 @@
 6. 실데이터로 카테고리·난이도·페이지네이션·기록 기간 필터 검증
 
 명세 항목이 “연결 준비” 또는 “계약 준비”인 것은 서버 기능이 완료됐다는 의미가 아닙니다. 백엔드 없이 구현 가능한 사용자 흐름과 교체 경계를 마련했다는 의미입니다.
+=======
+현재 구현 기준은 2026-08-17 확인한 **운영 Swagger**입니다.
+
+- 52개 전체 operation의 연결 방식과 검증 명령은
+  [API_INTEGRATION.md](./API_INTEGRATION.md)를 확인하세요.
+- 로컬 실행 환경, 인증/쿠키 정책, 실서버 점검 절차는
+  [API_INTEGRATION.md](./API_INTEGRATION.md)를 확인하세요.
+- 현재 서버에 없는 사용자 입력 문장 API는
+  [API_INTEGRATION_GAPS.md](./API_INTEGRATION_GAPS.md)를 확인하세요.
+
+이 문서가 이전에 참조하던 PDF 기반 상태표와 mock API는 더 이상 현재 구현의
+기준이 아닙니다. 사용자 정의 문장 생성은 운영 Swagger에 생성 엔드포인트가
+없으므로, 임의의 `contentId`를 만들어 전송하지 않고 화면에서 지원 범위를
+안내합니다.
+>>>>>>> Stashed changes

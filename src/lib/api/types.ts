@@ -6,6 +6,7 @@ import type {
   SyllableFeedback,
 } from "@/lib/app-data";
 
+<<<<<<< Updated upstream
 export type SocialProvider = "kakao" | "google" | "naver" | "apple";
 export type Difficulty = "beginner" | "intermediate" | "advanced";
 export type ContentKind = "news" | "sentence" | "announcer" | "pronunciation" | "intonation";
@@ -13,6 +14,54 @@ export type ContentKind = "news" | "sentence" | "announcer" | "pronunciation" | 
 export interface UserAccount {
   id: string;
   email: string;
+=======
+export type SocialProvider = "GOOGLE" | "KAKAO";
+export type UserStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
+export type CurrentLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type ContentType = "NEWS" | "SENTENCE" | "ANNOUNCER" | "CLASS_PRACTICE";
+export type LearningFocus = "PRONUNCIATION" | "INTONATION" | "BOTH";
+export type Difficulty = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type PublishStatus = "DRAFT" | "PUBLISHED" | "HIDDEN";
+export type CourseType = "PRONUNCIATION" | "INTONATION";
+export type CourseStepType =
+  "THEORY" | "AUDIO_EXAMPLE" | "PRACTICE" | "RESULT_REVIEW";
+export type CourseProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+export type TrainingSessionStatus =
+  "RECORDING" | "UPLOADING" | "ANALYZING" | "COMPLETED" | "FAILED" | "CANCELED";
+export type RecordingQualityStatus =
+  | "PENDING"
+  | "PASS"
+  | "LOW_VOLUME"
+  | "TOO_NOISY"
+  | "TOO_SHORT"
+  | "NO_SPEECH"
+  | "FAILED";
+export type AnalysisStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type SegmentMatchType =
+  "MATCH" | "SUBSTITUTION" | "OMISSION" | "ADDITION";
+export type SegmentResultStatus = "NORMAL" | "CAUTION" | "NEEDS_IMPROVEMENT";
+export type SpeedStatus = "TOO_SLOW" | "NORMAL" | "TOO_FAST" | "SLOW" | "FAST";
+
+export interface ApiEnvelope<T> {
+  result: boolean;
+  message: string;
+  data: T;
+  code?: string;
+}
+
+export interface PageResult<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages?: number;
+  hasNext?: boolean;
+}
+
+export interface UserAccount {
+  id: Id;
+  email: string | null;
+>>>>>>> Stashed changes
   nickname: string;
   provider: "email" | SocialProvider;
   onboardingCompleted: boolean;
@@ -159,12 +208,32 @@ export interface ApiContract {
     save(input: OnboardingAnswers): Promise<OnboardingAnswers>;
   };
   content: {
+<<<<<<< Updated upstream
     list(filters?: ContentFilters): Promise<PageResult<LearningContent>>;
     get(id: string): Promise<LearningContent>;
     getRecommendations(): Promise<LearningContent[]>;
     getNext(id: string): Promise<LearningContent | null>;
     getPrevious(id: string): Promise<LearningContent | null>;
     getReferenceAudio(id: string): Promise<{ url: string | null }>;
+=======
+    list(filters?: {
+      type?: ContentType;
+      category?: string;
+      difficulty?: Difficulty;
+      focus?: LearningFocus;
+      page?: number;
+      size?: number;
+    }): Promise<PageResult<PracticeContentSummary>>;
+    get(id: Id): Promise<PracticeContent>;
+    getNext(filters: {
+      type: ContentType;
+      category?: string;
+      difficulty?: Difficulty;
+      excludeId?: Id;
+    }): Promise<PracticeContent>;
+    getReferenceAudios(id: Id): Promise<ReferenceAudio[]>;
+    getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
+>>>>>>> Stashed changes
   };
   practice: {
     analyze(
