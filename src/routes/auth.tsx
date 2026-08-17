@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { TopBar } from "@/components/top-bar";
+import { api, type SocialProvider } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -23,6 +27,7 @@ const SNS = [
     label: "Google",
     cls: "border border-border bg-background text-foreground",
   },
+
   {
     provider: "NAVER",
     label: "네이버",
@@ -43,6 +48,13 @@ export default function Auth() {
   >("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const devAccountEnabled = isDevAccountEnabled();
+  const passwordValid =
+    password.length >= 8 &&
+    password.length <= 72 &&
+    /[A-Za-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password);
   const devAccountEnabled = isDevAccountEnabled();
   const passwordValid =
     password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
@@ -77,7 +89,6 @@ export default function Auth() {
       )
       .finally(() => setSubmitting(false));
   }, [router, searchParams]);
-
   async function checkEmail() {
     if (!email) return;
     setEmailStatus("checking");
@@ -178,7 +189,7 @@ export default function Auth() {
             />
             {mode === "signup" && password && !passwordValid && (
               <span className="text-[11px] text-destructive">
-                영문과 숫자를 포함해 8자 이상 입력해 주세요.
+                영문, 숫자, 특수문자를 포함해 8~72자로 입력해 주세요.
               </span>
             )}
           </label>
@@ -273,6 +284,14 @@ export default function Auth() {
                 setSubmitting(true);
                 setError(null);
                 try {
+                  const attempt = createOAuthAttempt(s.provider);
+                  const authorizationUrl = getOAuthAuthorizationUrl(
+                    s.provider,
+                    attempt,
+                  );
+                  window.location.assign(authorizationUrl);
+                } catch (reason) {
+                  clearOAuthAttempt(s.provider);
                   const urls: Record<SocialProvider, string | undefined> = {
                     GOOGLE: process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
                     KAKAO: process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,

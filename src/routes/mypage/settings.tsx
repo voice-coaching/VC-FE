@@ -18,7 +18,7 @@ export default function AccountSettings() {
       .getMe()
       .then((account) => {
         setNickname(account.nickname);
-        setEmail(account.email);
+        setEmail(account.email ?? "");
       })
       .catch(() => setMessage("프로필을 불러오지 못했습니다."));
   }, []);
