@@ -1,15 +1,14 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
-import { forceDevSession } from "@/lib/dev-account";
+import { useState, type ReactNode } from "react";
+import { SessionGate } from "@/components/session-gate";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
-  useEffect(() => {
-    forceDevSession();
-  }, []);
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionGate>{children}</SessionGate>
+    </QueryClientProvider>
   );
 }

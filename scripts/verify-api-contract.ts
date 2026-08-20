@@ -111,7 +111,7 @@ await api.auth.signIn({ email: "test@example.com", password: "Password1!" });
 await api.auth.socialLogin({
   provider: "GOOGLE",
   authorizationCode: "code",
-  redirectUri: "http://localhost/auth",
+  redirectUri: "http://localhost:3000/oauth/google/callback",
 });
 await api.auth.refresh();
 await api.auth.signOut();

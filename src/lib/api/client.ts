@@ -12,22 +12,18 @@ export class ApiError extends Error {
   }
 }
 
-const ACCESS_TOKEN_KEY = "ttobak.accessToken";
+let accessToken: string | null = null;
 
-export function saveAccessToken(accessToken: string) {
-  if (typeof window !== "undefined")
-    window.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+export function saveAccessToken(value: string) {
+  accessToken = value;
 }
 
 export function clearAccessToken() {
-  if (typeof window !== "undefined")
-    window.localStorage.removeItem(ACCESS_TOKEN_KEY);
+  accessToken = null;
 }
 
 export function getAccessToken() {
-  return typeof window === "undefined"
-    ? null
-    : window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  return accessToken;
 }
 
 interface RequestOptions extends Omit<RequestInit, "body"> {

@@ -11,6 +11,9 @@ export default function AccountSettings() {
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [accountAction, setAccountAction] = useState<
+    "logout" | "withdraw" | null
+  >(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,15 +73,28 @@ export default function AccountSettings() {
           {saving ? "저장 중…" : "프로필 저장"}
         </button>
         <button
+          disabled={accountAction != null}
           onClick={async () => {
-            await api.auth.signOut();
-            router.push("/auth");
+            setAccountAction("logout");
+            setMessage(null);
+            try {
+              await api.auth.signOut();
+              router.replace("/auth?mode=login");
+            } catch (reason) {
+              setMessage(
+                reason instanceof Error
+                  ? reason.message
+                  : "로그아웃하지 못했습니다.",
+              );
+              setAccountAction(null);
+            }
           }}
-          className="w-full rounded-full border border-border py-4 text-sm font-semibold"
+          className="w-full rounded-full border border-border py-4 text-sm font-semibold disabled:opacity-50"
         >
-          로그아웃
+          {accountAction === "logout" ? "로그아웃 중…" : "로그아웃"}
         </button>
         <button
+          disabled={accountAction != null}
           onClick={async () => {
             if (
               !window.confirm(
@@ -86,12 +102,23 @@ export default function AccountSettings() {
               )
             )
               return;
-            await api.users.withdraw();
-            router.push("/");
+            setAccountAction("withdraw");
+            setMessage(null);
+            try {
+              await api.users.withdraw();
+              router.replace("/");
+            } catch (reason) {
+              setMessage(
+                reason instanceof Error
+                  ? reason.message
+                  : "회원 탈퇴를 완료하지 못했습니다.",
+              );
+              setAccountAction(null);
+            }
           }}
-          className="w-full py-3 text-xs font-semibold text-destructive underline"
+          className="w-full py-3 text-xs font-semibold text-destructive underline disabled:opacity-50"
         >
-          회원 탈퇴
+          {accountAction === "withdraw" ? "탈퇴 처리 중…" : "회원 탈퇴"}
         </button>
       </div>
     </AppShell>

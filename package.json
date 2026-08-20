@@ -11,8 +11,6 @@
     "preview": "next start",
     "lint": "eslint .",
     "verify:api": "tsx scripts/verify-api-contract.ts",
-    "verify:dev-api": "tsx scripts/verify-dev-api.ts",
-    "verify:dev-account": "tsx scripts/verify-dev-account.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

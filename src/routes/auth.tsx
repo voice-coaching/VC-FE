@@ -1,16 +1,17 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
+import { safeInternalPath } from "@/lib/navigation";
 import {
-  createDevSession,
-  DEV_ACCOUNT,
-  forceDevSession,
-  isDevAccountEnabled,
-} from "@/lib/dev-account";
+  clearOAuthAttempt,
+  createOAuthAttempt,
+  getOAuthAuthorizationUrl,
+  isOAuthProviderConfigured,
+} from "@/lib/oauth";
 
 const SNS = [
   {
@@ -30,10 +31,16 @@ const SNS = [
   },
 ] satisfies Array<{ provider: SocialProvider; label: string; cls: string }>;
 
+const CONFIGURED_SNS = SNS.filter(({ provider }) =>
+  isOAuthProviderConfigured(provider),
+);
+
 export default function Auth() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+  const [mode, setMode] = useState<"signup" | "login">(() =>
+    searchParams.get("mode") === "login" ? "login" : "signup",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
@@ -43,49 +50,64 @@ export default function Auth() {
   >("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const devAccountEnabled = isDevAccountEnabled();
+  const oauthStarted = useRef(false);
+  const emailCheckId = useRef(0);
+  const returnTo = safeInternalPath(searchParams.get("next"), "/home");
   const passwordValid =
     password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
-  useEffect(() => {
-    if (forceDevSession()) router.replace("/home");
-  }, [router]);
+  const startOAuth = useCallback(
+    (provider: SocialProvider) => {
+      const attempt = createOAuthAttempt(provider, returnTo);
+      const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
+      window.location.assign(authorizationUrl);
+    },
+    [returnTo],
+  );
 
   useEffect(() => {
-    const code = searchParams.get("code");
-    const provider = searchParams.get("provider")?.toUpperCase() as
-      SocialProvider | undefined;
-    if (!code || !provider || !SNS.some((item) => item.provider === provider))
+    const provider = searchParams.get("provider")?.toUpperCase();
+    const requestedProvider = SNS.find((item) => item.provider === provider);
+    if (oauthStarted.current || !requestedProvider) return;
+
+    oauthStarted.current = true;
+    if (!CONFIGURED_SNS.includes(requestedProvider)) {
+      setError(`${requestedProvider.label} OAuth 설정이 없습니다.`);
       return;
+    }
     setSubmitting(true);
-    setError(null);
-    api.auth
-      .socialLogin({
-        provider,
-        authorizationCode: code,
-        redirectUri: `${window.location.origin}/auth?provider=${provider}`,
-      })
-      .then((session) =>
-        router.replace(session.onboardingRequired ? "/onboarding" : "/home"),
-      )
-      .catch((reason) =>
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "SNS 로그인에 실패했습니다.",
-        ),
-      )
-      .finally(() => setSubmitting(false));
-  }, [router, searchParams]);
+    try {
+      startOAuth(provider as SocialProvider);
+    } catch (reason) {
+      clearOAuthAttempt(provider as SocialProvider);
+      setError(
+        reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.",
+      );
+      setSubmitting(false);
+    }
+  }, [searchParams, startOAuth]);
 
   async function checkEmail() {
-    if (!email) return;
+    const candidate = email.trim();
+    if (!candidate) return false;
+    const requestId = ++emailCheckId.current;
     setEmailStatus("checking");
+    setError(null);
     try {
-      const result = await api.auth.checkEmail(email);
+      const result = await api.auth.checkEmail(candidate);
+      if (requestId !== emailCheckId.current) return false;
       setEmailStatus(result.available ? "available" : "used");
-    } catch {
+      if (!result.available) setError("이미 가입된 이메일입니다.");
+      return result.available;
+    } catch (reason) {
+      if (requestId !== emailCheckId.current) return false;
       setEmailStatus("idle");
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "이메일 사용 가능 여부를 확인하지 못했습니다.",
+      );
+      return false;
     }
   }
 
@@ -96,9 +118,16 @@ export default function Auth() {
         className="flex flex-col gap-6 px-6 pt-6"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (mode === "signup" && emailStatus !== "available") {
+            const available = await checkEmail();
+            if (!available) return;
+          }
           if (
             mode === "signup" &&
-            (!passwordValid || !termsAccepted || emailStatus === "used")
+            (!passwordValid ||
+              !nickname.trim() ||
+              !termsAccepted ||
+              emailStatus === "used")
           )
             return;
           setSubmitting(true);
@@ -107,15 +136,16 @@ export default function Auth() {
             const session =
               mode === "signup"
                 ? await api.auth.signUp({
-                    email,
+                    email: email.trim(),
                     password,
-                    nickname: nickname.trim() || "또박이",
+                    nickname: nickname.trim(),
                     termsAgreed: termsAccepted,
                     privacyAgreed: termsAccepted,
                   })
-                : (createDevSession({ email, password }) ??
-                  (await api.auth.signIn({ email, password })));
-            router.push(session.onboardingRequired ? "/onboarding" : "/home");
+                : await api.auth.signIn({ email: email.trim(), password });
+            router.replace(
+              session.onboardingRequired ? "/onboarding" : returnTo,
+            );
           } catch (reason) {
             setError(
               reason instanceof Error
@@ -134,26 +164,46 @@ export default function Auth() {
         </h1>
 
         <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="auth-email"
+              className="text-xs font-medium text-muted-foreground"
+            >
               이메일
-            </span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setEmailStatus("idle");
-              }}
-              onBlur={() => {
-                if (mode === "signup") void checkEmail();
-              }}
-              placeholder="name@email.com"
-              className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-            />
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="auth-email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => {
+                  emailCheckId.current += 1;
+                  setEmail(e.target.value);
+                  setEmailStatus("idle");
+                  setError(null);
+                }}
+                onBlur={() => {
+                  if (mode === "signup") void checkEmail();
+                }}
+                placeholder="name@email.com"
+                autoComplete="email"
+                className="min-w-0 flex-1 rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+              />
+              {mode === "signup" && (
+                <button
+                  type="button"
+                  disabled={!email.trim() || emailStatus === "checking"}
+                  onClick={() => void checkEmail()}
+                  className="shrink-0 rounded-2xl border border-border px-4 text-xs font-semibold disabled:opacity-30"
+                >
+                  중복 확인
+                </button>
+              )}
+            </div>
             {mode === "signup" && emailStatus !== "idle" && (
               <span
+                role="status"
                 className={`text-[11px] ${emailStatus === "used" ? "text-destructive" : "text-muted-foreground"}`}
               >
                 {emailStatus === "checking"
@@ -163,7 +213,7 @@ export default function Auth() {
                     : "이미 사용 중인 이메일입니다."}
               </span>
             )}
-          </label>
+          </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">
               비밀번호
@@ -174,6 +224,9 @@ export default function Auth() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="8자 이상"
+              autoComplete={
+                mode === "signup" ? "new-password" : "current-password"
+              }
               className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
             />
             {mode === "signup" && password && !passwordValid && (
@@ -188,9 +241,10 @@ export default function Auth() {
                 닉네임
               </span>
               <input
+                required
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="또박이"
+                placeholder="닉네임을 입력해 주세요"
                 className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
               />
             </label>
@@ -223,8 +277,12 @@ export default function Auth() {
           type="submit"
           disabled={
             submitting ||
+            emailStatus === "checking" ||
             (mode === "signup" &&
-              (!passwordValid || !termsAccepted || emailStatus === "used"))
+              (!passwordValid ||
+                !nickname.trim() ||
+                !termsAccepted ||
+                emailStatus === "used"))
           }
           className="w-full rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-30"
         >
@@ -235,36 +293,13 @@ export default function Auth() {
               : "로그인"}
         </button>
 
-        {devAccountEnabled && (
-          <div className="rounded-2xl border border-dashed border-brand/60 bg-brand/10 p-4 text-xs">
-            <p className="font-semibold">개발용 임시 계정</p>
-            <p className="mt-1 text-muted-foreground">
-              {DEV_ACCOUNT.email} / {DEV_ACCOUNT.password}
-            </p>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => {
-                const session = createDevSession({
-                  email: DEV_ACCOUNT.email,
-                  password: DEV_ACCOUNT.password,
-                });
-                if (session) router.push("/home");
-              }}
-              className="mt-3 rounded-full bg-brand px-4 py-2 font-semibold text-brand-foreground"
-            >
-              임시 계정으로 바로 로그인
-            </button>
-          </div>
-        )}
-
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           <span className="h-px flex-1 bg-border" /> SNS 계정으로 계속하기
           <span className="h-px flex-1 bg-border" />
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {SNS.map((s) => (
+          {CONFIGURED_SNS.map((s) => (
             <button
               key={s.label}
               type="button"
@@ -273,20 +308,9 @@ export default function Auth() {
                 setSubmitting(true);
                 setError(null);
                 try {
-                  const urls: Record<SocialProvider, string | undefined> = {
-                    GOOGLE: process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
-                    KAKAO: process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,
-                    NAVER: process.env.NEXT_PUBLIC_NAVER_AUTH_URL,
-                    APPLE: process.env.NEXT_PUBLIC_APPLE_AUTH_URL,
-                  };
-                  const authorizationUrl = urls[s.provider];
-                  if (!authorizationUrl) {
-                    throw new Error(
-                      `${s.label} OAuth 인가 URL이 설정되지 않았습니다.`,
-                    );
-                  }
-                  window.location.assign(authorizationUrl);
+                  startOAuth(s.provider);
                 } catch (reason) {
+                  clearOAuthAttempt(s.provider);
                   setError(
                     reason instanceof Error
                       ? reason.message
@@ -305,7 +329,13 @@ export default function Auth() {
 
         <button
           type="button"
-          onClick={() => setMode((m) => (m === "signup" ? "login" : "signup"))}
+          onClick={() => {
+            const nextMode = mode === "signup" ? "login" : "signup";
+            setMode(nextMode);
+            const params = new URLSearchParams({ mode: nextMode });
+            if (returnTo !== "/home") params.set("next", returnTo);
+            router.replace(`/auth?${params.toString()}`, { scroll: false });
+          }}
           className="pb-10 text-center text-xs text-muted-foreground underline"
         >
           {mode === "signup"

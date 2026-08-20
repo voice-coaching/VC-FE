@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
@@ -19,19 +20,29 @@ export default function LearningHistory() {
   const [kind, setKind] = useState<ContentType | undefined>();
   const [items, setItems] = useState<TrainingHistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError(null);
+    setLoadMoreError(null);
     api.myPage
       .listTrainingSessions({
         type: kind,
         status: "COMPLETED",
         page: 0,
-        size: 50,
+        size: 20,
       })
       .then((value) => {
-        if (active) setItems(value.items);
+        if (active) {
+          setItems(value.items);
+          setPage(value.page);
+          setHasNext(Boolean(value.hasNext));
+        }
       })
       .catch((reason) => {
         if (active)
@@ -48,6 +59,30 @@ export default function LearningHistory() {
       active = false;
     };
   }, [kind]);
+
+  async function loadMore() {
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const value = await api.myPage.listTrainingSessions({
+        type: kind,
+        status: "COMPLETED",
+        page: page + 1,
+        size: 20,
+      });
+      setItems((current) => [...current, ...value.items]);
+      setPage(value.page);
+      setHasNext(Boolean(value.hasNext));
+    } catch (reason) {
+      setLoadMoreError(
+        reason instanceof Error
+          ? reason.message
+          : "기록을 더 불러오지 못했습니다.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
   return (
     <AppShell nav={false}>
       <TopBar to="/mypage" title="학습 기록" />
@@ -82,8 +117,9 @@ export default function LearningHistory() {
         ) : (
           <div className="mt-4 space-y-2">
             {items.map((item) => (
-              <div
+              <Link
                 key={String(item.sessionId)}
+                href={`/mypage/history/${item.sessionId}`}
                 className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5"
               >
                 <div>
@@ -95,11 +131,26 @@ export default function LearningHistory() {
                 <b className={scoreColor(item.overallScore)}>
                   {Math.round(item.overallScore)}
                 </b>
-              </div>
+              </Link>
             ))}
             {items.length === 0 && (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 아직 저장된 학습 기록이 없습니다.
+              </p>
+            )}
+            {hasNext && (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+                className="mt-3 w-full rounded-full border border-border py-3 text-sm font-semibold disabled:opacity-50"
+              >
+                {loadingMore ? "불러오는 중…" : "기록 더 보기"}
+              </button>
+            )}
+            {loadMoreError && (
+              <p role="alert" className="text-center text-xs text-destructive">
+                {loadMoreError}
               </p>
             )}
           </div>

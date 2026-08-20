@@ -3,9 +3,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type RecorderStatus =
-  "idle" | "requesting" | "recording" | "recorded" | "denied" | "unsupported" | "error";
+  | "idle"
+  | "requesting"
+  | "recording"
+  | "recorded"
+  | "denied"
+  | "unsupported"
+  | "error";
 
 const MAX_RECORDING_MS = 60_000;
+const SUPPORTED_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/mp4",
+  "audio/webm",
+  "audio/ogg;codecs=opus",
+] as const;
 
 export function useAudioRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -53,11 +65,21 @@ export function useAudioRecorder() {
     setStatus("requesting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
       streamRef.current = stream;
       chunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const mimeType = SUPPORTED_MIME_TYPES.find((type) =>
+        MediaRecorder.isTypeSupported(type),
+      );
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -70,19 +92,25 @@ export function useAudioRecorder() {
       };
       recorder.onstop = () => {
         const duration = Date.now() - startedAtRef.current;
-        const recorded = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const recorded = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
         clearTimers();
         stopTracks();
         setDurationMs(duration);
         setElapsedMs(duration);
         setBlob(recorded);
         setStatus(recorded.size > 0 ? "recorded" : "error");
-        if (!recorded.size) setError("녹음된 음성이 없습니다. 다시 시도해 주세요.");
+        if (!recorded.size)
+          setError("녹음된 음성이 없습니다. 다시 시도해 주세요.");
       };
       recorder.start(250);
       startedAtRef.current = Date.now();
       setStatus("recording");
-      intervalRef.current = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 200);
+      intervalRef.current = setInterval(
+        () => setElapsedMs(Date.now() - startedAtRef.current),
+        200,
+      );
       timeoutRef.current = setTimeout(stop, MAX_RECORDING_MS);
       return true;
     } catch (reason) {
@@ -120,7 +148,10 @@ export function useAudioRecorder() {
     [clearTimers, stop, stopTracks],
   );
 
-  const previewUrl = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  const previewUrl = useMemo(
+    () => (blob ? URL.createObjectURL(blob) : null),
+    [blob],
+  );
   useEffect(
     () => () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -128,5 +159,15 @@ export function useAudioRecorder() {
     [previewUrl],
   );
 
-  return { status, blob, durationMs, elapsedMs, previewUrl, error, start, stop, reset };
+  return {
+    status,
+    blob,
+    durationMs,
+    elapsedMs,
+    previewUrl,
+    error,
+    start,
+    stop,
+    reset,
+  };
 }
