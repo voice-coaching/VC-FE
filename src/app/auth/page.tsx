@@ -14,6 +14,10 @@ export const metadata: Metadata = {
 };
 
 export default function AuthPage() {
+  return <Auth />;
+}
+=======
+export default function AuthPage() {
   return (
     <Suspense fallback={null}>
       <Auth />

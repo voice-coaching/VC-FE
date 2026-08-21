@@ -21,6 +21,10 @@ npm i
 npm run dev
 ```
 
+운영 Swagger의 52개 API operation을 사용합니다. 백엔드·OAuth 연결 방법은
+[`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md), 현재 서버에 없는 기능은
+[`docs/API_INTEGRATION_GAPS.md`](docs/API_INTEGRATION_GAPS.md)를 참고하세요.
+=======
 API 명세서(ver.08/07)의 53개 엔드포인트를 사용합니다. 백엔드 연결 방법과 검증 결과는
 [`docs/API_INTEGRATION.md`](docs/API_INTEGRATION.md)와
 [`docs/API_INTEGRATION_REPORT_2026-08-08.md`](docs/API_INTEGRATION_REPORT_2026-08-08.md)를 참고하세요.
