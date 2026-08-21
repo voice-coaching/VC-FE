@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   GOAL_LABELS,
@@ -22,16 +23,10 @@ const PRONUNCIATION_CONCERNS = [
   "특정 고민 없음",
 ];
 const LEARNING_SITUATIONS = ["발표", "대화", "면접", "방송", "회의"];
-const WEAKNESS = [
-  "발음이 뭉개져요",
-  "말이 너무 빨라요",
-  "억양이 단조로워요",
-  "발표만 하면 떨려요",
-];
 
 export default function Onboarding() {
   const router = useRouter();
-  const { profile, save } = useProfile();
+  const { save } = useProfile({ loadExisting: false });
   const [step, setStep] = useState(0);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [improvementAreas, setImprovementAreas] = useState<string[]>([]);
@@ -40,90 +35,98 @@ export default function Onboarding() {
   );
   const [learningSituations, setLearningSituations] = useState<string[]>([]);
   const [level, setLevel] = useState<Level | null>(null);
-  const [minutes, setMinutes] = useState(10);
-  const [weakness, setWeakness] = useState<string | null>(null);
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [weeklySessions, setWeeklySessions] = useState<number | null>(null);
   const [goalDescription, setGoalDescription] = useState("");
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toggle = (setter: Dispatch<SetStateAction<string[]>>, value: string) =>
+  useEffect(() => {
+    let active = true;
+    api.users
+      .getMe()
+      .then((user) => {
+        if (active) setName(user.nickname);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggleRequired = (
+    setter: Dispatch<SetStateAction<string[]>>,
+    value: string,
+  ) =>
     setter((items) =>
       items.includes(value)
-        ? items.filter((item) => item !== value)
+        ? items.length > 1
+          ? items.filter((item) => item !== value)
+          : items
         : [...items, value],
     );
-
-  useEffect(() => {
-    if (!profile) return;
-    setName(profile.name);
-    setGoals(profile.goals);
-    setImprovementAreas(profile.improvementAreas);
-    setPronunciationConcerns(profile.pronunciationConcerns);
-    setLearningSituations(profile.learningSituations);
-    setLevel(profile.level);
-    setMinutes(profile.minutesPerDay);
-    setWeakness(profile.weakness);
-    setGoalDescription(profile.goalDescription ?? "");
-  }, [profile]);
 
   const steps = [
     {
       q: "또박에서\n무엇을 이루고 싶나요?",
-      hint: "복수 선택 가능",
+      hint: "복수 선택 가능 · 최소 1개",
       body: (
         <Options
           items={Object.entries(GOAL_LABELS)}
           selected={goals}
-          onSelect={(v) =>
-            setGoals((g) =>
-              g.includes(v as Goal)
-                ? g.filter((x) => x !== v)
-                : [...g, v as Goal],
-            )
-          }
+          onSelect={(value) => {
+            const goal = value as Goal;
+            setGoals((items) =>
+              items.includes(goal)
+                ? items.length > 1
+                  ? items.filter((item) => item !== goal)
+                  : items
+                : [...items, goal],
+            );
+          }}
         />
       ),
       valid: goals.length > 0,
     },
     {
       q: "집중해서 개선하고 싶은\n영역을 골라주세요",
-      hint: "복수 선택 가능",
+      hint: "복수 선택 가능 · 최소 1개",
       body: (
         <Options
           items={IMPROVEMENT_AREAS.map(
             (item) => [item, item] as [string, string],
           )}
           selected={improvementAreas}
-          onSelect={(value) => toggle(setImprovementAreas, value)}
+          onSelect={(value) => toggleRequired(setImprovementAreas, value)}
         />
       ),
       valid: improvementAreas.length > 0,
     },
     {
       q: "어떤 발음이\n가장 어렵게 느껴지나요?",
-      hint: "복수 선택 가능",
+      hint: "복수 선택 가능 · 최소 1개",
       body: (
         <Options
           items={PRONUNCIATION_CONCERNS.map(
             (item) => [item, item] as [string, string],
           )}
           selected={pronunciationConcerns}
-          onSelect={(value) => toggle(setPronunciationConcerns, value)}
+          onSelect={(value) => toggleRequired(setPronunciationConcerns, value)}
         />
       ),
       valid: pronunciationConcerns.length > 0,
     },
     {
       q: "주로 어떤 상황에서\n말하기를 활용하나요?",
-      hint: "복수 선택 가능",
+      hint: "복수 선택 가능 · 최소 1개",
       body: (
         <Options
           items={LEARNING_SITUATIONS.map(
             (item) => [item, item] as [string, string],
           )}
           selected={learningSituations}
-          onSelect={(value) => toggle(setLearningSituations, value)}
+          onSelect={(value) => toggleRequired(setLearningSituations, value)}
         />
       ),
       valid: learningSituations.length > 0,
@@ -139,18 +142,6 @@ export default function Onboarding() {
         />
       ),
       valid: !!level,
-    },
-    {
-      q: "가장 고치고 싶은\n습관은 무엇인가요?",
-      hint: "AI 약점 분석의 출발점이 돼요",
-      body: (
-        <Options
-          items={WEAKNESS.map((w) => [w, w] as [string, string])}
-          selected={weakness ? [weakness] : []}
-          onSelect={(v) => setWeakness(v)}
-        />
-      ),
-      valid: !!weakness,
     },
     {
       q: "또박과 함께 이루고 싶은\n구체적인 목표가 있나요?",
@@ -171,10 +162,15 @@ export default function Onboarding() {
       hint: "알림으로 매일 챙겨드릴게요",
       body: (
         <div className="flex flex-col gap-6">
+          <p className="text-xs font-medium text-muted-foreground">
+            하루 학습 시간
+          </p>
           <div className="grid grid-cols-4 gap-2">
             {[5, 10, 15, 30].map((m) => (
               <button
                 key={m}
+                type="button"
+                aria-pressed={minutes === m}
                 onClick={() => setMinutes(m)}
                 className={cn(
                   "rounded-2xl py-4 text-sm font-semibold transition-colors",
@@ -187,6 +183,27 @@ export default function Onboarding() {
               </button>
             ))}
           </div>
+          <p className="text-xs font-medium text-muted-foreground">
+            주간 학습 횟수
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {[3, 5, 7].map((count) => (
+              <button
+                key={count}
+                type="button"
+                aria-pressed={weeklySessions === count}
+                onClick={() => setWeeklySessions(count)}
+                className={cn(
+                  "rounded-2xl py-4 text-sm font-semibold transition-colors",
+                  weeklySessions === count
+                    ? "bg-foreground text-background"
+                    : "bg-surface",
+                )}
+              >
+                주 {count}회
+              </button>
+            ))}
+          </div>
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">
               이름
@@ -194,13 +211,14 @@ export default function Onboarding() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="또박이"
+              placeholder="이름을 입력해 주세요"
               className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
             />
           </label>
         </div>
       ),
-      valid: true,
+      valid:
+        minutes !== null && weeklySessions !== null && name.trim().length > 0,
     },
   ];
 
@@ -223,22 +241,28 @@ export default function Onboarding() {
           disabled={!cur.valid || saving}
           onClick={async () => {
             if (step < steps.length - 1) return setStep(step + 1);
+            if (
+              !level ||
+              minutes === null ||
+              weeklySessions === null ||
+              !name.trim()
+            )
+              return;
             setSaving(true);
             setError(null);
             try {
               await save({
-                name: name.trim() || "또박이",
+                name: name.trim(),
                 goals,
                 improvementAreas,
                 pronunciationConcerns,
                 learningSituations,
-                level: level ?? "beginner",
+                level,
                 minutesPerDay: minutes,
-                weeklySessions: 5,
-                weakness: weakness ?? WEAKNESS[0],
+                weeklySessions,
                 goalDescription: goalDescription.trim(),
               });
-              router.push("/home");
+              router.replace("/home");
             } catch (reason) {
               setError(
                 reason instanceof Error
@@ -281,6 +305,8 @@ function Options({
       {items.map(([value, label]) => (
         <button
           key={value}
+          type="button"
+          aria-pressed={selected.includes(value)}
           onClick={() => onSelect(value)}
           className={cn(
             "rounded-2xl px-5 py-4 text-left text-sm font-medium transition-colors",

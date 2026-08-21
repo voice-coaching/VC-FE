@@ -13,10 +13,12 @@ import { AppShell } from "@/components/app-shell";
 import { GOAL_LABELS, LEVEL_LABELS, scoreColor } from "@/lib/app-data";
 import {
   api,
+  type ScoreTrend,
   type Statistics,
   type StrengthsWeaknesses,
   type TrainingHistoryItem,
   type UserAccount,
+  type WeaknessRecommendations,
 } from "@/lib/api";
 import { useProfile } from "@/lib/use-profile";
 
@@ -26,6 +28,9 @@ export default function MyPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
   const [history, setHistory] = useState<TrainingHistoryItem[]>([]);
+  const [scoreTrend, setScoreTrend] = useState<ScoreTrend | null>(null);
+  const [recommendations, setRecommendations] =
+    useState<WeaknessRecommendations | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,14 +44,27 @@ export default function MyPage() {
         page: 0,
         size: 5,
       }),
+      api.myPage.getScoreTrends("PRONUNCIATION", "MONTH"),
+      api.myPage.getWeaknessRecommendations({ limit: 3 }),
     ])
-      .then(([user, stats, strengthsWeaknesses, sessions]) => {
-        if (!active) return;
-        setAccount(user);
-        setStatistics(stats);
-        setFeedback(strengthsWeaknesses);
-        setHistory(sessions.items);
-      })
+      .then(
+        ([
+          user,
+          stats,
+          strengthsWeaknesses,
+          sessions,
+          trend,
+          weaknessRecommendations,
+        ]) => {
+          if (!active) return;
+          setAccount(user);
+          setStatistics(stats);
+          setFeedback(strengthsWeaknesses);
+          setHistory(sessions.items);
+          setScoreTrend(trend);
+          setRecommendations(weaknessRecommendations);
+        },
+      )
       .catch((reason) => {
         if (active)
           setError(
@@ -59,6 +77,8 @@ export default function MyPage() {
       active = false;
     };
   }, []);
+
+  const displayName = account?.nickname ?? profile?.name;
 
   return (
     <AppShell>
@@ -81,24 +101,28 @@ export default function MyPage() {
 
         <div className="mt-2 flex items-center gap-4">
           <div className="flex size-16 items-center justify-center rounded-full bg-surface text-xl font-bold">
-            {(account?.nickname ?? profile?.name ?? "또박")[0]}
+            {displayName?.[0] ?? (
+              <span className="size-5 animate-pulse rounded-full bg-border" />
+            )}
           </div>
           <div>
             <p className="text-xl font-bold tracking-tight">
-              {account?.nickname ?? profile?.name ?? "불러오는 중…"}
+              {displayName ?? "불러오는 중…"}
             </p>
-            <div className="mt-1.5 flex gap-2">
-              <Chip
-                icon={<CheckCircle2 className="size-3" />}
-                label="연속 학습"
-                value={`${statistics?.consecutiveLearningDays ?? 0}일`}
-              />
-              <Chip
-                icon={<Clock className="size-3" />}
-                label="학습 기록"
-                value={`${statistics?.totalSessionCount ?? 0}회`}
-              />
-            </div>
+            {statistics && (
+              <div className="mt-1.5 flex gap-2">
+                <Chip
+                  icon={<CheckCircle2 className="size-3" />}
+                  label="연속 학습"
+                  value={`${statistics.consecutiveLearningDays}일`}
+                />
+                <Chip
+                  icon={<Clock className="size-3" />}
+                  label="학습 기록"
+                  value={`${statistics.totalSessionCount}회`}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -133,6 +157,59 @@ export default function MyPage() {
           </Link>
         </section>
 
+        {scoreTrend && scoreTrend.points.length > 0 && (
+          <section className="mt-6 rounded-3xl bg-surface p-5">
+            <h2 className="text-sm font-semibold">발음 점수 변화</h2>
+            <div className="mt-4 flex h-28 items-end gap-2">
+              {scoreTrend.points.map((point) => (
+                <div
+                  key={point.date}
+                  className="flex min-w-0 flex-1 flex-col items-center gap-2"
+                >
+                  <span className="text-[10px] font-semibold">
+                    {Math.round(point.score)}
+                  </span>
+                  <span
+                    className="w-full rounded-t-lg bg-brand"
+                    style={{ height: `${Math.max(8, point.score)}%` }}
+                  />
+                  <span className="text-[9px] text-muted-foreground">
+                    {new Date(point.date).toLocaleDateString("ko-KR", {
+                      month: "numeric",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {recommendations && recommendations.recommendations.length > 0 && (
+          <section className="mt-6">
+            <h2 className="mb-3 text-sm font-semibold">약점 맞춤 추천</h2>
+            <div className="space-y-2">
+              {recommendations.recommendations.map((item) => {
+                const href = item.contentId
+                  ? `/practice/${item.contentId}?returnTo=%2Fmypage`
+                  : "/class";
+                return (
+                  <Link
+                    key={`${item.targetType}-${item.contentId ?? item.courseId ?? item.title}`}
+                    href={href}
+                    className="block rounded-2xl border border-border px-4 py-3.5"
+                  >
+                    <p className="text-sm font-semibold">{item.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.reason}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <section className="mt-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">내 훈련 기록</h2>
@@ -147,7 +224,7 @@ export default function MyPage() {
             {history.map((item) => (
               <Link
                 key={String(item.sessionId)}
-                href={`/mypage/history?sessionId=${item.sessionId}`}
+                href={`/mypage/history/${item.sessionId}`}
                 className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5"
               >
                 <div>
@@ -186,12 +263,9 @@ export default function MyPage() {
               {profile.minutesPerDay}분
             </p>
           )}
-          <Link
-            href="/onboarding"
-            className="mt-4 block text-xs font-semibold text-foreground underline"
-          >
-            설문 다시 하기
-          </Link>
+          <p className="mt-4 text-xs text-muted-foreground">
+            온보딩 설문은 가입할 때 한 번만 진행합니다.
+          </p>
         </section>
       </div>
     </AppShell>

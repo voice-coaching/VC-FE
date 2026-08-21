@@ -19,10 +19,9 @@ import { forceDevSession } from "@/lib/dev-account";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
-  useEffect(() => {
-    forceDevSession();
-  }, []);
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionGate>{children}</SessionGate>
+    </QueryClientProvider>
   );
 }

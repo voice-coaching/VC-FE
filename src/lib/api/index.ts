@@ -1,5 +1,3 @@
-import { isDevAccountEnabled } from "../dev-account";
-import { createDevApi } from "./dev";
 import { createRemoteApi } from "./remote";
 
 const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";

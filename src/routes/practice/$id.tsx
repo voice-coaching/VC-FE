@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PracticeSession } from "@/components/practice-session";
 import { TopBar } from "@/components/top-bar";
 import { api, type PracticeContent } from "@/lib/api";
+import { safeInternalPath } from "@/lib/navigation";
 
 export default function Practice({ contentId }: { contentId: string }) {
+  const searchParams = useSearchParams();
   const [content, setContent] = useState<PracticeContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const requestedReturnTo = searchParams.get("returnTo");
+  const returnTo = safeInternalPath(requestedReturnTo, "/home");
 
   useEffect(() => {
     let active = true;
@@ -31,7 +36,7 @@ export default function Practice({ contentId }: { contentId: string }) {
 
   return (
     <AppShell nav={false}>
-      <TopBar to="/home" progress={40} />
+      <TopBar to={returnTo} progress={40} />
       {error ? (
         <p
           role="alert"

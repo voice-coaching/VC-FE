@@ -1,32 +1,24 @@
-// TODO: replace with your project URL once a project name or custom domain is set.
-const BASE_URL = "";
-
 interface SitemapEntry {
   path: string;
-  changefreq?: "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
+  changefreq?:
+    "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never";
   priority?: string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const baseUrl = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin
+  ).replace(/\/$/, "");
   const entries: SitemapEntry[] = [
     { path: "/", changefreq: "weekly", priority: "1.0" },
-    { path: "/auth", changefreq: "monthly", priority: "0.6" },
-    { path: "/onboarding", changefreq: "monthly", priority: "0.5" },
-    { path: "/home", changefreq: "daily", priority: "0.9" },
-    { path: "/news", changefreq: "daily", priority: "0.8" },
-    { path: "/sentences", changefreq: "weekly", priority: "0.8" },
-    { path: "/announcer", changefreq: "weekly", priority: "0.8" },
-    { path: "/class", changefreq: "weekly", priority: "0.8" },
-    { path: "/class/pronunciation", changefreq: "weekly", priority: "0.7" },
-    { path: "/class/intonation", changefreq: "weekly", priority: "0.7" },
-    { path: "/practice/custom", changefreq: "monthly", priority: "0.6" },
-    { path: "/mypage", changefreq: "weekly", priority: "0.5" },
   ];
   const urls = entries.map((entry) =>
     [
       `  <url>`,
-      `    <loc>${BASE_URL}${entry.path}</loc>`,
-      entry.changefreq ? `    <changefreq>${entry.changefreq}</changefreq>` : null,
+      `    <loc>${baseUrl}${entry.path}</loc>`,
+      entry.changefreq
+        ? `    <changefreq>${entry.changefreq}</changefreq>`
+        : null,
       entry.priority ? `    <priority>${entry.priority}</priority>` : null,
       `  </url>`,
     ]
@@ -40,6 +32,9 @@ export async function GET() {
     `</urlset>`,
   ].join("\n");
   return new Response(xml, {
-    headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" },
+    headers: {
+      "Content-Type": "application/xml",
+      "Cache-Control": "public, max-age=3600",
+    },
   });
 }

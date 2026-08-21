@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mic, RotateCcw, Square, UploadCloud, Volume2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import {
   api,
@@ -25,14 +25,24 @@ type Phase =
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function PracticeSession({ content }: { content: PracticeContent }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const resumedSessionId = searchParams.get("sessionId");
+  const resumeType = searchParams.get("resumeType");
   const [phase, setPhase] = useState<Phase>("idle");
-  const [sessionId, setSessionId] = useState<Id | null>(null);
+  const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [canRetryAnalysis, setCanRetryAnalysis] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [loadingNext, setLoadingNext] = useState(false);
+  const resumeStarted = useRef(false);
+  const sessionIdRef = useRef<Id | null>(resumedSessionId);
+  const phaseRef = useRef<Phase>("idle");
+  const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const recorder = useAudioRecorder();
 
   const courseId = searchParams.get("courseId");
@@ -43,6 +53,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   );
 
   useEffect(() => {
+    phaseRef.current = phase;
     if (recorder.status === "recorded" && phase === "recording")
       setPhase("review");
     if (
@@ -52,6 +63,95 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       setPhase("error");
     }
   }, [phase, recorder.status]);
+
+  useEffect(
+    () => () => {
+      const activeSessionId = sessionIdRef.current;
+      if (
+        activeSessionId &&
+        !completedRef.current &&
+        phaseRef.current !== "analyzing"
+      ) {
+        void api.training.cancel(activeSessionId).catch(() => undefined);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (
+      resumeStarted.current ||
+      !resumedSessionId ||
+      !["ANALYSIS_STATUS", "ANALYSIS_RESULT"].includes(resumeType ?? "")
+    )
+      return;
+
+    resumeStarted.current = true;
+    let active = true;
+    setPhase("analyzing");
+
+    void (async () => {
+      try {
+        let analysisId: Id;
+        if (resumeType === "ANALYSIS_RESULT") {
+          analysisId = (await api.training.getSessionAnalysis(resumedSessionId))
+            .analysisId;
+        } else {
+          for (let attempt = 0; attempt < 120; attempt += 1) {
+            const status =
+              await api.training.getAnalysisStatus(resumedSessionId);
+            if (!active) return;
+            setAnalysisProgress(status.progressPercent);
+            if (status.status === "FAILED") {
+              setCanRetryAnalysis(true);
+              throw new Error(
+                status.failureReason || "음성 분석에 실패했습니다.",
+              );
+            }
+            if (status.status === "COMPLETED") {
+              analysisId = status.analysisId;
+              const [result, segmentPage] = await Promise.all([
+                api.analyses.get(analysisId),
+                api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
+              ]);
+              if (!active) return;
+              setAnalysis(result);
+              setSegments(segmentPage.items);
+              await api.training.complete(resumedSessionId, 1);
+              completedRef.current = true;
+              if (active) setPhase("result");
+              return;
+            }
+            await wait(1_000);
+          }
+          throw new Error(
+            "분석 대기 시간이 초과되었습니다. 학습 기록에서 다시 확인해 주세요.",
+          );
+        }
+
+        const [result, segmentPage] = await Promise.all([
+          api.analyses.get(analysisId),
+          api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
+        ]);
+        if (!active) return;
+        setAnalysis(result);
+        setSegments(segmentPage.items);
+        setPhase("result");
+      } catch (reason) {
+        if (!active) return;
+        setRequestError(
+          reason instanceof Error
+            ? reason.message
+            : "이어하던 학습을 불러오지 못했습니다.",
+        );
+        setPhase("error");
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [resumeType, resumedSessionId]);
 
   async function ensureSession() {
     if (sessionId) return sessionId;
@@ -63,6 +163,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     const createdId = session.sessionId ?? session.id;
     if (createdId == null) throw new Error("학습 세션 ID가 응답에 없습니다.");
     setSessionId(createdId);
+    sessionIdRef.current = createdId;
     return createdId;
   }
 
@@ -88,8 +189,10 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       const status = await api.training.getAnalysisStatus(activeSessionId);
       setAnalysisProgress(status.progressPercent);
       if (status.status === "COMPLETED") return status.analysisId;
-      if (status.status === "FAILED")
+      if (status.status === "FAILED") {
+        setCanRetryAnalysis(true);
         throw new Error(status.failureReason || "음성 분석에 실패했습니다.");
+      }
       await wait(1_000);
     }
     throw new Error(
@@ -127,6 +230,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       activeSessionId,
       Math.max(1, Math.round(recorder.durationMs / 1_000)),
     );
+    completedRef.current = true;
 
     if (courseId && courseStepId) {
       const steps = await api.courses.getSteps(courseId);
@@ -152,13 +256,19 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       return;
     }
     setRequestError(null);
+    setCanRetryAnalysis(false);
     setUploadProgress(0);
     try {
       const activeSessionId = await ensureSession();
       setPhase("uploading");
       const mimeType = recorder.blob.type || "audio/webm";
+      const extension = mimeType.includes("mp4")
+        ? "m4a"
+        : mimeType.includes("ogg")
+          ? "ogg"
+          : "webm";
       const uploadInfo = await api.training.getUploadUrl(activeSessionId, {
-        fileName: `recording-${Date.now()}.webm`,
+        fileName: `recording-${Date.now()}.${extension}`,
         mimeType,
         fileSizeBytes: recorder.blob.size,
       });
@@ -191,6 +301,80 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
           : "음성 분석 요청에 실패했습니다.",
       );
       setPhase("review");
+    }
+  }
+
+  async function retryFailedAnalysis() {
+    if (!sessionId) return;
+    setRequestError(null);
+    setCanRetryAnalysis(false);
+    setAnalysisProgress(0);
+    setPhase("analyzing");
+    try {
+      const requested = await api.training.retryAnalysis(sessionId);
+      const completedAnalysisId = await waitForAnalysis(sessionId);
+      await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
+    } catch (reason) {
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "음성 분석 재시도에 실패했습니다.",
+      );
+      setPhase("error");
+    }
+  }
+
+  async function regenerateFeedback() {
+    if (!analysis) return;
+    setRegenerating(true);
+    setRequestError(null);
+    try {
+      const feedback = await api.analyses.regenerateFeedback(
+        analysis.id,
+        "COACHING",
+      );
+      setAnalysis((current) =>
+        current
+          ? {
+              ...current,
+              strengths: feedback.strengths,
+              weaknesses: feedback.weaknesses,
+              summaryFeedback: feedback.summaryFeedback,
+            }
+          : current,
+      );
+    } catch (reason) {
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "AI 코칭을 다시 생성하지 못했습니다.",
+      );
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  async function goToNextContent() {
+    setLoadingNext(true);
+    setRequestError(null);
+    try {
+      const next = await api.content.getNext({
+        type: content.contentType,
+        category: content.category,
+        difficulty: content.difficulty,
+        excludeId: content.id,
+      });
+      const returnTo = searchParams.get("returnTo") ?? "/home";
+      router.push(
+        `/practice/${next.id}?returnTo=${encodeURIComponent(returnTo)}`,
+      );
+    } catch (reason) {
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "다음 콘텐츠를 불러오지 못했습니다.",
+      );
+      setLoadingNext(false);
     }
   }
 
@@ -332,12 +516,23 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               `녹음 중 ${Math.floor(recorder.elapsedMs / 1000)}초 · 버튼을 눌러 종료`}
           </p>
           {requestError && (
-            <p
-              role="alert"
-              className="w-full rounded-2xl bg-destructive/10 px-4 py-3 text-center text-xs text-destructive"
-            >
-              {requestError}
-            </p>
+            <div className="w-full text-center">
+              <p
+                role="alert"
+                className="rounded-2xl bg-destructive/10 px-4 py-3 text-xs text-destructive"
+              >
+                {requestError}
+              </p>
+              {canRetryAnalysis && (
+                <button
+                  type="button"
+                  onClick={() => void retryFailedAnalysis()}
+                  className="mt-3 rounded-full bg-foreground px-5 py-2.5 text-xs font-semibold text-background"
+                >
+                  분석 다시 시도
+                </button>
+              )}
+            </div>
           )}
         </div>
       ) : analysis ? (
@@ -414,20 +609,49 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
                 ))}
               </ul>
               <p className="mt-3 text-xs">{analysis.summaryFeedback}</p>
+              <button
+                type="button"
+                disabled={regenerating}
+                onClick={() => void regenerateFeedback()}
+                className="mt-4 rounded-full border border-border px-4 py-2 text-xs font-semibold disabled:opacity-50"
+              >
+                {regenerating ? "코칭 생성 중…" : "AI 코칭 다시 생성"}
+              </button>
             </div>
           </section>
-          <button
-            onClick={() => {
-              recorder.reset();
-              setAnalysis(null);
-              setSegments([]);
-              setPhase("idle");
-              setSessionId(null);
-            }}
-            className="w-full rounded-full bg-foreground py-4 text-sm font-semibold text-background"
-          >
-            다시 연습하기
-          </button>
+          {requestError && (
+            <p
+              role="alert"
+              className="rounded-2xl bg-destructive/10 px-4 py-3 text-center text-xs text-destructive"
+            >
+              {requestError}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                recorder.reset();
+                setAnalysis(null);
+                setSegments([]);
+                setPhase("idle");
+                setSessionId(null);
+                sessionIdRef.current = null;
+                completedRef.current = false;
+              }}
+              className="rounded-full border border-border py-4 text-sm font-semibold"
+            >
+              다시 연습
+            </button>
+            <button
+              type="button"
+              disabled={loadingNext}
+              onClick={() => void goToNextContent()}
+              className="rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-50"
+            >
+              {loadingNext ? "이동 중…" : "다음 콘텐츠"}
+            </button>
+          </div>
         </>
       ) : null}
     </div>

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import Auth from "@/routes/auth";
 
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   title: "회원가입 · 로그인 | 또박",
   description:
     "이메일 또는 SNS 계정으로 또박에 가입하고 발음 훈련을 시작하세요.",

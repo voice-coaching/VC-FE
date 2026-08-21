@@ -102,11 +102,8 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         return data;
       },
       async signOut() {
-        try {
-          await request<null>("/api/auth/logout", { method: "POST" });
-        } finally {
-          clearAccessToken();
-        }
+        await request<null>("/api/auth/logout", { method: "POST" });
+        clearAccessToken();
       },
     },
     users: {

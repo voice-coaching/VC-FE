@@ -16,13 +16,13 @@ export default function Landing() {
 
         <div className="flex flex-col gap-2.5">
           <Link
-            href="/auth"
+            href="/auth?mode=login&provider=KAKAO"
             className="w-full rounded-full bg-warning py-4 text-center text-sm font-semibold text-warning-foreground"
           >
             카카오로 시작하기
           </Link>
           <Link
-            href="/auth"
+            href="/auth?mode=login&provider=NAVER"
             className="w-full rounded-full bg-success py-4 text-center text-sm font-semibold text-success-foreground"
           >
             네이버로 시작하기
@@ -35,7 +35,10 @@ export default function Landing() {
           </Link>
           <p className="pt-2 text-center text-xs text-muted-foreground">
             이미 계정이 있나요?{" "}
-            <Link href="/auth" className="font-semibold text-foreground underline">
+            <Link
+              href="/auth?mode=login"
+              className="font-semibold text-foreground underline"
+            >
               로그인
             </Link>
           </p>

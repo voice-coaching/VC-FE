@@ -7,16 +7,12 @@ import {
   type CurrentLevel,
   type OnboardingProfile as ApiProfile,
 } from "./api";
-import { DEV_PROFILE, isDevSession } from "./dev-account";
-
-const KEY = "voco.profile";
 
 export type OnboardingAnswers = UiProfile & {
   improvementAreas: string[];
   pronunciationConcerns: string[];
   learningSituations: string[];
-  weeklySessions?: number;
-  goalDescription?: string;
+  goalDescription: string;
 };
 
 const levelFromApi: Record<CurrentLevel, Level> = {
@@ -39,7 +35,6 @@ function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
     ) as Goal[],
     level: levelFromApi[profile.currentLevel],
     minutesPerDay: profile.dailyGoalMinutes,
-    weakness: profile.surveyAnswers.improvementAreas[0] ?? "",
     improvementAreas: profile.surveyAnswers.improvementAreas,
     pronunciationConcerns: profile.surveyAnswers.pronunciationConcerns,
     learningSituations: profile.surveyAnswers.learningSituations,
@@ -51,9 +46,9 @@ function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
 function toApi(profile: OnboardingAnswers): ApiProfile {
   return {
     currentLevel: levelToApi[profile.level],
-    goalText: profile.goalDescription ?? profile.weakness,
+    goalText: profile.goalDescription,
     dailyGoalMinutes: profile.minutesPerDay,
-    weeklyGoalCount: profile.weeklySessions ?? 5,
+    weeklyGoalCount: profile.weeklySessions,
     surveyAnswers: {
       learningPurposes: profile.goals.map((value) => value.toUpperCase()),
       improvementAreas: profile.improvementAreas,
@@ -63,29 +58,13 @@ function toApi(profile: OnboardingAnswers): ApiProfile {
   };
 }
 
-export function readProfile(): OnboardingAnswers | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as OnboardingAnswers) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeProfile(profile: OnboardingAnswers) {
-  window.localStorage.setItem(KEY, JSON.stringify(profile));
-}
-
-export function useProfile() {
+export function useProfile({ loadExisting = true } = {}) {
   const [profile, setProfile] = useState<OnboardingAnswers | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydrated, setHydrated] = useState(() => !loadExisting);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isDevSession()) {
-      setProfile(DEV_PROFILE);
-      writeProfile(DEV_PROFILE);
-      setHydrated(true);
+    if (!loadExisting) {
       return;
     }
 
@@ -95,10 +74,14 @@ export function useProfile() {
         if (!active) return;
         const value = fromApi(onboarding, user.nickname);
         setProfile(value);
-        writeProfile(value);
       })
-      .catch(() => {
-        if (active) setProfile(readProfile());
+      .catch((reason) => {
+        if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "프로필을 불러오지 못했습니다.",
+          );
       })
       .finally(() => {
         if (active) setHydrated(true);
@@ -106,21 +89,20 @@ export function useProfile() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadExisting]);
 
   const save = useCallback(async (value: OnboardingAnswers) => {
-    if (isDevSession()) {
-      writeProfile(value);
-      setProfile(value);
-      return value;
-    }
-    await api.onboarding.save(toApi(value));
     if (value.name.trim())
       await api.users.updateProfile({ nickname: value.name.trim() });
-    writeProfile(value);
+
+    const completion = await api.onboarding.save(toApi(value));
+    if (!completion.completed) {
+      throw new Error("온보딩 완료 상태가 저장되지 않았습니다.");
+    }
+
     setProfile(value);
     return value;
   }, []);
 
-  return { profile, hydrated, save };
+  return { profile, hydrated, error, save };
 }

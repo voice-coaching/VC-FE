@@ -34,19 +34,34 @@ export function ContentCatalog({
   title: string;
   description: string;
 }) {
+  const returnTo =
+    type === "NEWS"
+      ? "/news"
+      : type === "SENTENCE"
+        ? "/sentences"
+        : "/announcer";
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
   const [items, setItems] = useState<PracticeContentSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
+    setLoadMoreError(null);
     api.content
       .list({ type, difficulty: difficulty || undefined, page: 0, size: 20 })
       .then((result) => {
-        if (active) setItems(result.items);
+        if (active) {
+          setItems(result.items);
+          setPage(result.page);
+          setHasNext(Boolean(result.hasNext));
+        }
       })
       .catch((reason) => {
         if (active)
@@ -63,6 +78,30 @@ export function ContentCatalog({
       active = false;
     };
   }, [difficulty, type]);
+
+  async function loadMore() {
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const result = await api.content.list({
+        type,
+        difficulty: difficulty || undefined,
+        page: page + 1,
+        size: 20,
+      });
+      setItems((current) => [...current, ...result.items]);
+      setPage(result.page);
+      setHasNext(Boolean(result.hasNext));
+    } catch (reason) {
+      setLoadMoreError(
+        reason instanceof Error
+          ? reason.message
+          : "콘텐츠를 더 불러오지 못했습니다.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <AppShell>
@@ -104,7 +143,7 @@ export function ContentCatalog({
             {items.map((item) => (
               <Link
                 key={item.id}
-                href={`/practice/${item.id}`}
+                href={`/practice/${item.id}?returnTo=${encodeURIComponent(returnTo)}`}
                 className="rounded-3xl border border-border p-5 transition-colors hover:bg-surface"
               >
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -128,6 +167,21 @@ export function ContentCatalog({
             {items.length === 0 && (
               <p className="py-12 text-center text-sm text-muted-foreground">
                 조건에 맞는 콘텐츠가 없습니다.
+              </p>
+            )}
+            {hasNext && (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+                className="mt-2 rounded-full border border-border py-3 text-sm font-semibold disabled:opacity-50"
+              >
+                {loadingMore ? "불러오는 중…" : "콘텐츠 더 보기"}
+              </button>
+            )}
+            {loadMoreError && (
+              <p role="alert" className="text-center text-xs text-destructive">
+                {loadMoreError}
               </p>
             )}
           </div>
