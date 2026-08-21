@@ -5,6 +5,10 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { api } from "@/lib/api";
+import {
+  AUDIO_ACCESS_OPTIONS,
+  type AudioAccessPreference,
+} from "@/lib/accessibility-preference";
 import { cn } from "@/lib/utils";
 import {
   GOAL_LABELS,
@@ -34,6 +38,8 @@ export default function Onboarding() {
     [],
   );
   const [learningSituations, setLearningSituations] = useState<string[]>([]);
+  const [audioAccessPreference, setAudioAccessPreference] =
+    useState<AudioAccessPreference | null>(null);
   const [level, setLevel] = useState<Level | null>(null);
   const [minutes, setMinutes] = useState<number | null>(null);
   const [weeklySessions, setWeeklySessions] = useState<number | null>(null);
@@ -130,6 +136,20 @@ export default function Onboarding() {
         />
       ),
       valid: learningSituations.length > 0,
+    },
+    {
+      q: "음성이나 영상을 이용할 때\n어떤 방식이 가장 편한가요?",
+      hint: "더 편한 학습 환경을 준비하기 위한 질문이에요",
+      body: (
+        <Options
+          items={AUDIO_ACCESS_OPTIONS.map(({ value, label }) => [value, label])}
+          selected={audioAccessPreference ? [audioAccessPreference] : []}
+          onSelect={(value) =>
+            setAudioAccessPreference(value as AudioAccessPreference)
+          }
+        />
+      ),
+      valid: audioAccessPreference !== null,
     },
     {
       q: "지금 내 말하기\n수준은 어느 정도인가요?",
@@ -243,6 +263,7 @@ export default function Onboarding() {
             if (step < steps.length - 1) return setStep(step + 1);
             if (
               !level ||
+              !audioAccessPreference ||
               minutes === null ||
               weeklySessions === null ||
               !name.trim()
@@ -257,6 +278,7 @@ export default function Onboarding() {
                 improvementAreas,
                 pronunciationConcerns,
                 learningSituations,
+                audioAccessPreference,
                 level,
                 minutesPerDay: minutes,
                 weeklySessions,

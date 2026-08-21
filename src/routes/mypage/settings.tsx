@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
 import { api } from "@/lib/api";
+import { getCachedUser } from "@/lib/auth-session";
 
 export default function AccountSettings() {
   const router = useRouter();
@@ -17,6 +18,12 @@ export default function AccountSettings() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const cachedUser = getCachedUser();
+    if (cachedUser) {
+      setNickname(cachedUser.nickname);
+      setEmail(cachedUser.email);
+      return;
+    }
     api.users
       .getMe()
       .then((account) => {

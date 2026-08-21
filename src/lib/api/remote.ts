@@ -1,4 +1,9 @@
 import { clearAccessToken, createHttpClient, saveAccessToken } from "./client";
+import {
+  markAnonymousSession,
+  markAuthenticatedSession,
+  markAuthenticatedUser,
+} from "../auth-session";
 import type {
   ApiContract,
   AuthSession,
@@ -34,6 +39,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
 
   function persistSession(session: AuthSession) {
     saveAccessToken(session.accessToken);
+    markAuthenticatedSession(session);
     return session;
   }
 
@@ -104,10 +110,18 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       async signOut() {
         await request<null>("/api/auth/logout", { method: "POST" });
         clearAccessToken();
+        markAnonymousSession();
       },
     },
     users: {
-      getMe: () => request("/api/users/me"),
+      async getMe() {
+        const user =
+          await request<Awaited<ReturnType<ApiContract["users"]["getMe"]>>>(
+            "/api/users/me",
+          );
+        markAuthenticatedUser(user);
+        return user;
+      },
       updateProfile: (input) =>
         request("/api/users/me", { method: "PATCH", body: input }),
       async withdraw() {
@@ -115,6 +129,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           method: "DELETE",
         });
         clearAccessToken();
+        markAnonymousSession();
         return result;
       },
     },

@@ -1,4 +1,5 @@
 import type { ApiEnvelope } from "./types";
+import { markAnonymousSession } from "../auth-session";
 
 export class ApiError extends Error {
   constructor(
@@ -111,7 +112,10 @@ export function createHttpClient(baseUrl: string) {
         : null;
 
       if (!response.ok || !payload?.result) {
-        if (response.status === 401) clearAccessToken();
+        if (response.status === 401) {
+          clearAccessToken();
+          markAnonymousSession();
+        }
         throw new ApiError(
           payload?.message ?? "요청을 처리하지 못했습니다.",
           response.status,
