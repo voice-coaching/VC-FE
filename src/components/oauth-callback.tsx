@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { api, type SocialProvider } from "@/lib/api";
+import { safeInternalPath } from "@/lib/navigation";
 import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
+
+const PROVIDER_LABELS: Record<SocialProvider, string> = {
+  GOOGLE: "Google",
+  KAKAO: "카카오",
+  NAVER: "네이버",
+  APPLE: "Apple",
+};
 
 export function OAuthCallback({
   provider,
@@ -23,7 +31,7 @@ export function OAuthCallback({
   const router = useRouter();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const providerLabel = provider === "GOOGLE" ? "Google" : "카카오";
+  const providerLabel = PROVIDER_LABELS[provider];
 
   useEffect(() => {
     if (started.current) return;
@@ -63,7 +71,7 @@ export function OAuthCallback({
         router.replace(
           session.isNewUser || session.onboardingRequired
             ? "/onboarding"
-            : "/home",
+            : safeInternalPath(attempt.returnTo, "/home"),
         );
       })
       .catch((reason) => {
@@ -96,7 +104,7 @@ export function OAuthCallback({
               {error}
             </p>
             <Link
-              href="/auth"
+              href="/auth?mode=login"
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background"
             >
               로그인 화면으로 돌아가기
