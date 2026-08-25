@@ -147,6 +147,10 @@ export function useProfile({ loadExisting = true } = {}) {
     if (!completion.completed) {
       throw new Error("온보딩 완료 상태가 저장되지 않았습니다.");
     }
+    const stored = await api.onboarding.get();
+    if (!stored.completedAt) {
+      throw new Error("저장된 온보딩 완료 상태를 확인하지 못했습니다.");
+    }
 
     markOnboardingCompleted();
     cachedProfile = value;

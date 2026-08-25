@@ -16,7 +16,19 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 
 export function saveAccessToken(value: string) {
-  accessToken = value;
+  const normalized = value
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (!normalized) {
+    throw new ApiError(
+      "로그인 응답에 Access Token이 없습니다.",
+      500,
+      "INVALID_AUTH_RESPONSE",
+    );
+  }
+  accessToken = normalized;
+  return normalized;
 }
 
 export function clearAccessToken() {
@@ -53,8 +65,7 @@ export function createHttpClient(baseUrl: string) {
         },
       )
         .then(({ accessToken }) => {
-          saveAccessToken(accessToken);
-          return accessToken;
+          return saveAccessToken(accessToken);
         })
         .finally(() => {
           refreshPromise = null;
@@ -139,7 +150,7 @@ export function createHttpClient(baseUrl: string) {
       }
 
       const headerToken = response.headers.get("x-new-access-token");
-      if (headerToken) saveAccessToken(headerToken.replace(/^Bearer\s+/i, ""));
+      if (headerToken) saveAccessToken(headerToken);
       return data;
     } catch (error) {
       if (error instanceof ApiError) throw error;

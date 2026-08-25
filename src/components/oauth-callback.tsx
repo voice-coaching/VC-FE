@@ -9,7 +9,7 @@ import { safeInternalPath } from "@/lib/navigation";
 import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
-  GOOGLE: "Google",
+  GOOGLE: "구글",
   KAKAO: "카카오",
   NAVER: "네이버",
   APPLE: "Apple",
