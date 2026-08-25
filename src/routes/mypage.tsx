@@ -21,10 +21,11 @@ import {
   type WeaknessRecommendations,
 } from "@/lib/api";
 import { useProfile } from "@/lib/use-profile";
+import { getCachedUser } from "@/lib/auth-session";
 
 export default function MyPage() {
   const { profile } = useProfile();
-  const [account, setAccount] = useState<UserAccount | null>(null);
+  const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
   const [history, setHistory] = useState<TrainingHistoryItem[]>([]);
@@ -35,8 +36,9 @@ export default function MyPage() {
 
   useEffect(() => {
     let active = true;
+    const cachedUser = getCachedUser();
     Promise.all([
-      api.users.getMe(),
+      cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
       api.myPage.listTrainingSessions({
@@ -99,12 +101,7 @@ export default function MyPage() {
           </p>
         )}
 
-        <div className="mt-2 flex items-center gap-4">
-          <div className="flex size-16 items-center justify-center rounded-full bg-surface text-xl font-bold">
-            {displayName?.[0] ?? (
-              <span className="size-5 animate-pulse rounded-full bg-border" />
-            )}
-          </div>
+        <div className="mt-2">
           <div>
             <p className="text-xl font-bold tracking-tight">
               {displayName ?? "불러오는 중…"}

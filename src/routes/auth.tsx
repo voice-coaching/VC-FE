@@ -1,8 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import {
+  TermsAgreementDialog,
+  type TermsAgreement,
+} from "@/components/terms-agreement-dialog";
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
@@ -44,48 +48,41 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAgreement, setTermsAgreement] = useState<TermsAgreement>({
+    service: false,
+    privacy: false,
+  });
+  const [termsOpen, setTermsOpen] = useState(false);
   const [emailStatus, setEmailStatus] = useState<
     "idle" | "checking" | "available" | "used"
   >("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const oauthStarted = useRef(false);
   const emailCheckId = useRef(0);
   const returnTo = safeInternalPath(searchParams.get("next"), "/home");
+  const termsAccepted = termsAgreement.service && termsAgreement.privacy;
   const passwordValid =
     password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
   const startOAuth = useCallback(
     (provider: SocialProvider) => {
-      const attempt = createOAuthAttempt(provider, returnTo);
-      const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
-      window.location.assign(authorizationUrl);
+      setSubmitting(true);
+      setError(null);
+      try {
+        const attempt = createOAuthAttempt(provider, returnTo);
+        window.location.assign(getOAuthAuthorizationUrl(provider, attempt));
+      } catch (reason) {
+        clearOAuthAttempt(provider);
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "SNS 로그인에 실패했습니다.",
+        );
+        setSubmitting(false);
+      }
     },
     [returnTo],
   );
-
-  useEffect(() => {
-    const provider = searchParams.get("provider")?.toUpperCase();
-    const requestedProvider = SNS.find((item) => item.provider === provider);
-    if (oauthStarted.current || !requestedProvider) return;
-
-    oauthStarted.current = true;
-    if (!CONFIGURED_SNS.includes(requestedProvider)) {
-      setError(`${requestedProvider.label} OAuth 설정이 없습니다.`);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      startOAuth(provider as SocialProvider);
-    } catch (reason) {
-      clearOAuthAttempt(provider as SocialProvider);
-      setError(
-        reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.",
-      );
-      setSubmitting(false);
-    }
-  }, [searchParams, startOAuth]);
 
   async function checkEmail() {
     const candidate = email.trim();
@@ -139,8 +136,8 @@ export default function Auth() {
                     email: email.trim(),
                     password,
                     nickname: nickname.trim(),
-                    termsAgreed: termsAccepted,
-                    privacyAgreed: termsAccepted,
+                    termsAgreed: termsAgreement.service,
+                    privacyAgreed: termsAgreement.privacy,
                   })
                 : await api.auth.signIn({ email: email.trim(), password });
             router.replace(
@@ -250,17 +247,25 @@ export default function Auth() {
             </label>
           )}
           {mode === "signup" && (
-            <label className="flex items-start gap-2 rounded-2xl border border-border p-3 text-xs leading-relaxed">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5"
-              />
+            <button
+              type="button"
+              onClick={() => setTermsOpen(true)}
+              className="flex items-center justify-between rounded-2xl border border-border p-4 text-left text-xs leading-relaxed"
+            >
               <span>
-                <b>필수</b> 서비스 이용약관 및 개인정보 처리방침에 동의합니다.
+                <b>필수 약관</b>
+                <span className="mt-0.5 block text-muted-foreground">
+                  서비스 이용약관 및 개인정보 처리방침
+                </span>
               </span>
-            </label>
+              <span
+                className={
+                  termsAccepted ? "font-semibold text-success" : "underline"
+                }
+              >
+                {termsAccepted ? "동의 완료" : "확인하기"}
+              </span>
+            </button>
           )}
         </div>
 
@@ -304,22 +309,7 @@ export default function Auth() {
               key={s.label}
               type="button"
               disabled={submitting}
-              onClick={async () => {
-                setSubmitting(true);
-                setError(null);
-                try {
-                  startOAuth(s.provider);
-                } catch (reason) {
-                  clearOAuthAttempt(s.provider);
-                  setError(
-                    reason instanceof Error
-                      ? reason.message
-                      : "SNS 로그인에 실패했습니다.",
-                  );
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
+              onClick={() => startOAuth(s.provider)}
               className={`w-full rounded-full py-4 text-sm font-semibold ${s.cls}`}
             >
               {s.label} 계정으로 계속하기
@@ -343,6 +333,12 @@ export default function Auth() {
             : "계정이 없어요, 가입할래요"}
         </button>
       </form>
+      <TermsAgreementDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        value={termsAgreement}
+        onChange={setTermsAgreement}
+      />
     </AppShell>
   );
 }

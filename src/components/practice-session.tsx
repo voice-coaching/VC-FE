@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, RotateCcw, Square, UploadCloud, Volume2 } from "lucide-react";
+import {
+  Mic,
+  RotateCcw,
+  Square,
+  Trash2,
+  UploadCloud,
+  Volume2,
+} from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import {
@@ -10,6 +17,8 @@ import {
   type AnalysisSegment,
   type Id,
   type PracticeContent,
+  type PracticeContentRecommendation,
+  type VoiceRecording,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +48,19 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   const [canRetryAnalysis, setCanRetryAnalysis] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
+  const [recommendations, setRecommendations] = useState<
+    PracticeContentRecommendation[]
+  >([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(
+    null,
+  );
+  const [recordingAttempts, setRecordingAttempts] = useState<VoiceRecording[]>(
+    [],
+  );
+  const [deletingRecordingId, setDeletingRecordingId] = useState<string | null>(
+    null,
+  );
   const resumeStarted = useRef(false);
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const phaseRef = useRef<Phase>("idle");
@@ -92,6 +114,18 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
 
     void (async () => {
       try {
+        const [resumedSession, attempts] = await Promise.all([
+          api.training.get(resumedSessionId),
+          api.training.listRecordings(resumedSessionId),
+        ]);
+        if (
+          resumedSession.content?.id != null &&
+          String(resumedSession.content.id) !== String(content.id)
+        ) {
+          throw new Error("이어갈 학습과 현재 콘텐츠가 일치하지 않습니다.");
+        }
+        if (active) setRecordingAttempts(attempts);
+
         let analysisId: Id;
         if (resumeType === "ANALYSIS_RESULT") {
           analysisId = (await api.training.getSessionAnalysis(resumedSessionId))
@@ -151,7 +185,34 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     return () => {
       active = false;
     };
-  }, [resumeType, resumedSessionId]);
+  }, [content.id, resumeType, resumedSessionId]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let active = true;
+    setRecommendationsLoading(true);
+    setRecommendationError(null);
+    setRecommendations([]);
+    void api.content
+      .getRecommendations(content.id)
+      .then((items) => {
+        if (active) setRecommendations(items);
+      })
+      .catch((reason) => {
+        if (!active) return;
+        setRecommendationError(
+          reason instanceof Error
+            ? reason.message
+            : "비슷한 콘텐츠를 불러오지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        if (active) setRecommendationsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [content.id, phase]);
 
   async function ensureSession() {
     if (sessionId) return sessionId;
@@ -203,10 +264,11 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   async function waitForRecordingQuality(activeSessionId: Id, recordingId: Id) {
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const recordings = await api.training.listRecordings(activeSessionId);
+      setRecordingAttempts(recordings);
       const recording = recordings.find(
         (item) => String(item.recordingId ?? item.id) === String(recordingId),
       );
-      if (recording?.qualityStatus === "PASS") return;
+      if (recording?.qualityStatus === "PASS") return recording;
       if (recording && recording.qualityStatus !== "PENDING") {
         throw new Error(
           `음질 검사를 통과하지 못했습니다: ${recording.qualityStatus}`,
@@ -287,6 +349,13 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
       await waitForRecordingQuality(activeSessionId, recordingId);
       await api.training.selectRecording(activeSessionId, recordingId);
+      setRecordingAttempts((current) =>
+        current.map((item) => ({
+          ...item,
+          selected:
+            String(item.recordingId ?? item.id) === String(recordingId),
+        })),
+      );
       const requested = await api.training.analyze(activeSessionId);
       setPhase("analyzing");
       const completedAnalysisId = await waitForAnalysis(activeSessionId);
@@ -352,6 +421,40 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     } finally {
       setRegenerating(false);
     }
+  }
+
+  async function deleteRecordingAttempt(recording: VoiceRecording) {
+    if (!sessionId) return;
+    const recordingId = recording.recordingId ?? recording.id;
+    if (recordingId == null) return;
+    if (!window.confirm(`${recording.attemptNo}번째 녹음을 삭제할까요?`)) return;
+
+    const key = String(recordingId);
+    setDeletingRecordingId(key);
+    setRequestError(null);
+    try {
+      await api.training.deleteRecording(sessionId, recordingId);
+      setRecordingAttempts((current) =>
+        current.filter(
+          (item) => String(item.recordingId ?? item.id) !== String(recordingId),
+        ),
+      );
+    } catch (reason) {
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "녹음 시도를 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingRecordingId(null);
+    }
+  }
+
+  function goToRecommendation(item: PracticeContentRecommendation) {
+    const returnTo = searchParams.get("returnTo") ?? "/home";
+    router.push(
+      `/practice/${item.id}?returnTo=${encodeURIComponent(returnTo)}`,
+    );
   }
 
   async function goToNextContent() {
@@ -470,6 +573,44 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               </div>
             </div>
           )}
+
+          {phase === "review" &&
+            recordingAttempts.some((recording) => !recording.selected) && (
+              <section className="w-full rounded-3xl bg-surface p-5">
+                <h2 className="text-sm font-semibold">서버에 저장된 녹음 시도</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  분석하지 않을 녹음은 여기서 삭제할 수 있습니다.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {recordingAttempts
+                    .filter((recording) => !recording.selected)
+                    .map((recording) => {
+                      const recordingId = recording.recordingId ?? recording.id;
+                      const key = String(recordingId ?? recording.attemptNo);
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between rounded-2xl bg-background px-4 py-3"
+                        >
+                          <span className="text-xs">
+                            {recording.attemptNo}번째 시도 ·{" "}
+                            {recording.qualityStatus}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={recordingId == null || deletingRecordingId === key}
+                            onClick={() => void deleteRecordingAttempt(recording)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-destructive disabled:opacity-40"
+                          >
+                            <Trash2 className="size-3.5" />
+                            {deletingRecordingId === key ? "삭제 중…" : "삭제"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+              </section>
+            )}
 
           {(phase === "uploading" || phase === "analyzing") && (
             <div className="w-full rounded-3xl bg-surface p-5 text-center">
@@ -627,6 +768,34 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               {requestError}
             </p>
           )}
+          <section className="rounded-3xl bg-surface p-5">
+            <h2 className="text-sm font-semibold">비슷한 콘텐츠</h2>
+            {recommendationsLoading ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                추천 콘텐츠를 불러오는 중…
+              </p>
+            ) : recommendations.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {recommendations.map((item) => (
+                  <button
+                    key={String(item.id)}
+                    type="button"
+                    onClick={() => goToRecommendation(item)}
+                    className="block w-full rounded-2xl bg-background p-4 text-left"
+                  >
+                    <span className="text-sm font-semibold">{item.title}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {item.similarityReason}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {recommendationError ?? "추천할 비슷한 콘텐츠가 없습니다."}
+              </p>
+            )}
+          </section>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
