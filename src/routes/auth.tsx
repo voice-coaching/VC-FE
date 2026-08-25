@@ -39,6 +39,19 @@ const CONFIGURED_SNS = SNS.filter(({ provider }) =>
   isOAuthProviderConfigured(provider),
 );
 
+const MAX_PASSWORD_LENGTH = 72;
+const MAX_NICKNAME_LENGTH = 30;
+
+function isSignupPasswordValid(password: string) {
+  return (
+    password.length >= 8 &&
+    password.length <= MAX_PASSWORD_LENGTH &&
+    /[A-Za-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
+
 export default function Auth() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,8 +74,10 @@ export default function Auth() {
   const emailCheckId = useRef(0);
   const returnTo = safeInternalPath(searchParams.get("next"), "/home");
   const termsAccepted = termsAgreement.service && termsAgreement.privacy;
-  const passwordValid =
-    password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
+  const passwordValid = isSignupPasswordValid(password);
+  const nicknameValid =
+    nickname.trim().length > 0 &&
+    nickname.trim().length <= MAX_NICKNAME_LENGTH;
 
   const startOAuth = useCallback(
     (provider: SocialProvider) => {
@@ -122,7 +137,7 @@ export default function Auth() {
           if (
             mode === "signup" &&
             (!passwordValid ||
-              !nickname.trim() ||
+              !nicknameValid ||
               !termsAccepted ||
               emailStatus === "used")
           )
@@ -218,9 +233,13 @@ export default function Auth() {
             <input
               type="password"
               required
+              minLength={8}
+              maxLength={MAX_PASSWORD_LENGTH}
+              pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).+"
+              title="영문·숫자·특수문자를 포함한 8~72자"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="8자 이상"
+              placeholder="영문·숫자·특수문자 포함 8자 이상"
               autoComplete={
                 mode === "signup" ? "new-password" : "current-password"
               }
@@ -228,7 +247,7 @@ export default function Auth() {
             />
             {mode === "signup" && password && !passwordValid && (
               <span className="text-[11px] text-destructive">
-                영문과 숫자를 포함해 8자 이상 입력해 주세요.
+                영문·숫자·특수문자를 포함해 8~72자로 입력해 주세요.
               </span>
             )}
           </label>
@@ -239,11 +258,18 @@ export default function Auth() {
               </span>
               <input
                 required
+                minLength={1}
+                maxLength={MAX_NICKNAME_LENGTH}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="닉네임을 입력해 주세요"
                 className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
               />
+              {nickname.trim().length > MAX_NICKNAME_LENGTH && (
+                <span className="text-[11px] text-destructive">
+                  닉네임은 30자 이하로 입력해 주세요.
+                </span>
+              )}
             </label>
           )}
           {mode === "signup" && (
@@ -285,7 +311,7 @@ export default function Auth() {
             emailStatus === "checking" ||
             (mode === "signup" &&
               (!passwordValid ||
-                !nickname.trim() ||
+                !nicknameValid ||
                 !termsAccepted ||
                 emailStatus === "used"))
           }

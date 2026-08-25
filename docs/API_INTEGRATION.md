@@ -38,6 +38,7 @@ OAuth 공급자 콘솔에는 위 리다이렉트 URI를 정확히 등록해야 �
 
 ## 인증 및 재시도
 
+- 이메일 회원가입 비밀번호는 운영 DTO와 동일하게 영문·숫자·특수문자를 모두 포함한 8~72자로 검사하며, 닉네임은 30자로 제한합니다.
 - Access Token은 JavaScript 메모리에만 보관합니다. 새로고침 시 HttpOnly Refresh
   Cookie로 Access Token을 다시 발급받습니다.
 - Refresh Token은 JavaScript에서 읽거나 저장하지 않습니다.
@@ -63,6 +64,7 @@ OAuth 공급자 콘솔에는 위 리다이렉트 URI를 정확히 등록해야 �
 
 ## 화면 연결 보강
 
+- 홈: 최근 학습은 `/api/home`의 `recentTraining`을 사용합니다. 별도 `GET /api/users/me/training-sessions/recent`는 기록이 없는 사용자를 404로 응답하므로 홈에서 중복 호출하지 않습니다. 홈·개인화 추천이 빈 이력에서 실패하면 0 상태와 일반 콘텐츠 목록으로 대체합니다.
 - 설정: `PATCH /api/onboarding/me`로 학습 목표, 하루 학습 시간, 주간 횟수를 수정합니다.
 - 클래스: 상세 보기에서 `GET /api/courses/{courseId}`, 이어 학습에서 `GET /api/courses/{courseId}/progress`를 사용합니다.
 - 연습 이어하기: `GET /api/training-sessions/{sessionId}`로 세션과 콘텐츠를 검증합니다.

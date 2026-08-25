@@ -6,10 +6,9 @@ import { Flame, Mic, PenLine, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { GOAL_LABELS } from "@/lib/app-data";
 import {
-  ApiError,
   api,
   type HomeDashboard,
-  type RecentTraining,
+  type PracticeContentSummary,
   type Recommendation,
 } from "@/lib/api";
 import { useProfile } from "@/lib/use-profile";
@@ -18,6 +17,23 @@ type RecommendationCard = Pick<
   Recommendation,
   "contentId" | "title" | "reason"
 >;
+
+const EMPTY_DASHBOARD: HomeDashboard = {
+  today: { completedCount: 0, goalCount: 0, learningSeconds: 0 },
+  recommendations: [],
+  recentTraining: null,
+  courseProgress: null,
+};
+
+function generalRecommendations(
+  items: PracticeContentSummary[],
+): RecommendationCard[] {
+  return items.map((item) => ({
+    contentId: item.id,
+    title: item.title,
+    reason: "지금 바로 시작할 수 있는 학습이에요.",
+  }));
+}
 
 function combineRecommendations(
   primary: ReadonlyArray<RecommendationCard>,
@@ -37,52 +53,48 @@ function combineRecommendations(
 export default function Home() {
   const { profile } = useProfile();
   const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
-  const [recentTraining, setRecentTraining] = useState<RecentTraining | null>(
-    null,
-  );
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendations, setRecommendations] = useState<
+    RecommendationCard[]
+  >([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
   const [activeRecommendation, setActiveRecommendation] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const goal = profile?.goals[0];
 
   useEffect(() => {
     let active = true;
-    api.home
-      .get()
-      .then((value) => active && setDashboard(value))
-      .catch(
-        (reason) =>
-          active &&
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "홈 정보를 불러오지 못했습니다.",
-          ),
-      );
-    api.home
-      .getRecentTraining()
-      .then((value) => active && setRecentTraining(value))
-      .catch((reason) => {
-        if (reason instanceof ApiError && reason.status === 404) return;
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "최근 학습 정보를 불러오지 못했습니다.",
-          );
-      });
-    api.home
-      .getRecommendations({ limit: 3 })
-      .then((value) => active && setRecommendations(value.slice(0, 3)))
-      .catch(
-        (reason) =>
-          active &&
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "개인화 추천을 불러오지 못했습니다.",
-          ),
-      );
+    void (async () => {
+      const [dashboardResult, recommendationResult] = await Promise.allSettled([
+        api.home.get(),
+        api.home.getRecommendations({ limit: 3 }),
+      ]);
+      if (!active) return;
+
+      const nextDashboard =
+        dashboardResult.status === "fulfilled"
+          ? dashboardResult.value
+          : EMPTY_DASHBOARD;
+      setDashboard(nextDashboard);
+
+      if (recommendationResult.status === "fulfilled") {
+        setRecommendations(recommendationResult.value.slice(0, 3));
+      } else if (nextDashboard.recommendations.length === 0) {
+        try {
+          const fallback = await api.content.list({ page: 0, size: 3 });
+          if (active) setRecommendations(generalRecommendations(fallback.items));
+        } catch (reason) {
+          if (active) {
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : "추천 학습을 불러오지 못했습니다.",
+            );
+          }
+        }
+      }
+
+      if (active) setRecommendationsLoaded(true);
+    })();
     return () => {
       active = false;
     };
@@ -107,16 +119,12 @@ export default function Home() {
     return () => window.clearInterval(interval);
   }, [recommendationItems.length]);
 
-  const recent = recentTraining ?? dashboard?.recentTraining;
-  const recentHref = recentTraining
-    ? recentTraining.resumeType === "ANALYSIS_RESULT"
-      ? `/mypage/history/${recentTraining.sessionId}`
-      : `/practice/${recentTraining.contentId}?sessionId=${recentTraining.sessionId}&resumeType=${encodeURIComponent(recentTraining.resumeType)}&returnTo=%2Fhome`
-    : dashboard?.recentTraining
-      ? dashboard.recentTraining.status === "COMPLETED"
-        ? `/mypage/history/${dashboard.recentTraining.sessionId}`
-        : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
-      : "/home";
+  const recent = dashboard?.recentTraining;
+  const recentHref = recent
+    ? recent.status === "COMPLETED"
+      ? `/mypage/history/${recent.sessionId}`
+      : `/practice/${recent.contentId}?sessionId=${recent.sessionId}&resumeType=${recent.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
+    : "/home";
 
   return (
     <AppShell>
@@ -207,7 +215,9 @@ export default function Home() {
           </div>
         ) : (
           <p className="rounded-2xl border border-border px-5 py-4 text-sm text-muted-foreground">
-            추천 학습을 불러오는 중…
+            {recommendationsLoaded
+              ? "추천할 학습 콘텐츠가 아직 없습니다."
+              : "추천 학습을 불러오는 중…"}
           </p>
         )}
 
@@ -233,7 +243,7 @@ export default function Home() {
             className="mt-3 flex items-center justify-between rounded-2xl border border-border px-5 py-4 text-sm font-semibold"
           >
             최근 학습 이어하기 ·
-            {recentTraining?.contentTitle ?? dashboard?.recentTraining?.title}
+            {recent.title}
             <span className="text-xs text-muted-foreground">
               {recent.status}
             </span>
