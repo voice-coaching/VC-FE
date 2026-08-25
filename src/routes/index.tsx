@@ -1,7 +1,30 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import type { SocialProvider } from "@/lib/api";
+import { redirectToOAuthProvider } from "@/lib/oauth";
 
 export default function Landing() {
+  const [oauthProvider, setOAuthProvider] = useState<SocialProvider | null>(
+    null,
+  );
+  const [oauthError, setOAuthError] = useState<string | null>(null);
+
+  function startOAuth(provider: SocialProvider) {
+    setOAuthProvider(provider);
+    setOAuthError(null);
+    try {
+      redirectToOAuthProvider(provider);
+    } catch (reason) {
+      setOAuthProvider(null);
+      setOAuthError(
+        reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.",
+      );
+    }
+  }
+
   return (
     <AppShell nav={false}>
       <div className="flex min-h-dvh flex-col justify-between px-6 py-14">
@@ -15,18 +38,32 @@ export default function Landing() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <Link
-            href="/auth?mode=login&provider=KAKAO"
+          <button
+            type="button"
+            disabled={oauthProvider !== null}
+            onClick={() => startOAuth("KAKAO")}
             className="w-full rounded-full bg-warning py-4 text-center text-sm font-semibold text-warning-foreground"
           >
-            카카오로 시작하기
-          </Link>
-          <Link
-            href="/auth?mode=login&provider=NAVER"
-            className="w-full rounded-full bg-success py-4 text-center text-sm font-semibold text-success-foreground"
+            {oauthProvider === "KAKAO"
+              ? "카카오로 이동 중…"
+              : "카카오로 시작하기"}
+          </button>
+          <button
+            type="button"
+            disabled={oauthProvider !== null}
+            onClick={() => startOAuth("GOOGLE")}
+            className="w-full rounded-full border border-border bg-background py-4 text-center text-sm font-semibold text-foreground"
           >
-            네이버로 시작하기
-          </Link>
+            {oauthProvider === "GOOGLE" ? "구글로 이동 중…" : "구글로 시작하기"}
+          </button>
+          {oauthError && (
+            <p
+              role="alert"
+              className="px-2 text-center text-xs text-destructive"
+            >
+              {oauthError}
+            </p>
+          )}
           <Link
             href="/auth"
             className="w-full rounded-full bg-foreground py-4 text-center text-sm font-semibold text-background"

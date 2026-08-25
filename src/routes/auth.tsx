@@ -10,12 +10,7 @@ import {
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
-import {
-  clearOAuthAttempt,
-  createOAuthAttempt,
-  getOAuthAuthorizationUrl,
-  isOAuthProviderConfigured,
-} from "@/lib/oauth";
+import { redirectToOAuthProvider } from "@/lib/oauth";
 
 const SNS = [
   {
@@ -25,19 +20,10 @@ const SNS = [
   },
   {
     provider: "GOOGLE",
-    label: "Google",
+    label: "구글",
     cls: "border border-border bg-background text-foreground",
   },
-  {
-    provider: "NAVER",
-    label: "네이버",
-    cls: "bg-success text-success-foreground",
-  },
 ] satisfies Array<{ provider: SocialProvider; label: string; cls: string }>;
-
-const CONFIGURED_SNS = SNS.filter(({ provider }) =>
-  isOAuthProviderConfigured(provider),
-);
 
 const MAX_PASSWORD_LENGTH = 72;
 const MAX_NICKNAME_LENGTH = 30;
@@ -76,18 +62,15 @@ export default function Auth() {
   const termsAccepted = termsAgreement.service && termsAgreement.privacy;
   const passwordValid = isSignupPasswordValid(password);
   const nicknameValid =
-    nickname.trim().length > 0 &&
-    nickname.trim().length <= MAX_NICKNAME_LENGTH;
+    nickname.trim().length > 0 && nickname.trim().length <= MAX_NICKNAME_LENGTH;
 
   const startOAuth = useCallback(
     (provider: SocialProvider) => {
       setSubmitting(true);
       setError(null);
       try {
-        const attempt = createOAuthAttempt(provider, returnTo);
-        window.location.assign(getOAuthAuthorizationUrl(provider, attempt));
+        redirectToOAuthProvider(provider, returnTo);
       } catch (reason) {
-        clearOAuthAttempt(provider);
         setError(
           reason instanceof Error
             ? reason.message
@@ -330,7 +313,7 @@ export default function Auth() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {CONFIGURED_SNS.map((s) => (
+          {SNS.map((s) => (
             <button
               key={s.label}
               type="button"
