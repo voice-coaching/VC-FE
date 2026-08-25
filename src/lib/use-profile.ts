@@ -155,5 +155,28 @@ export function useProfile({ loadExisting = true } = {}) {
     return value;
   }, []);
 
-  return { profile, hydrated, error, save };
+  const updateLearningGoals = useCallback(
+    async (value: {
+      goalDescription: string;
+      minutesPerDay: number;
+      weeklySessions: number;
+    }) => {
+      await api.onboarding.update({
+        goalText: value.goalDescription,
+        dailyGoalMinutes: value.minutesPerDay,
+        weeklyGoalCount: value.weeklySessions,
+      });
+
+      setProfile((current) => {
+        if (!current) return current;
+        const updated = { ...current, ...value };
+        cachedProfile = updated;
+        cachedProfileUserId = currentUserId();
+        return updated;
+      });
+    },
+    [],
+  );
+
+  return { profile, hydrated, error, save, updateLearningGoals };
 }

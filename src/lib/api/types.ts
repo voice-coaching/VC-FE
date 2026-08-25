@@ -159,6 +159,13 @@ export interface PracticeContent extends PracticeContentSummary {
   referenceAudioAvailable: boolean;
 }
 
+export interface PracticeContentRecommendation {
+  id: Id;
+  title: string;
+  contentType: ContentType;
+  similarityReason: string;
+}
+
 export interface ReferenceAudio {
   id: Id;
   speakerName: string;
@@ -446,17 +453,7 @@ export interface ApiContract {
       difficulty?: Difficulty;
       excludeId?: Id;
     }): Promise<PracticeContent>;
-    getRecommendations(
-      id: Id,
-      limit?: number,
-    ): Promise<
-      Array<{
-        id: Id;
-        title: string;
-        contentType: ContentType;
-        similarityReason: string;
-      }>
-    >;
+    getRecommendations(id: Id): Promise<PracticeContentRecommendation[]>;
     getReferenceAudios(id: Id): Promise<ReferenceAudio[]>;
     getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
   };

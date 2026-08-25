@@ -162,7 +162,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request<PracticeContent>(
           `/api/practice-contents/next${query(filters)}`,
         ),
-      async getRecommendations(contentId, limit) {
+      async getRecommendations(contentId) {
         const data = await request<{
           items: Array<{
             id: Id;
@@ -170,9 +170,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             contentType: ContentType;
             similarityReason: string;
           }>;
-        }>(
-          `/api/practice-contents/${id(contentId)}/recommendations${query({ limit })}`,
-        );
+        }>(`/api/practice-contents/${id(contentId)}/recommendations`);
         return data.items;
       },
       async getReferenceAudios(contentId) {
