@@ -32,14 +32,14 @@ export default function AccountSettings() {
     const cachedUser = getCachedUser();
     if (cachedUser) {
       setNickname(cachedUser.nickname);
-      setEmail(cachedUser.email);
+      setEmail(cachedUser.email ?? "");
       return;
     }
     api.users
       .getMe()
       .then((account) => {
         setNickname(account.nickname);
-        setEmail(account.email);
+        setEmail(account.email ?? "");
       })
       .catch(() => setMessage("프로필을 불러오지 못했습니다."));
   }, []);

@@ -75,7 +75,7 @@ export default function Onboarding() {
 
   const steps = [
     {
-      q: "또박에서\n무엇을 이루고 싶나요?",
+      q: "SpeakAI에서\n무엇을 이루고 싶나요?",
       hint: "복수 선택 가능 · 최소 1개",
       body: (
         <Options
@@ -164,7 +164,7 @@ export default function Onboarding() {
       valid: !!level,
     },
     {
-      q: "또박과 함께 이루고 싶은\n구체적인 목표가 있나요?",
+      q: "SpeakAI와 함께 이루고 싶은\n구체적인 목표가 있나요?",
       hint: "선택한 목표를 내 말로 적어보세요",
       body: (
         <textarea

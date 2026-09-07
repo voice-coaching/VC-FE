@@ -154,7 +154,7 @@ export default function Auth() {
       >
         <h1 className="text-3xl leading-tight font-bold tracking-tight">
           {mode === "signup"
-            ? "또박에 오신 걸\n환영해요"
+            ? "SpeakAI에 오신 걸\n환영해요"
             : "다시 만나서\n반가워요"}
         </h1>
 

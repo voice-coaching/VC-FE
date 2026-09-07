@@ -129,7 +129,7 @@ export default function Home() {
   return (
     <AppShell>
       <div className="px-5 pt-8 pb-10">
-        <h1 className="text-4xl font-black tracking-tighter">또박</h1>
+        <h1 className="text-4xl font-black tracking-tighter">SpeakAI</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {profile && goal ? (
             <>
