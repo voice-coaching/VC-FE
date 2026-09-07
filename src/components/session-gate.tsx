@@ -3,6 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "@/lib/api";
+import {
+  getAuthSessionSnapshot,
+  markAuthenticatedUser,
+  resetAuthSession,
+} from "@/lib/auth-session";
 
 const PROTECTED_PREFIXES = [
   "/home",
@@ -21,24 +26,51 @@ function isProtectedPath(pathname: string) {
   );
 }
 
+function canOpenPath(pathname: string) {
+  const session = getAuthSessionSnapshot();
+  if (session.status !== "authenticated") return false;
+  return session.onboardingCompleted
+    ? pathname !== "/onboarding"
+    : pathname === "/onboarding";
+}
+
 export function SessionGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const protectedPath = isProtectedPath(pathname);
-  const [status, setStatus] = useState<"checking" | "ready" | "error">(
-    protectedPath ? "checking" : "ready",
+  const [status, setStatus] = useState<"checking" | "ready" | "error">(() =>
+    protectedPath && getAuthSessionSnapshot().status === "unknown"
+      ? "checking"
+      : "ready",
   );
   const [message, setMessage] = useState("");
-  const [checkedPath, setCheckedPath] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!protectedPath) return;
 
+    const cachedSession = getAuthSessionSnapshot();
+    if (cachedSession.status === "anonymous") {
+      const next = encodeURIComponent(pathname);
+      router.replace(`/auth?mode=login&next=${next}`);
+      return;
+    }
+    if (cachedSession.status === "authenticated") {
+      if (cachedSession.onboardingCompleted && pathname === "/onboarding") {
+        router.replace("/home");
+        return;
+      }
+      if (!cachedSession.onboardingCompleted && pathname !== "/onboarding") {
+        router.replace("/onboarding");
+        return;
+      }
+      setStatus("ready");
+      return;
+    }
+
     let active = true;
     setStatus("checking");
     setMessage("");
-    setCheckedPath(null);
     api.users
       .getMe()
       .then(async (user) => {
@@ -57,6 +89,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
         }
 
         if (!active) return;
+        markAuthenticatedUser({ ...user, onboardingCompleted });
         if (onboardingCompleted && pathname === "/onboarding") {
           router.replace("/home");
           return;
@@ -65,7 +98,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
           router.replace("/onboarding");
           return;
         }
-        setCheckedPath(pathname);
         setStatus("ready");
       })
       .catch((reason) => {
@@ -88,7 +120,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     };
   }, [pathname, protectedPath, retryKey, router]);
 
-  if (!protectedPath || (status === "ready" && checkedPath === pathname))
+  if (!protectedPath || (status === "ready" && canOpenPath(pathname)))
     return children;
 
   return (
@@ -108,7 +140,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
           </p>
           <button
             type="button"
-            onClick={() => setRetryKey((value) => value + 1)}
+            onClick={() => {
+              resetAuthSession();
+              setRetryKey((value) => value + 1);
+            }}
             className="mt-6 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background"
           >
             다시 시도

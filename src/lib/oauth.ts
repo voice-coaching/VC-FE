@@ -25,29 +25,29 @@ function providerConfiguration(provider: SocialProvider) {
   switch (provider) {
     case "GOOGLE":
       return {
-        value:
-          process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
-          process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
+        clientId:
+          process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
+          process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL?.trim(),
         endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
         scope: "openid email profile",
       };
     case "KAKAO":
       return {
-        value:
-          process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY ??
-          process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,
+        clientId:
+          process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY?.trim() ||
+          process.env.NEXT_PUBLIC_KAKAO_AUTH_URL?.trim(),
         endpoint: "https://kauth.kakao.com/oauth/authorize",
       };
     case "NAVER":
       return {
-        value:
-          process.env.NEXT_PUBLIC_NAVER_CLIENT_ID ??
-          process.env.NEXT_PUBLIC_NAVER_AUTH_URL,
+        clientId:
+          process.env.NEXT_PUBLIC_NAVER_CLIENT_ID?.trim() ||
+          process.env.NEXT_PUBLIC_NAVER_AUTH_URL?.trim(),
         endpoint: "https://nid.naver.com/oauth2.0/authorize",
       };
     case "APPLE":
       return {
-        value: process.env.NEXT_PUBLIC_APPLE_AUTH_URL,
+        clientId: process.env.NEXT_PUBLIC_APPLE_AUTH_URL?.trim(),
         endpoint: "https://appleid.apple.com/auth/authorize",
       };
   }
@@ -93,15 +93,18 @@ export function getOAuthAuthorizationUrl(
   attempt: OAuthAttempt,
 ) {
   const configuration = providerConfiguration(provider);
-  const value = configuration.value?.trim();
-  if (!value) {
+  const clientId = configuration.clientId;
+  if (!clientId) {
     throw new Error(`${provider} OAuth 설정이 없습니다.`);
   }
+  if (/^https?:\/\//i.test(clientId)) {
+    throw new Error(
+      `${provider} OAuth에는 인증 URL이 아닌 클라이언트 ID를 설정해 주세요.`,
+    );
+  }
 
-  const isAuthorizationUrl = /^https?:\/\//i.test(value);
-  const url = new URL(isAuthorizationUrl ? value : configuration.endpoint);
-
-  if (!isAuthorizationUrl) url.searchParams.set("client_id", value);
+  const url = new URL(configuration.endpoint);
+  url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", attempt.redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", attempt.state);
@@ -117,7 +120,20 @@ export function getOAuthAuthorizationUrl(
 }
 
 export function isOAuthProviderConfigured(provider: SocialProvider) {
-  return Boolean(providerConfiguration(provider).value?.trim());
+  return Boolean(providerConfiguration(provider).clientId);
+}
+
+export function redirectToOAuthProvider(
+  provider: SocialProvider,
+  returnTo = "/home",
+) {
+  const attempt = createOAuthAttempt(provider, returnTo);
+  try {
+    window.location.assign(getOAuthAuthorizationUrl(provider, attempt));
+  } catch (reason) {
+    clearOAuthAttempt(provider);
+    throw reason;
+  }
 }
 
 export function consumeOAuthAttempt(provider: SocialProvider, state: string) {

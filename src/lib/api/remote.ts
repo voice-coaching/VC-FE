@@ -1,10 +1,21 @@
-import { clearAccessToken, createHttpClient, saveAccessToken } from "./client";
+import {
+  ApiError,
+  clearAccessToken,
+  createHttpClient,
+  saveAccessToken,
+} from "./client";
+import {
+  markAnonymousSession,
+  markAuthenticatedSession,
+  markAuthenticatedUser,
+} from "../auth-session";
 import type {
   ApiContract,
   AuthSession,
   ContentType,
   CourseStep,
   Id,
+  OnboardingProfile,
   PageResult,
   PracticeContent,
   PracticeContentSummary,
@@ -32,9 +43,42 @@ const id = (value: Id) => encodeURIComponent(String(value));
 export function createRemoteApi(baseUrl: string): ApiContract {
   const { request, upload } = createHttpClient(baseUrl);
 
-  function persistSession(session: AuthSession) {
-    saveAccessToken(session.accessToken);
-    return session;
+  async function persistSession(
+    session: AuthSession,
+    { reconcileOnboarding = false } = {},
+  ) {
+    let normalizedSession = {
+      ...session,
+      accessToken: saveAccessToken(session.accessToken),
+    };
+    markAuthenticatedSession(normalizedSession);
+
+    if (
+      !reconcileOnboarding ||
+      normalizedSession.isNewUser ||
+      !normalizedSession.onboardingRequired
+    ) {
+      return normalizedSession;
+    }
+
+    try {
+      const onboarding = await request<OnboardingProfile>("/api/onboarding/me");
+      if (onboarding.completedAt) {
+        normalizedSession = {
+          ...normalizedSession,
+          onboardingRequired: false,
+          user: {
+            ...normalizedSession.user,
+            onboardingCompleted: true,
+          },
+        };
+        markAuthenticatedSession(normalizedSession);
+      }
+    } catch (reason) {
+      if (!(reason instanceof ApiError && reason.status === 404)) throw reason;
+    }
+
+    return normalizedSession;
   }
 
   return {
@@ -68,10 +112,13 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           expiresIn: number;
           user: { id: Id; nickname: string; onboardingCompleted: boolean };
         }>("/api/auth/login", { method: "POST", body: input, skipAuth: true });
-        return persistSession({
-          ...data,
-          onboardingRequired: !data.user.onboardingCompleted,
-        });
+        return persistSession(
+          {
+            ...data,
+            onboardingRequired: !data.user.onboardingCompleted,
+          },
+          { reconcileOnboarding: true },
+        );
       },
       async socialLogin(input) {
         const data = await request<{
@@ -86,7 +133,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           body: input,
           skipAuth: true,
         });
-        return persistSession(data);
+        return persistSession(data, { reconcileOnboarding: true });
       },
       async refresh() {
         const data = await request<{
@@ -98,16 +145,23 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           skipAuth: true,
           skipRefresh: true,
         });
-        saveAccessToken(data.accessToken);
-        return data;
+        return { ...data, accessToken: saveAccessToken(data.accessToken) };
       },
       async signOut() {
         await request<null>("/api/auth/logout", { method: "POST" });
         clearAccessToken();
+        markAnonymousSession();
       },
     },
     users: {
-      getMe: () => request("/api/users/me"),
+      async getMe() {
+        const user =
+          await request<Awaited<ReturnType<ApiContract["users"]["getMe"]>>>(
+            "/api/users/me",
+          );
+        markAuthenticatedUser(user);
+        return user;
+      },
       updateProfile: (input) =>
         request("/api/users/me", { method: "PATCH", body: input }),
       async withdraw() {
@@ -115,6 +169,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           method: "DELETE",
         });
         clearAccessToken();
+        markAnonymousSession();
         return result;
       },
     },
@@ -147,7 +202,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request<PracticeContent>(
           `/api/practice-contents/next${query(filters)}`,
         ),
-      async getRecommendations(contentId, limit) {
+      async getRecommendations(contentId) {
         const data = await request<{
           items: Array<{
             id: Id;
@@ -155,9 +210,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             contentType: ContentType;
             similarityReason: string;
           }>;
-        }>(
-          `/api/practice-contents/${id(contentId)}/recommendations${query({ limit })}`,
-        );
+        }>(`/api/practice-contents/${id(contentId)}/recommendations`);
         return data.items;
       },
       async getReferenceAudios(contentId) {

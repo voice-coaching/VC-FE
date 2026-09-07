@@ -1,4 +1,5 @@
 import type { ApiEnvelope } from "./types";
+import { markAnonymousSession } from "../auth-session";
 
 export class ApiError extends Error {
   constructor(
@@ -15,7 +16,19 @@ export class ApiError extends Error {
 let accessToken: string | null = null;
 
 export function saveAccessToken(value: string) {
-  accessToken = value;
+  const normalized = value
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (!normalized) {
+    throw new ApiError(
+      "로그인 응답에 Access Token이 없습니다.",
+      500,
+      "INVALID_AUTH_RESPONSE",
+    );
+  }
+  accessToken = normalized;
+  return normalized;
 }
 
 export function clearAccessToken() {
@@ -52,8 +65,7 @@ export function createHttpClient(baseUrl: string) {
         },
       )
         .then(({ accessToken }) => {
-          saveAccessToken(accessToken);
-          return accessToken;
+          return saveAccessToken(accessToken);
         })
         .finally(() => {
           refreshPromise = null;
@@ -111,7 +123,10 @@ export function createHttpClient(baseUrl: string) {
         : null;
 
       if (!response.ok || !payload?.result) {
-        if (response.status === 401) clearAccessToken();
+        if (response.status === 401) {
+          clearAccessToken();
+          markAnonymousSession();
+        }
         throw new ApiError(
           payload?.message ?? "요청을 처리하지 못했습니다.",
           response.status,
@@ -135,7 +150,7 @@ export function createHttpClient(baseUrl: string) {
       }
 
       const headerToken = response.headers.get("x-new-access-token");
-      if (headerToken) saveAccessToken(headerToken.replace(/^Bearer\s+/i, ""));
+      if (headerToken) saveAccessToken(headerToken);
       return data;
     } catch (error) {
       if (error instanceof ApiError) throw error;

@@ -8,11 +8,23 @@ import {
   type OnboardingProfile as ApiProfile,
   type OnboardingSaveInput,
 } from "./api";
+import {
+  decodeAudioAccessPreference,
+  encodeAudioAccessPreference,
+  withoutAudioAccessPreference,
+  type AudioAccessPreference,
+} from "./accessibility-preference";
+import {
+  getAuthSessionSnapshot,
+  getCachedUser,
+  markOnboardingCompleted,
+} from "./auth-session";
 
 export type OnboardingAnswers = UiProfile & {
   improvementAreas: string[];
   pronunciationConcerns: string[];
   learningSituations: string[];
+  audioAccessPreference: AudioAccessPreference | null;
   goalDescription: string;
 };
 
@@ -28,6 +40,16 @@ const levelToApi: Record<Level, CurrentLevel> = {
   advanced: "ADVANCED",
 };
 
+let cachedProfile: OnboardingAnswers | null = null;
+let cachedProfileUserId: string | null = null;
+
+function currentUserId() {
+  const session = getAuthSessionSnapshot();
+  return session.status === "authenticated" && session.userId !== undefined
+    ? String(session.userId)
+    : null;
+}
+
 function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
   return {
     name,
@@ -38,7 +60,12 @@ function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
     minutesPerDay: profile.dailyGoalMinutes ?? 10,
     improvementAreas: profile.surveyAnswers.improvementAreas,
     pronunciationConcerns: profile.surveyAnswers.pronunciationConcerns,
-    learningSituations: profile.surveyAnswers.learningSituations,
+    learningSituations: withoutAudioAccessPreference(
+      profile.surveyAnswers.learningSituations,
+    ),
+    audioAccessPreference: decodeAudioAccessPreference(
+      profile.surveyAnswers.learningSituations,
+    ),
     weeklySessions: profile.weeklyGoalCount ?? 5,
     goalDescription: profile.goalText ?? "",
   };
@@ -54,26 +81,47 @@ function toApi(profile: OnboardingAnswers): OnboardingSaveInput {
       learningPurposes: profile.goals.map((value) => value.toUpperCase()),
       improvementAreas: profile.improvementAreas,
       pronunciationConcerns: profile.pronunciationConcerns,
-      learningSituations: profile.learningSituations,
+      learningSituations: profile.audioAccessPreference
+        ? [
+            ...profile.learningSituations,
+            encodeAudioAccessPreference(profile.audioAccessPreference),
+          ]
+        : profile.learningSituations,
     },
   };
 }
 
 export function useProfile({ loadExisting = true } = {}) {
-  const [profile, setProfile] = useState<OnboardingAnswers | null>(null);
-  const [hydrated, setHydrated] = useState(() => !loadExisting);
+  const userId = currentUserId();
+  const initialProfile =
+    userId !== null && cachedProfileUserId === userId ? cachedProfile : null;
+  const [profile, setProfile] = useState<OnboardingAnswers | null>(
+    initialProfile,
+  );
+  const [hydrated, setHydrated] = useState(
+    () => !loadExisting || initialProfile !== null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loadExisting) {
+    if (
+      !loadExisting ||
+      (cachedProfile !== null && cachedProfileUserId === userId)
+    ) {
       return;
     }
 
     let active = true;
-    Promise.all([api.onboarding.get(), api.users.getMe()])
+    const cachedUser = getCachedUser();
+    Promise.all([
+      api.onboarding.get(),
+      cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
+    ])
       .then(([onboarding, user]) => {
         if (!active) return;
         const value = fromApi(onboarding, user.nickname);
+        cachedProfile = value;
+        cachedProfileUserId = String(user.id);
         setProfile(value);
       })
       .catch((reason) => {
@@ -90,7 +138,7 @@ export function useProfile({ loadExisting = true } = {}) {
     return () => {
       active = false;
     };
-  }, [loadExisting]);
+  }, [loadExisting, userId]);
 
   const save = useCallback(async (value: OnboardingAnswers) => {
     if (value.name.trim())
@@ -100,10 +148,40 @@ export function useProfile({ loadExisting = true } = {}) {
     if (!completion.completed) {
       throw new Error("온보딩 완료 상태가 저장되지 않았습니다.");
     }
+    const stored = await api.onboarding.get();
+    if (!stored.completedAt) {
+      throw new Error("저장된 온보딩 완료 상태를 확인하지 못했습니다.");
+    }
 
+    markOnboardingCompleted();
+    cachedProfile = value;
+    cachedProfileUserId = currentUserId();
     setProfile(value);
     return value;
   }, []);
 
-  return { profile, hydrated, error, save };
+  const updateLearningGoals = useCallback(
+    async (value: {
+      goalDescription: string;
+      minutesPerDay: number;
+      weeklySessions: number;
+    }) => {
+      await api.onboarding.update({
+        goalText: value.goalDescription,
+        dailyGoalMinutes: value.minutesPerDay,
+        weeklyGoalCount: value.weeklySessions,
+      });
+
+      setProfile((current) => {
+        if (!current) return current;
+        const updated = { ...current, ...value };
+        cachedProfile = updated;
+        cachedProfileUserId = currentUserId();
+        return updated;
+      });
+    },
+    [],
+  );
+
+  return { profile, hydrated, error, save, updateLearningGoals };
 }

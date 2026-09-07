@@ -4,20 +4,37 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
-import { LearningGoalSettings } from "@/components/learning-goal-settings";
 import { api } from "@/lib/api";
+import { getCachedUser } from "@/lib/auth-session";
+import { useProfile } from "@/lib/use-profile";
 
 export default function AccountSettings() {
   const router = useRouter();
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [goalDescription, setGoalDescription] = useState("");
+  const [minutesPerDay, setMinutesPerDay] = useState(10);
+  const [weeklySessions, setWeeklySessions] = useState(3);
+  const [savingGoals, setSavingGoals] = useState(false);
   const [accountAction, setAccountAction] = useState<
     "logout" | "withdraw" | null
   >(null);
   const [message, setMessage] = useState<string | null>(null);
+  const {
+    profile,
+    hydrated: profileHydrated,
+    error: profileError,
+    updateLearningGoals,
+  } = useProfile();
 
   useEffect(() => {
+    const cachedUser = getCachedUser();
+    if (cachedUser) {
+      setNickname(cachedUser.nickname);
+      setEmail(cachedUser.email ?? "");
+      return;
+    }
     api.users
       .getMe()
       .then((account) => {
@@ -26,6 +43,13 @@ export default function AccountSettings() {
       })
       .catch(() => setMessage("프로필을 불러오지 못했습니다."));
   }, []);
+
+  useEffect(() => {
+    if (!profile) return;
+    setGoalDescription(profile.goalDescription);
+    setMinutesPerDay(profile.minutesPerDay);
+    setWeeklySessions(profile.weeklySessions);
+  }, [profile]);
 
   return (
     <AppShell nav={false}>
@@ -73,7 +97,97 @@ export default function AccountSettings() {
         >
           {saving ? "저장 중…" : "프로필 저장"}
         </button>
-        <LearningGoalSettings />
+        <section className="rounded-3xl bg-surface p-5">
+          <h2 className="text-base font-semibold">학습 목표</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            온보딩에서 정한 목표를 현재 계획에 맞게 수정할 수 있습니다.
+          </p>
+          {!profileHydrated ? (
+            <p className="mt-4 text-xs text-muted-foreground">
+              학습 목표를 불러오는 중…
+            </p>
+          ) : (
+            <div className="mt-4 space-y-4">
+              <label className="block text-xs text-muted-foreground">
+                목표 문구
+                <textarea
+                  value={goalDescription}
+                  onChange={(event) => setGoalDescription(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-2xl bg-background px-4 py-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-muted-foreground">
+                  하루 학습(분)
+                  <input
+                    type="number"
+                    min={1}
+                    max={180}
+                    value={minutesPerDay}
+                    onChange={(event) =>
+                      setMinutesPerDay(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-2xl bg-background px-4 py-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+                <label className="block text-xs text-muted-foreground">
+                  주간 횟수
+                  <input
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={weeklySessions}
+                    onChange={(event) =>
+                      setWeeklySessions(Number(event.target.value))
+                    }
+                    className="mt-2 w-full rounded-2xl bg-background px-4 py-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+              </div>
+              {profileError && (
+                <p role="alert" className="text-xs text-destructive">
+                  {profileError}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={
+                  savingGoals ||
+                  !profile ||
+                  goalDescription.trim().length < 4 ||
+                  minutesPerDay < 1 ||
+                  minutesPerDay > 180 ||
+                  weeklySessions < 1 ||
+                  weeklySessions > 7
+                }
+                onClick={async () => {
+                  setSavingGoals(true);
+                  setMessage(null);
+                  try {
+                    await updateLearningGoals({
+                      goalDescription: goalDescription.trim(),
+                      minutesPerDay,
+                      weeklySessions,
+                    });
+                    setMessage("학습 목표를 저장했습니다.");
+                  } catch (reason) {
+                    setMessage(
+                      reason instanceof Error
+                        ? reason.message
+                        : "학습 목표를 저장하지 못했습니다.",
+                    );
+                  } finally {
+                    setSavingGoals(false);
+                  }
+                }}
+                className="w-full rounded-full border border-border py-3 text-sm font-semibold disabled:opacity-30"
+              >
+                {savingGoals ? "저장 중…" : "학습 목표 저장"}
+              </button>
+            </div>
+          )}
+        </section>
         <button
           disabled={accountAction != null}
           onClick={async () => {

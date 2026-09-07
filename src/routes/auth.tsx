@@ -1,17 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import {
+  TermsAgreementDialog,
+  type TermsAgreement,
+} from "@/components/terms-agreement-dialog";
 import { TopBar } from "@/components/top-bar";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
-import {
-  clearOAuthAttempt,
-  createOAuthAttempt,
-  getOAuthAuthorizationUrl,
-  isOAuthProviderConfigured,
-} from "@/lib/oauth";
+import { redirectToOAuthProvider } from "@/lib/oauth";
 
 const SNS = [
   {
@@ -21,19 +20,23 @@ const SNS = [
   },
   {
     provider: "GOOGLE",
-    label: "Google",
+    label: "구글",
     cls: "border border-border bg-background text-foreground",
-  },
-  {
-    provider: "NAVER",
-    label: "네이버",
-    cls: "bg-success text-success-foreground",
   },
 ] satisfies Array<{ provider: SocialProvider; label: string; cls: string }>;
 
-const CONFIGURED_SNS = SNS.filter(({ provider }) =>
-  isOAuthProviderConfigured(provider),
-);
+const MAX_PASSWORD_LENGTH = 72;
+const MAX_NICKNAME_LENGTH = 30;
+
+function isSignupPasswordValid(password: string) {
+  return (
+    password.length >= 8 &&
+    password.length <= MAX_PASSWORD_LENGTH &&
+    /[A-Za-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
 
 export default function Auth() {
   const router = useRouter();
@@ -44,52 +47,40 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAgreement, setTermsAgreement] = useState<TermsAgreement>({
+    service: false,
+    privacy: false,
+  });
+  const [termsOpen, setTermsOpen] = useState(false);
   const [emailStatus, setEmailStatus] = useState<
     "idle" | "checking" | "available" | "used"
   >("idle");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const oauthStarted = useRef(false);
   const emailCheckId = useRef(0);
   const returnTo = safeInternalPath(searchParams.get("next"), "/home");
-  const passwordValid =
-    password.length >= 8 &&
-    password.length <= 72 &&
-    /[A-Za-z]/.test(password) &&
-    /\d/.test(password) &&
-    /[^A-Za-z0-9]/.test(password);
+  const termsAccepted = termsAgreement.service && termsAgreement.privacy;
+  const passwordValid = isSignupPasswordValid(password);
+  const nicknameValid =
+    nickname.trim().length > 0 && nickname.trim().length <= MAX_NICKNAME_LENGTH;
 
   const startOAuth = useCallback(
     (provider: SocialProvider) => {
-      const attempt = createOAuthAttempt(provider, returnTo);
-      const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
-      window.location.assign(authorizationUrl);
+      setSubmitting(true);
+      setError(null);
+      try {
+        redirectToOAuthProvider(provider, returnTo);
+      } catch (reason) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "SNS 로그인에 실패했습니다.",
+        );
+        setSubmitting(false);
+      }
     },
     [returnTo],
   );
-
-  useEffect(() => {
-    const provider = searchParams.get("provider")?.toUpperCase();
-    const requestedProvider = SNS.find((item) => item.provider === provider);
-    if (oauthStarted.current || !requestedProvider) return;
-
-    oauthStarted.current = true;
-    if (!CONFIGURED_SNS.includes(requestedProvider)) {
-      setError(`${requestedProvider.label} OAuth 설정이 없습니다.`);
-      return;
-    }
-    setSubmitting(true);
-    try {
-      startOAuth(provider as SocialProvider);
-    } catch (reason) {
-      clearOAuthAttempt(provider as SocialProvider);
-      setError(
-        reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.",
-      );
-      setSubmitting(false);
-    }
-  }, [searchParams, startOAuth]);
 
   async function checkEmail() {
     const candidate = email.trim();
@@ -129,7 +120,7 @@ export default function Auth() {
           if (
             mode === "signup" &&
             (!passwordValid ||
-              !nickname.trim() ||
+              !nicknameValid ||
               !termsAccepted ||
               emailStatus === "used")
           )
@@ -143,8 +134,8 @@ export default function Auth() {
                     email: email.trim(),
                     password,
                     nickname: nickname.trim(),
-                    termsAgreed: termsAccepted,
-                    privacyAgreed: termsAccepted,
+                    termsAgreed: termsAgreement.service,
+                    privacyAgreed: termsAgreement.privacy,
                   })
                 : await api.auth.signIn({ email: email.trim(), password });
             router.replace(
@@ -225,9 +216,13 @@ export default function Auth() {
             <input
               type="password"
               required
+              minLength={8}
+              maxLength={MAX_PASSWORD_LENGTH}
+              pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).+"
+              title="영문·숫자·특수문자를 포함한 8~72자"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="8자 이상"
+              placeholder="영문·숫자·특수문자 포함 8자 이상"
               autoComplete={
                 mode === "signup" ? "new-password" : "current-password"
               }
@@ -235,7 +230,7 @@ export default function Auth() {
             />
             {mode === "signup" && password && !passwordValid && (
               <span className="text-[11px] text-destructive">
-                영문, 숫자, 특수문자를 포함해 8~72자로 입력해 주세요.
+                영문·숫자·특수문자를 포함해 8~72자로 입력해 주세요.
               </span>
             )}
           </label>
@@ -246,25 +241,40 @@ export default function Auth() {
               </span>
               <input
                 required
+                minLength={1}
+                maxLength={MAX_NICKNAME_LENGTH}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="닉네임을 입력해 주세요"
                 className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
               />
+              {nickname.trim().length > MAX_NICKNAME_LENGTH && (
+                <span className="text-[11px] text-destructive">
+                  닉네임은 30자 이하로 입력해 주세요.
+                </span>
+              )}
             </label>
           )}
           {mode === "signup" && (
-            <label className="flex items-start gap-2 rounded-2xl border border-border p-3 text-xs leading-relaxed">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5"
-              />
+            <button
+              type="button"
+              onClick={() => setTermsOpen(true)}
+              className="flex items-center justify-between rounded-2xl border border-border p-4 text-left text-xs leading-relaxed"
+            >
               <span>
-                <b>필수</b> 서비스 이용약관 및 개인정보 처리방침에 동의합니다.
+                <b>필수 약관</b>
+                <span className="mt-0.5 block text-muted-foreground">
+                  서비스 이용약관 및 개인정보 처리방침
+                </span>
               </span>
-            </label>
+              <span
+                className={
+                  termsAccepted ? "font-semibold text-success" : "underline"
+                }
+              >
+                {termsAccepted ? "동의 완료" : "확인하기"}
+              </span>
+            </button>
           )}
         </div>
 
@@ -284,7 +294,7 @@ export default function Auth() {
             emailStatus === "checking" ||
             (mode === "signup" &&
               (!passwordValid ||
-                !nickname.trim() ||
+                !nicknameValid ||
                 !termsAccepted ||
                 emailStatus === "used"))
           }
@@ -303,27 +313,12 @@ export default function Auth() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {CONFIGURED_SNS.map((s) => (
+          {SNS.map((s) => (
             <button
               key={s.label}
               type="button"
               disabled={submitting}
-              onClick={async () => {
-                setSubmitting(true);
-                setError(null);
-                try {
-                  startOAuth(s.provider);
-                } catch (reason) {
-                  clearOAuthAttempt(s.provider);
-                  setError(
-                    reason instanceof Error
-                      ? reason.message
-                      : "SNS 로그인에 실패했습니다.",
-                  );
-                } finally {
-                  setSubmitting(false);
-                }
-              }}
+              onClick={() => startOAuth(s.provider)}
               className={`w-full rounded-full py-4 text-sm font-semibold ${s.cls}`}
             >
               {s.label} 계정으로 계속하기
@@ -347,6 +342,12 @@ export default function Auth() {
             : "계정이 없어요, 가입할래요"}
         </button>
       </form>
+      <TermsAgreementDialog
+        open={termsOpen}
+        onOpenChange={setTermsOpen}
+        value={termsAgreement}
+        onChange={setTermsAgreement}
+      />
     </AppShell>
   );
 }
