@@ -6,6 +6,7 @@ import {
   api,
   type CurrentLevel,
   type OnboardingProfile as ApiProfile,
+  type OnboardingSaveInput,
 } from "./api";
 
 export type OnboardingAnswers = UiProfile & {
@@ -34,16 +35,16 @@ function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
       value.toLowerCase(),
     ) as Goal[],
     level: levelFromApi[profile.currentLevel],
-    minutesPerDay: profile.dailyGoalMinutes,
+    minutesPerDay: profile.dailyGoalMinutes ?? 10,
     improvementAreas: profile.surveyAnswers.improvementAreas,
     pronunciationConcerns: profile.surveyAnswers.pronunciationConcerns,
     learningSituations: profile.surveyAnswers.learningSituations,
-    weeklySessions: profile.weeklyGoalCount,
-    goalDescription: profile.goalText,
+    weeklySessions: profile.weeklyGoalCount ?? 5,
+    goalDescription: profile.goalText ?? "",
   };
 }
 
-function toApi(profile: OnboardingAnswers): ApiProfile {
+function toApi(profile: OnboardingAnswers): OnboardingSaveInput {
   return {
     currentLevel: levelToApi[profile.level],
     goalText: profile.goalDescription,

@@ -1,9 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AppShell } from "@/components/app-shell";
-import { TopBar } from "@/components/top-bar";
-import { api, type SocialProvider } from "@/lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -28,7 +24,6 @@ const SNS = [
     label: "Google",
     cls: "border border-border bg-background text-foreground",
   },
-
   {
     provider: "NAVER",
     label: "네이버",
@@ -64,9 +59,6 @@ export default function Auth() {
     /[A-Za-z]/.test(password) &&
     /\d/.test(password) &&
     /[^A-Za-z0-9]/.test(password);
-  const devAccountEnabled = isDevAccountEnabled();
-  const passwordValid =
-    password.length >= 8 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
   const startOAuth = useCallback(
     (provider: SocialProvider) => {
@@ -88,25 +80,17 @@ export default function Auth() {
       return;
     }
     setSubmitting(true);
-    setError(null);
-    api.auth
-      .socialLogin({
-        provider,
-        authorizationCode: code,
-        redirectUri: `${window.location.origin}/auth?provider=${provider}`,
-      })
-      .then((session) =>
-        router.replace(session.onboardingRequired ? "/onboarding" : "/home"),
-      )
-      .catch((reason) =>
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "SNS 로그인에 실패했습니다.",
-        ),
-      )
-      .finally(() => setSubmitting(false));
-  }, [router, searchParams]);
+    try {
+      startOAuth(provider as SocialProvider);
+    } catch (reason) {
+      clearOAuthAttempt(provider as SocialProvider);
+      setError(
+        reason instanceof Error ? reason.message : "SNS 로그인에 실패했습니다.",
+      );
+      setSubmitting(false);
+    }
+  }, [searchParams, startOAuth]);
+
   async function checkEmail() {
     const candidate = email.trim();
     if (!candidate) return false;
@@ -328,27 +312,7 @@ export default function Auth() {
                 setSubmitting(true);
                 setError(null);
                 try {
-                  const attempt = createOAuthAttempt(s.provider);
-                  const authorizationUrl = getOAuthAuthorizationUrl(
-                    s.provider,
-                    attempt,
-                  );
-                  window.location.assign(authorizationUrl);
-                } catch (reason) {
-                  clearOAuthAttempt(s.provider);
-                  const urls: Record<SocialProvider, string | undefined> = {
-                    GOOGLE: process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
-                    KAKAO: process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,
-                    NAVER: process.env.NEXT_PUBLIC_NAVER_AUTH_URL,
-                    APPLE: process.env.NEXT_PUBLIC_APPLE_AUTH_URL,
-                  };
-                  const authorizationUrl = urls[s.provider];
-                  if (!authorizationUrl) {
-                    throw new Error(
-                      `${s.label} OAuth 인가 URL이 설정되지 않았습니다.`,
-                    );
-                  }
-                  window.location.assign(authorizationUrl);
+                  startOAuth(s.provider);
                 } catch (reason) {
                   clearOAuthAttempt(s.provider);
                   setError(

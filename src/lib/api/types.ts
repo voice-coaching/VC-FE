@@ -45,52 +45,6 @@ export interface PageResult<T> {
 
 export interface UserAccount {
   id: Id;
-  email: string;
-export type SocialProvider = "GOOGLE" | "KAKAO";
-export type UserStatus = "ACTIVE" | "SUSPENDED" | "WITHDRAWN";
-export type CurrentLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
-export type ContentType = "NEWS" | "SENTENCE" | "ANNOUNCER" | "CLASS_PRACTICE";
-export type LearningFocus = "PRONUNCIATION" | "INTONATION" | "BOTH";
-export type Difficulty = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
-export type PublishStatus = "DRAFT" | "PUBLISHED" | "HIDDEN";
-export type CourseType = "PRONUNCIATION" | "INTONATION";
-export type CourseStepType =
-  "THEORY" | "AUDIO_EXAMPLE" | "PRACTICE" | "RESULT_REVIEW";
-export type CourseProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
-export type TrainingSessionStatus =
-  "RECORDING" | "UPLOADING" | "ANALYZING" | "COMPLETED" | "FAILED" | "CANCELED";
-export type RecordingQualityStatus =
-  | "PENDING"
-  | "PASS"
-  | "LOW_VOLUME"
-  | "TOO_NOISY"
-  | "TOO_SHORT"
-  | "NO_SPEECH"
-  | "FAILED";
-export type AnalysisStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-export type SegmentMatchType =
-  "MATCH" | "SUBSTITUTION" | "OMISSION" | "ADDITION";
-export type SegmentResultStatus = "NORMAL" | "CAUTION" | "NEEDS_IMPROVEMENT";
-export type SpeedStatus = "TOO_SLOW" | "NORMAL" | "TOO_FAST" | "SLOW" | "FAST";
-
-export interface ApiEnvelope<T> {
-  result: boolean;
-  message: string;
-  data: T;
-  code?: string;
-}
-
-export interface PageResult<T> {
-  items: T[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages?: number;
-  hasNext?: boolean;
-}
-
-export interface UserAccount {
-  id: Id;
   email: string | null;
   nickname: string;
   status: UserStatus;
@@ -141,13 +95,33 @@ export interface OnboardingSurveyAnswers {
   learningSituations: string[];
 }
 
+export interface OnboardingSaveInput {
+  currentLevel: CurrentLevel;
+  goalText?: string | null;
+  dailyGoalMinutes?: number | null;
+  weeklyGoalCount?: number | null;
+  surveyAnswers: OnboardingSurveyAnswers;
+}
+
 export interface OnboardingProfile {
   currentLevel: CurrentLevel;
-  goalText: string;
-  dailyGoalMinutes: number;
-  weeklyGoalCount: number;
+  goalText: string | null;
+  dailyGoalMinutes: number | null;
+  weeklyGoalCount: number | null;
   surveyAnswers: OnboardingSurveyAnswers;
-  completedAt?: string;
+  completedAt: string;
+}
+
+// PATCH leaves omitted/null fields unchanged, including individual survey lists.
+export interface OnboardingUpdateInput {
+  goalText?: string | null;
+  dailyGoalMinutes?: number | null;
+  weeklyGoalCount?: number | null;
+  surveyAnswers?:
+    | {
+        [Key in keyof OnboardingSurveyAnswers]?: string[] | null;
+      }
+    | null;
 }
 
 export interface HomeDashboard {
@@ -460,11 +434,11 @@ export interface ApiContract {
   onboarding: {
     get(): Promise<OnboardingProfile>;
     save(
-      input: OnboardingProfile,
+      input: OnboardingSaveInput,
     ): Promise<{ completed: boolean; completedAt: string }>;
-    update(input: Partial<OnboardingProfile>): Promise<{
-      goalText: string;
-      dailyGoalMinutes: number;
+    update(input: OnboardingUpdateInput): Promise<{
+      goalText: string | null;
+      dailyGoalMinutes: number | null;
       updatedAt: string;
     }>;
   };

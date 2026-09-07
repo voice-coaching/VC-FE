@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { ApiError } from "../src/lib/api/client";
 import { createRemoteApi } from "../src/lib/api/remote";
 
 const expected = [
@@ -125,10 +126,10 @@ await api.onboarding.save({
   dailyGoalMinutes: 10,
   weeklyGoalCount: 5,
   surveyAnswers: {
-    learningPurposes: [],
-    improvementAreas: [],
-    pronunciationConcerns: [],
-    learningSituations: [],
+    learningPurposes: ["PRESENTATION"],
+    improvementAreas: ["발음"],
+    pronunciationConcerns: ["받침"],
+    learningSituations: ["발표"],
   },
 });
 await api.onboarding.update({ goalText: "goal" });
@@ -194,7 +195,7 @@ await api.myPage.getWeaknessRecommendations({
 assert.equal(
   expected.length,
   53,
-  "Notion 명세 엔드포인트 수가 53개여야 합니다.",
+  "Frontend adapter endpoint count must be 53 (not backend implementation coverage).",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
@@ -250,4 +251,79 @@ assert.deepEqual(refreshCalls, [
 
 console.log(
   `API contract verification passed: ${expected.length}/${expected.length} endpoints + token refresh retry`,
+);
+
+// Fixtures mirror VC-BE Onboarding*ResponseDto and ApiResponse, not a generic
+// object with unrelated fields. The PATCH response is deliberately incomplete.
+const onboardingDetail = {
+  currentLevel: "BEGINNER",
+  goalText: null,
+  dailyGoalMinutes: null,
+  weeklyGoalCount: null,
+  surveyAnswers: {
+    learningPurposes: ["PRESENTATION"],
+    improvementAreas: ["발음"],
+    pronunciationConcerns: ["받침"],
+    learningSituations: ["발표"],
+  },
+  completedAt: "2026-09-07T16:00:00+09:00",
+};
+const completion = {
+  completed: true,
+  completedAt: onboardingDetail.completedAt,
+};
+const patchResponse = {
+  goalText: "발표 연습",
+  dailyGoalMinutes: null,
+  updatedAt: onboardingDetail.completedAt,
+};
+const onboardingCalls: Array<{ method: string; body: unknown }> = [];
+globalThis.fetch = (async (_input, init) => {
+  const method = init?.method ?? "GET";
+  onboardingCalls.push({
+    method,
+    body: init?.body ? JSON.parse(String(init.body)) : undefined,
+  });
+  const data =
+    method === "PUT"
+      ? completion
+      : method === "PATCH"
+        ? patchResponse
+        : onboardingDetail;
+  return Response.json({ result: true, message: "성공", data });
+}) as typeof fetch;
+assert.deepEqual(await api.onboarding.get(), onboardingDetail);
+assert.deepEqual(
+  await api.onboarding.save({
+    currentLevel: "BEGINNER",
+    surveyAnswers: onboardingDetail.surveyAnswers,
+  }),
+  completion,
+);
+const partialUpdate = {
+  goalText: "발표 연습",
+  surveyAnswers: { improvementAreas: ["억양"] },
+};
+assert.deepEqual(await api.onboarding.update(partialUpdate), patchResponse);
+assert.deepEqual(onboardingCalls[2], { method: "PATCH", body: partialUpdate });
+assert.deepEqual(onboardingCalls[1].body, {
+  currentLevel: "BEGINNER",
+  surveyAnswers: onboardingDetail.surveyAnswers,
+});
+for (const status of [400, 404]) {
+  globalThis.fetch = (async () =>
+    Response.json(
+      { result: false, message: "온보딩 오류", data: null },
+      { status },
+    )) as typeof fetch;
+  await assert.rejects(
+    api.onboarding.get(),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === status &&
+      error.message === "온보딩 오류",
+  );
+}
+console.log(
+  "VC-BE onboarding DTO verification passed: nullable GET, PUT, nested PATCH, 400/404 envelopes",
 );

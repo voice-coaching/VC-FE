@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
+import { LearningGoalSettings } from "@/components/learning-goal-settings";
 import { api } from "@/lib/api";
 
 export default function AccountSettings() {
@@ -72,6 +73,7 @@ export default function AccountSettings() {
         >
           {saving ? "저장 중…" : "프로필 저장"}
         </button>
+        <LearningGoalSettings />
         <button
           disabled={accountAction != null}
           onClick={async () => {
