@@ -104,7 +104,7 @@ export function OAuthCallback({
               {error}
             </p>
             <Link
-              href="/auth?mode=login"
+              href="/auth"
               className="mt-6 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background"
             >
               로그인 화면으로 돌아가기

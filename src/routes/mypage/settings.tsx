@@ -195,7 +195,7 @@ export default function AccountSettings() {
             setMessage(null);
             try {
               await api.auth.signOut();
-              router.replace("/auth?mode=login");
+              router.replace("/auth");
             } catch (reason) {
               setMessage(
                 reason instanceof Error

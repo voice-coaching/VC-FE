@@ -52,7 +52,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
     const cachedSession = getAuthSessionSnapshot();
     if (cachedSession.status === "anonymous") {
       const next = encodeURIComponent(pathname);
-      router.replace(`/auth?mode=login&next=${next}`);
+      router.replace(`/auth?next=${next}`);
       return;
     }
     if (cachedSession.status === "authenticated") {
@@ -104,7 +104,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
         if (!active) return;
         if (reason instanceof ApiError && reason.status === 401) {
           const next = encodeURIComponent(pathname);
-          router.replace(`/auth?mode=login&next=${next}`);
+          router.replace(`/auth?next=${next}`);
           return;
         }
         setMessage(
