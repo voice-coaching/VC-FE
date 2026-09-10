@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
 import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
+import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
   GOOGLE: "구글",
@@ -69,9 +70,10 @@ export function OAuthCallback({
       })
       .then((session) => {
         router.replace(
-          session.isNewUser || session.onboardingRequired
-            ? "/onboarding"
-            : safeInternalPath(attempt.returnTo, "/home"),
+          getPostLoginDestination(
+            session,
+            safeInternalPath(attempt.returnTo, "/home"),
+          ),
         );
       })
       .catch((reason) => {
