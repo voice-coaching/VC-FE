@@ -8,6 +8,7 @@ import {
   markAuthenticatedUser,
   resetAuthSession,
 } from "@/lib/auth-session";
+import { hasAcceptedTerms } from "@/lib/terms-flow";
 
 const PROTECTED_PREFIXES = [
   "/home",
@@ -31,7 +32,7 @@ function canOpenPath(pathname: string) {
   if (session.status !== "authenticated") return false;
   return session.onboardingCompleted
     ? pathname !== "/onboarding"
-    : pathname === "/onboarding";
+    : pathname === "/onboarding" && hasAcceptedTerms(session.userId);
 }
 
 export function SessionGate({ children }: { children: ReactNode }) {
@@ -60,9 +61,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
         router.replace("/home");
         return;
       }
-      if (!cachedSession.onboardingCompleted && pathname !== "/onboarding") {
-        router.replace("/onboarding");
-        return;
+      if (!cachedSession.onboardingCompleted) {
+        const destination = hasAcceptedTerms(cachedSession.userId)
+          ? "/onboarding"
+          : "/terms";
+        if (pathname !== destination) {
+          router.replace(destination);
+          return;
+        }
       }
       setStatus("ready");
       return;
@@ -94,9 +100,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
           router.replace("/home");
           return;
         }
-        if (!onboardingCompleted && pathname !== "/onboarding") {
-          router.replace("/onboarding");
-          return;
+        if (!onboardingCompleted) {
+          const destination = hasAcceptedTerms(user.id)
+            ? "/onboarding"
+            : "/terms";
+          if (pathname !== destination) {
+            router.replace(destination);
+            return;
+          }
         }
         setStatus("ready");
       })

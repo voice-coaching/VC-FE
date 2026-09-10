@@ -12,6 +12,7 @@ import {
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
 import { redirectToOAuthProvider } from "@/lib/oauth";
+import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const SOCIAL_METHODS = [
   {
@@ -91,7 +92,7 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
         email: email.trim(),
         password,
       });
-      router.replace(session.onboardingRequired ? "/onboarding" : destination);
+      router.replace(getPostLoginDestination(session, destination));
     } catch (reason) {
       setError(
         reason instanceof Error
