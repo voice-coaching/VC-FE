@@ -1,5 +1,5 @@
-import NewsPage from "@/routes/news/prototype";
+import { redirect } from "next/navigation";
 
 export default function TodayPracticePage() {
-  return <NewsPage today />;
+  redirect("/news");
 }

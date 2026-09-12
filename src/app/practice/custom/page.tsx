@@ -1,1 +1,5 @@
-export { default } from "@/routes/custom-practice";
+import { redirect } from "next/navigation";
+
+export default function CustomPracticePage() {
+  redirect("/sentences");
+}

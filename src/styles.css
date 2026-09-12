@@ -154,13 +154,9 @@
 @utility app-shell {
   margin-inline: auto;
   width: 100%;
-  max-width: 26rem;
   min-height: 100dvh;
   background-color: var(--color-background);
   position: relative;
-  box-shadow:
-    0 0 0 1px oklch(0 0 0 / 6%),
-    0 24px 60px -24px oklch(0 0 0 / 25%);
 }
 
 @keyframes signup-field-reveal {

@@ -1,8 +1,6 @@
 import { CourseCatalog } from "@/components/course-catalog";
-import PronunciationPrototype from "./prototype";
 
 export default function ClassIndex() {
-  if (process.env.NODE_ENV === "development") return <PronunciationPrototype />;
   return (
     <CourseCatalog
       title="클래스"
