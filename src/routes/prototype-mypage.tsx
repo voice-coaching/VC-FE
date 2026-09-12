@@ -1,12 +1,11 @@
 "use client";
+import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
-import { usePrototypeHistory } from "@/hooks/use-prototype-history";
-import { modeLabels } from "@/lib/prototype-history";
+import { PracticeHistoryContent } from "./prototype-history";
 import styles from "./prototype-mypage.module.css";
 
 const tabs = ["리포트", "연습 기록", "연습 계획"];
@@ -18,34 +17,27 @@ const initialPlan = {
   method: "짧은 문장 반복, 내 원고",
 };
 const planKey = "speakai:prototype-plan:v1";
-const demoHistory = [
-  {
-    title: "받침 발음 클래스",
-    detail: "4단계 완료",
-    score: "88점",
-    date: "오늘",
-  },
-  {
-    title: "뉴스 읽기",
-    detail: "한국은행 기준금리 동결",
-    score: "82점",
-    date: "어제",
-  },
-  {
-    title: "내 문장",
-    detail: "발표 원고 5문장",
-    score: "79점",
-    date: "2일 전",
-  },
-];
-
 export default function PrototypeMyPage() {
   const [tab, setTab] = useState(0);
   const [plan, setPlan] = useState(initialPlan);
   const [draft, setDraft] = useState(initialPlan);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState("");
-  const history = usePrototypeHistory();
+  useEffect(() => {
+    const syncTab = () => {
+      const value = new URLSearchParams(window.location.search).get("tab");
+      setTab(value === "history" ? 1 : value === "plan" ? 2 : 0);
+    };
+    syncTab();
+    window.addEventListener("popstate", syncTab);
+    return () => window.removeEventListener("popstate", syncTab);
+  }, []);
+  function selectTab(index: number) {
+    setTab(index);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", ["report", "history", "plan"][index]);
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(planKey) ?? "null");
@@ -60,17 +52,6 @@ export default function PrototypeMyPage() {
       /* The example plan remains available. */
     }
   }, []);
-  const records = history.items.length
-    ? history.items.map((item) => ({
-        title: modeLabels[item.mode],
-        detail: item.title,
-        score: `${item.sentenceCount}문장`,
-        date: new Date(item.completedAt).toLocaleDateString("ko-KR", {
-          month: "numeric",
-          day: "numeric",
-        }),
-      }))
-    : demoHistory;
 
   return (
     <IPhoneFrame>
@@ -86,7 +67,7 @@ export default function PrototypeMyPage() {
             <Settings size={24} />
           </Link>
         </header>
-        <div className="shrink-0 bg-white px-5 pt-2 pb-3">
+        <div className="shrink-0 bg-[#fafbfc] px-5 pt-2 pb-3">
           <div
             role="tablist"
             aria-label="마이 메뉴"
@@ -105,7 +86,7 @@ export default function PrototypeMyPage() {
                 aria-selected={tab === index}
                 aria-controls={`my-panel-${index}`}
                 tabIndex={tab === index ? 0 : -1}
-                onClick={() => setTab(index)}
+                onClick={() => selectTab(index)}
                 onKeyDown={(event) => {
                   if (
                     !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
@@ -120,7 +101,7 @@ export default function PrototypeMyPage() {
                       : event.key === "End"
                         ? 2
                         : (tab + (event.key === "ArrowRight" ? 1 : 2)) % 3;
-                  setTab(next);
+                  selectTab(next);
                   document.getElementById(`my-tab-${next}`)?.focus();
                 }}
                 className={`relative min-h-10 flex-1 rounded-full text-sm font-bold transition-colors ${tab === index ? "text-[#191f28]" : "text-[#8b95a1]"}`}
@@ -193,42 +174,7 @@ export default function PrototypeMyPage() {
                 </section>
               </>
             )}
-            {tab === 1 && (
-              <section className={`${card} divide-y divide-[#e5e8eb] py-0`}>
-                {history.error && (
-                  <p role="alert" className="py-3 text-sm text-red-600">
-                    저장된 연습 기록을 불러오지 못했어요.
-                  </p>
-                )}
-                {!history.ready ? (
-                  <p role="status" className="py-5 text-sm text-[#8b95a1]">
-                    기록을 불러오고 있어요
-                  </p>
-                ) : (
-                  records.map((item, index) => (
-                    <div
-                      key={`${item.title}-${index}`}
-                      className="flex items-start justify-between gap-4 py-[18px]"
-                    >
-                      <div className="min-w-0">
-                        <h2 className="text-base font-bold">{item.title}</h2>
-                        <p className="mt-1 text-xs text-[#8b95a1]">
-                          {item.detail}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-base font-bold text-[#2f6bff]">
-                          {item.score}
-                        </p>
-                        <p className="mt-1 text-xs text-[#8b95a1]">
-                          {item.date}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </section>
-            )}
+            {tab === 1 && <PracticeHistoryContent />}
             {tab === 2 && (
               <section className={card}>
                 <div className="mb-4 flex items-center justify-between">
@@ -328,39 +274,7 @@ export default function PrototypeMyPage() {
             )}
           </div>
         </main>
-        <nav
-          aria-label="주 메뉴"
-          className="flex shrink-0 border-t border-[#e5e8eb] bg-white pt-2 pb-8"
-        >
-          {[
-            ["/home", "홈", "tab-home"],
-            ["/class", "클래스", "tab-class"],
-            ["/mypage", "마이", "tab-my"],
-          ].map(([href, label, icon]) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={label === "마이" ? "page" : undefined}
-              className={`flex min-h-11 flex-1 flex-col items-center gap-1 text-xs ${label === "마이" ? "font-bold text-[#2f6bff]" : "text-[#8b95a1]"}`}
-            >
-              <Image
-                src={`/figma/home/${icon}.svg`}
-                alt=""
-                width={28}
-                height={28}
-                style={
-                  label === "마이"
-                    ? {
-                        filter:
-                          "brightness(0) saturate(100%) invert(37%) sepia(100%) saturate(3150%) hue-rotate(218deg)",
-                      }
-                    : undefined
-                }
-              />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <PrototypeBottomNav />
       </section>
     </IPhoneFrame>
   );

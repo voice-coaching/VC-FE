@@ -14,6 +14,16 @@ const item: PracticeCompletion = {
   completedAt: new Date(2026, 8, 11, 12).toISOString(),
   daily: true,
 };
+test("legacy class titles display without middle dots and keep progress data", () => {
+  const legacy = {
+    ...item,
+    mode: "class" as const,
+    title: "강조 억양 클래스 · 3단계",
+  };
+  assert.deepEqual(parseHistory(JSON.stringify([legacy])), [
+    { ...legacy, title: "강조 억양 클래스 3단계" },
+  ]);
+});
 test("completion is idempotent and capped at 100 records", () => {
   assert.equal(addCompletion([item], item).length, 1);
   const items = Array.from({ length: 100 }, (_, index) => ({

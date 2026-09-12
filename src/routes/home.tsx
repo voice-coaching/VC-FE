@@ -1,4 +1,5 @@
 "use client";
+import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -97,16 +98,6 @@ const PRACTICE_CARDS: PracticeCard[] = [
     badgeClassName: "bg-[#c9bbff]",
   },
 ];
-
-const HOME_TABS = [
-  { href: "/home", label: "홈", icon: "/figma/home/tab-home.svg" },
-  {
-    href: "/class",
-    label: "클래스",
-    icon: "/figma/home/tab-class.svg",
-  },
-  { href: "/mypage", label: "마이", icon: "/figma/home/tab-my.svg" },
-] as const;
 
 function generalRecommendations(
   items: PracticeContentSummary[],
@@ -252,7 +243,7 @@ export default function Home() {
             </div>
 
             <Link
-              href={completed.dailyDone ? "/home/history" : todayHref}
+              href={completed.dailyDone ? "/mypage?tab=history" : todayHref}
               className="mt-[18px] flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-base leading-6 font-bold tracking-[0.0057em] text-white transition duration-150 active:scale-[0.985] active:bg-[#1f55e0]"
             >
               {completed.dailyDone
@@ -261,24 +252,6 @@ export default function Home() {
             </Link>
           </section>
 
-          {process.env.NODE_ENV === "development" && (
-            <Link
-              href="/home/history"
-              className="mt-4 block rounded-2xl bg-white p-4 shadow-sm"
-            >
-              <p className="text-sm font-bold">
-                {history.error
-                  ? "연습 기록을 불러오지 못했어요"
-                  : `오늘 ${completed.sentences}문장 · ${completed.count}회 연습 완료`}
-              </p>
-              <p className="mt-1 text-xs text-[#8b95a1]">
-                {history.items[0]
-                  ? `최근 연습: ${history.items[0].title}`
-                  : "연습을 마치면 기록이 쌓여요"}{" "}
-                · 기록 보기
-              </p>
-            </Link>
-          )}
           <h2 className="mt-[22px] text-xl leading-7 font-bold tracking-[-0.012em]">
             무엇을 연습할까요?
           </h2>
@@ -296,37 +269,7 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="h-[63px] shrink-0 border-t border-[#e6eaee] bg-white">
-          <ul className="flex h-full items-start py-2">
-            {HOME_TABS.map((tab) => {
-              const active = tab.href === "/home";
-              return (
-                <li key={tab.href} className="min-w-0 flex-1">
-                  <Link
-                    href={tab.href}
-                    aria-current={active ? "page" : undefined}
-                    className="flex flex-col items-center gap-1 active:opacity-70"
-                  >
-                    <Image src={tab.icon} alt="" width={28} height={28} />
-                    <span
-                      className={`text-xs leading-4 tracking-[0.0252em] ${
-                        active
-                          ? "font-bold text-[#2f6bff]"
-                          : "font-medium text-[#8b95a1]"
-                      }`}
-                    >
-                      {tab.label}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-        <div
-          className="h-[max(34px,env(safe-area-inset-bottom))] shrink-0 bg-white"
-          aria-hidden="true"
-        />
+        <PrototypeBottomNav />
       </div>
     </IPhoneFrame>
   );

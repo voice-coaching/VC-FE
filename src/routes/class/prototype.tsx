@@ -1,9 +1,9 @@
 "use client";
+import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
 import { practiceCopy } from "@/lib/practice-copy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
@@ -193,7 +193,7 @@ export default function PronunciationPrototype({
     saveCompletion(
       {
         mode: "class",
-        title: `${course.name} · ${step + 1}단계`,
+        title: `${course.name} ${step + 1}단계`,
         sentenceCount: 1,
         daily: false,
       },
@@ -681,28 +681,7 @@ export default function PronunciationPrototype({
           )}
         </main>
         {screen === "list" ? (
-          <nav className="flex shrink-0 border-t border-[#e5e8eb] bg-white pt-2 pb-8">
-            {[
-              ["/home?preview=1", "홈", "tab-home"],
-              ["/class", "클래스", "tab-class"],
-              ["/mypage?preview=1", "마이", "tab-my"],
-            ].map(([href, label, icon]) => (
-              <Link
-                key={href}
-                href={href}
-                aria-current={label === "클래스" ? "page" : undefined}
-                className={`flex min-h-12 flex-1 flex-col items-center gap-1 text-xs ${label === "클래스" ? "font-bold text-[#2f6bff]" : "text-[#8b95a1]"}`}
-              >
-                <Image
-                  src={`/figma/home/${icon}.svg`}
-                  alt=""
-                  width={24}
-                  height={24}
-                />
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <PrototypeBottomNav />
         ) : screen === "record" && !recorded ? (
           <footer className="shrink-0 px-5 pt-5 pb-8 text-center">
             {recording && (

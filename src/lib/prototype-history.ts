@@ -37,7 +37,12 @@ export function parseHistory(raw: string | null): PracticeCompletion[] {
           Number.isFinite(Date.parse(item.completedAt)) &&
           typeof item.daily === "boolean",
       )
-      .slice(0, 100);
+      .slice(0, 100)
+      .map((item) =>
+        item.mode === "class"
+          ? { ...item, title: item.title.replace(/\s*·\s*/g, " ") }
+          : item,
+      );
   } catch {
     return [];
   }
