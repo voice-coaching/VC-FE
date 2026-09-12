@@ -5,7 +5,7 @@ export default function SentencesPage() {
     <ContentCatalog
       type="SENTENCE"
       title="문장 연습"
-      description="받침, 자음, 모음 등 원하는 발음 유형을 반복해서 연습해요."
+      description="서버에 등록된 문장으로 발음과 억양을 연습해요."
     />
   );
 }

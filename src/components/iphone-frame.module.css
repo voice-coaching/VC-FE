@@ -1,0 +1,26 @@
+.stage {
+  min-height: 100dvh;
+  background: #fafbfc;
+  color: #191f28;
+}
+
+.screen {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #fafbfc;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.screen > :is(section, div) > div:first-child[class~="h-11"] {
+  height: 0;
+}
+
+.screen > :is(section, div) > :is(footer, nav):last-child {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+}
+
+.screen :is(input, textarea, select) {
+  font-size: max(16px, 1em);
+}

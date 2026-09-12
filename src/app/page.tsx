@@ -11,4 +11,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default Landing;
+export default function MainPage() {
+  return <Landing />;
+}

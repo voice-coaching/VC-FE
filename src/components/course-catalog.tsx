@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { IPhoneFrame } from "@/components/iphone-frame";
+import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 import { TopBar } from "@/components/top-bar";
 import {
   ApiError,
@@ -58,13 +61,22 @@ export function CourseCatalog({
     Record<string, CourseDetail>
   >({});
   const [error, setError] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<CourseType>(
+    type ?? "PRONUNCIATION",
+  );
+  const requestType = type ?? (showBack ? undefined : selectedType);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setError(null);
     Promise.all([
-      api.courses.list({ type, status: "PUBLISHED", page: 0, size: 20 }),
+      api.courses.list({
+        type: requestType,
+        status: "PUBLISHED",
+        page: 0,
+        size: 20,
+      }),
       api.courses.getMyProgress(),
     ])
       .then(([result, userProgress]) => {
@@ -90,14 +102,14 @@ export function CourseCatalog({
     return () => {
       active = false;
     };
-  }, [type]);
+  }, [requestType]);
 
   async function loadMore() {
     setLoadingMore(true);
     setError(null);
     try {
       const result = await api.courses.list({
-        type,
+        type: requestType,
         status: "PUBLISHED",
         page: page + 1,
         size: 20,
@@ -209,6 +221,147 @@ export function CourseCatalog({
     }
   }
 
+  if (!showBack) {
+    const visibleItems = items.filter(
+      (course) => course.courseType === selectedType,
+    );
+
+    return (
+      <IPhoneFrame>
+        <section className="flex h-full flex-col bg-[#fafbfc] text-[#191f28]">
+          <div className="h-11 shrink-0" aria-hidden="true" />
+          <header className="flex h-12 shrink-0 items-center justify-center">
+            <h1 className="text-[17px] font-bold">{title}</h1>
+          </header>
+
+          <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <p className="mb-4 text-sm text-[#4e5968]">{description}</p>
+            <div
+              role="tablist"
+              aria-label="클래스 종류"
+              className="mb-4 grid grid-cols-2 rounded-xl bg-[#f2f4f6] p-1"
+            >
+              {(["PRONUNCIATION", "INTONATION"] as const).map((courseType) => (
+                <button
+                  key={courseType}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedType === courseType}
+                  onClick={() => setSelectedType(courseType)}
+                  className={`h-10 rounded-[9px] text-sm font-bold transition-colors ${
+                    selectedType === courseType
+                      ? "bg-white text-[#191f28] shadow-[0_1px_4px_rgba(23,23,23,0.08)]"
+                      : "text-[#8b95a1]"
+                  }`}
+                >
+                  {courseType === "PRONUNCIATION"
+                    ? "발음 클래스"
+                    : "억양 클래스"}
+                </button>
+              ))}
+            </div>
+
+            {error ? (
+              <p
+                role="alert"
+                className="mb-3 rounded-xl bg-[#fff0f0] px-4 py-3 text-sm text-[#d91b34]"
+              >
+                {error}
+              </p>
+            ) : null}
+
+            {loading ? (
+              <p className="py-12 text-center text-sm text-[#8b95a1]">
+                클래스를 불러오는 중…
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {visibleItems.map((course) => {
+                  const progress = Math.min(
+                    100,
+                    Math.max(0, course.progressPercent),
+                  );
+                  const starting = startingId === String(course.id);
+
+                  return (
+                    <button
+                      key={String(course.id)}
+                      type="button"
+                      onClick={() => void start(course)}
+                      disabled={starting}
+                      className="flex w-full gap-3.5 rounded-2xl bg-white p-[18px] text-left shadow-[0_2px_6px_rgba(23,23,23,0.05)] transition-transform active:scale-[0.985] disabled:opacity-60"
+                    >
+                      <span
+                        className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${
+                          course.courseType === "PRONUNCIATION"
+                            ? "bg-[#ccddff]"
+                            : "bg-[#e2e9ff]"
+                        }`}
+                      >
+                        <Image
+                          src={
+                            course.courseType === "PRONUNCIATION"
+                              ? "/figma/class/icon.svg"
+                              : "/figma/class/stress.svg"
+                          }
+                          alt=""
+                          width={28}
+                          height={26}
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2">
+                          <strong className="truncate text-[15px]">
+                            {course.title}
+                          </strong>
+                          <span
+                            className={`shrink-0 text-xs ${
+                              progress > 0 ? "text-[#2f6bff]" : "text-[#8b95a1]"
+                            }`}
+                          >
+                            {starting ? "시작 중…" : `${Math.round(progress)}%`}
+                          </span>
+                        </span>
+                        <span className="mt-1 mb-3 block text-xs text-[#8b95a1]">
+                          {course.difficulty} · 약 {course.estimatedMinutes}분
+                        </span>
+                        <span className="block h-2 overflow-hidden rounded-full bg-[#e5e8eb]">
+                          <span
+                            className="block h-full rounded-full bg-[#2f6bff]"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {visibleItems.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-[#8b95a1]">
+                    조건에 맞는 클래스가 없습니다.
+                  </p>
+                ) : null}
+
+                {hasNext ? (
+                  <button
+                    type="button"
+                    disabled={loadingMore}
+                    onClick={() => void loadMore()}
+                    className="w-full rounded-full border border-[#e5e8eb] py-3 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {loadingMore ? "불러오는 중…" : "클래스 더 보기"}
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </main>
+
+          <PrototypeBottomNav />
+        </section>
+      </IPhoneFrame>
+    );
+  }
+
   return (
     <AppShell>
       {showBack && <TopBar to="/class" title={title} />}
@@ -263,7 +416,9 @@ export function CourseCatalog({
                         <p>상세 정보를 불러오는 중…</p>
                       ) : detail ? (
                         <>
-                          <p className="leading-relaxed">{detail.description}</p>
+                          <p className="leading-relaxed">
+                            {detail.description}
+                          </p>
                           <p className="mt-2">
                             전체 {detail.stepCount}단계 · 현재{" "}
                             {Math.round(detail.progress.progressPercent)}%

@@ -1,0 +1,18 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Badge Stage" clip-path="url(#clip0_0_7)">
+<circle id="Glow" cx="100" cy="100" r="100" fill="url(#paint0_radial_0_7)"/>
+<circle id="Disc" cx="100" cy="100" r="42" fill="#2F6BFF"/>
+<g id="Check">
+<path id="Vector" d="M91 100L97.364 106.364L110.091 93.636" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<defs>
+<radialGradient id="paint0_radial_0_7" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(100 100) scale(100)">
+<stop stop-color="#2F6BFF" stop-opacity="0.16"/>
+<stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/>
+</radialGradient>
+<clipPath id="clip0_0_7">
+<rect width="200" height="200" fill="white"/>
+</clipPath>
+</defs>
+</svg>

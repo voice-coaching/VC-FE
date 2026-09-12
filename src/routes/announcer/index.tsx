@@ -5,7 +5,7 @@ export default function AnnouncerPage() {
     <ContentCatalog
       type="ANNOUNCER"
       title="아나운서 따라 읽기"
-      description="기준 음성을 듣고 같은 스크립트로 녹음해 비교해요."
+      description="서버의 기준 음성을 듣고 같은 원고를 따라 읽어 보세요."
     />
   );
 }
