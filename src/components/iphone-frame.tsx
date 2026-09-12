@@ -1,7 +1,8 @@
 "use client";
 
 import localFont from "next/font/local";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import styles from "./iphone-frame.module.css";
 
 const pretendard = localFont({
   src: "../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2",
@@ -10,36 +11,54 @@ const pretendard = localFont({
 });
 
 export function IPhoneFrame({ children }: { children: ReactNode }) {
-  const [deviceScale, setDeviceScale] = useState(1);
+  const stage = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fitDeviceToViewport = () => {
-      setDeviceScale(
-        Math.min(
-          1,
-          (window.innerWidth - 32) / 426,
-          (window.innerHeight - 32) / 898,
+      const element = stage.current;
+      if (!element) return;
+      element.style.setProperty(
+        "--device-scale",
+        String(
+          Math.max(
+            0.1,
+            Math.min(
+              1,
+              (window.innerWidth - 32) / 426,
+              (window.innerHeight - 32) / 898,
+            ),
+          ),
         ),
+      );
+      const viewport = window.visualViewport;
+      // Do not counteract the user's pinch zoom. Keyboard resizing remains supported.
+      if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
+      element.style.setProperty(
+        "--visible-height",
+        `${viewport?.height ?? window.innerHeight}px`,
+      );
+      element.style.setProperty(
+        "--visible-top",
+        `${viewport?.offsetTop ?? 0}px`,
       );
     };
 
     fitDeviceToViewport();
     window.addEventListener("resize", fitDeviceToViewport);
-    return () => window.removeEventListener("resize", fitDeviceToViewport);
+    window.visualViewport?.addEventListener("resize", fitDeviceToViewport);
+    window.visualViewport?.addEventListener("scroll", fitDeviceToViewport);
+    return () => {
+      window.removeEventListener("resize", fitDeviceToViewport);
+      window.visualViewport?.removeEventListener("resize", fitDeviceToViewport);
+      window.visualViewport?.removeEventListener("scroll", fitDeviceToViewport);
+    };
   }, []);
 
   return (
-    <div
-      className={`${pretendard.className} relative h-dvh overflow-hidden bg-[#8b8b8b] text-[#191f28]`}
-    >
-      <main
-        className="absolute top-1/2 left-1/2 h-[898px] w-[426px] origin-center rounded-[58px] bg-[#090909] p-3 shadow-[0_30px_80px_rgba(0,0,0,0.28)]"
-        style={{ transform: `translate(-50%, -50%) scale(${deviceScale})` }}
-      >
-        <div className="h-[874px] w-[402px] overflow-hidden rounded-[46px] bg-white">
-          {children}
-        </div>
-      </main>
+    <div ref={stage} className={`${pretendard.className} ${styles.stage}`}>
+      <div className={styles.device}>
+        <div className={styles.screen}>{children}</div>
+      </div>
     </div>
   );
 }

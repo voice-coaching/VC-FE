@@ -39,6 +39,20 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const protectedPath = isProtectedPath(pathname);
+  const prototypePath =
+    process.env.NODE_ENV === "development" &&
+    (pathname === "/mypage" ||
+      [
+        "/home",
+        "/sentences",
+        "/announcer",
+        "/news",
+        "/practice/custom",
+        "/class",
+      ].some(
+        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+      ));
+  const [developmentPreview, setDevelopmentPreview] = useState(false);
   const [status, setStatus] = useState<"checking" | "ready" | "error">(() =>
     protectedPath && getAuthSessionSnapshot().status === "unknown"
       ? "checking"
@@ -48,7 +62,16 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    if (!protectedPath) return;
+    if (!protectedPath || prototypePath) return;
+
+    const previewEnabled =
+      process.env.NODE_ENV === "development" &&
+      new URLSearchParams(window.location.search).get("preview") === "1";
+    setDevelopmentPreview(previewEnabled);
+    if (previewEnabled) {
+      setStatus("ready");
+      return;
+    }
 
     const cachedSession = getAuthSessionSnapshot();
     if (cachedSession.status === "anonymous") {
@@ -129,9 +152,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [pathname, protectedPath, retryKey, router]);
+  }, [pathname, protectedPath, prototypePath, retryKey, router]);
 
-  if (!protectedPath || (status === "ready" && canOpenPath(pathname)))
+  if (
+    !protectedPath ||
+    prototypePath ||
+    developmentPreview ||
+    (status === "ready" && canOpenPath(pathname))
+  )
     return children;
 
   return (

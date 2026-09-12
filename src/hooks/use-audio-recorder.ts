@@ -49,6 +49,8 @@ export function useAudioRecorder() {
     if (recorder?.state === "recording") recorder.stop();
   }, []);
 
+  const getStream = useCallback(() => streamRef.current, []);
+
   const start = useCallback(async () => {
     setError(null);
     setBlob(null);
@@ -169,5 +171,6 @@ export function useAudioRecorder() {
     start,
     stop,
     reset,
+    getStream,
   };
 }

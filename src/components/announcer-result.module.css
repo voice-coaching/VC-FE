@@ -1,0 +1,19 @@
+.bar {
+  transform-origin: center;
+  animation: voice-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes voice-pulse {
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+}

@@ -1,0 +1,64 @@
+.nav {
+  flex-shrink: 0;
+  background: #fff;
+  border-top: 1px solid #e6eaee;
+  padding-bottom: 34px;
+}
+.list {
+  display: flex;
+  height: 62px;
+  padding: 8px 0;
+  margin: 0;
+  list-style: none;
+}
+.item {
+  flex: 1;
+  min-width: 0;
+}
+.link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 46px;
+  color: #8b95a1;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.0252em;
+  touch-action: manipulation;
+  transition: color 120ms ease;
+}
+.link[aria-current="page"] {
+  color: #2f6bff;
+  font-weight: 700;
+}
+.link:active {
+  opacity: 0.7;
+}
+.link:focus-visible {
+  outline: 2px solid #2f6bff;
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+.icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+}
+/* The frame already accounts for the device's real safe-area inset. */
+@media (max-width: 767px), (pointer: coarse) and (max-width: 1023px) {
+  .nav {
+    padding-bottom: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition: none;
+  }
+}

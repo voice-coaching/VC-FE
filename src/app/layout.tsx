@@ -20,7 +20,12 @@ export const metadata: Metadata = {
   icons: { icon: "/favicon.ico" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

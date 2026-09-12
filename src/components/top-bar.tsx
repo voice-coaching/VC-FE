@@ -1,7 +1,7 @@
 "use client";
+import { NavigationIcon } from "@/components/navigation-icon";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function TopBar({
@@ -25,7 +25,7 @@ export function TopBar({
           aria-label="이전 단계"
           className="text-foreground transition-opacity hover:opacity-60"
         >
-          <ArrowLeft className="size-5" />
+          <NavigationIcon />
         </button>
       ) : (
         <Link
@@ -33,7 +33,7 @@ export function TopBar({
           aria-label="뒤로가기"
           className="text-foreground transition-opacity hover:opacity-60"
         >
-          <ArrowLeft className="size-5" />
+          <NavigationIcon />
         </Link>
       )}
       {typeof progress === "number" ? (

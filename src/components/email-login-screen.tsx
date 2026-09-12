@@ -1,4 +1,5 @@
 "use client";
+import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -66,13 +67,7 @@ export function EmailLoginScreen() {
             aria-label="이전 화면으로 돌아가기"
             className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
           >
-            <Image
-              src="/figma/auth/chevron-left.svg"
-              alt=""
-              width={24}
-              height={24}
-              aria-hidden="true"
-            />
+            <NavigationIcon />
           </button>
           <h1 className="flex-1 text-center text-[18px] leading-[26px] font-bold tracking-[-0.0036px]">
             로그인

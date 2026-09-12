@@ -1,6 +1,8 @@
 import { CourseCatalog } from "@/components/course-catalog";
+import PronunciationPrototype from "./prototype";
 
 export default function PronunciationPage() {
+  if (process.env.NODE_ENV === "development") return <PronunciationPrototype />;
   return (
     <CourseCatalog
       type="PRONUNCIATION"
