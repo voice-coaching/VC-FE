@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Landing from "@/routes/index";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "SpeakAI · AI 발음 · 억양 트레이닝",
@@ -11,4 +12,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default Landing;
+export default function MainPage() {
+  if (process.env.NODE_ENV === "development") redirect("/home?preview=1");
+  return <Landing />;
+}

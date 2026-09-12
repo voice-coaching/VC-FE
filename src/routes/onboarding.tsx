@@ -1,4 +1,5 @@
 "use client";
+import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -422,13 +423,7 @@ function ProgressHeader({
         aria-label="이전 화면으로 돌아가기"
         className="flex size-6 shrink-0 touch-manipulation items-center justify-center rounded transition-transform duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
       >
-        <Image
-          src="/figma/auth/chevron-left.svg"
-          alt=""
-          width={24}
-          height={24}
-          aria-hidden="true"
-        />
+        <NavigationIcon />
       </button>
       <div
         className="flex h-2 w-[282px] shrink-0 gap-[5px]"

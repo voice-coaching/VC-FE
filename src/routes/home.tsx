@@ -1,22 +1,32 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Flame, Mic, PenLine, TrendingUp } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
-import { GOAL_LABELS } from "@/lib/app-data";
+import { IPhoneFrame } from "@/components/iphone-frame";
+import { usePrototypeHistory } from "@/hooks/use-prototype-history";
+import { todaySummary } from "@/lib/prototype-history";
 import {
   api,
   type HomeDashboard,
   type PracticeContentSummary,
   type Recommendation,
 } from "@/lib/api";
-import { useProfile } from "@/lib/use-profile";
 
 type RecommendationCard = Pick<
   Recommendation,
   "contentId" | "title" | "reason"
 >;
+
+type PracticeCard = {
+  href: string;
+  title: string;
+  description: React.ReactNode;
+  icon: string;
+  iconWidth: number;
+  iconHeight: number;
+  badgeClassName: string;
+};
 
 const EMPTY_DASHBOARD: HomeDashboard = {
   today: { completedCount: 0, goalCount: 0, learningSeconds: 0 },
@@ -24,6 +34,79 @@ const EMPTY_DASHBOARD: HomeDashboard = {
   recentTraining: null,
   courseProgress: null,
 };
+
+const PRACTICE_CARDS: PracticeCard[] = [
+  {
+    href: "/news",
+    title: "뉴스 읽기",
+    description: (
+      <>
+        오늘의 기사를
+        <br />
+        소리 내어 읽어요
+      </>
+    ),
+    icon: "/figma/home/news.svg",
+    iconWidth: 23.31,
+    iconHeight: 28.31,
+    badgeClassName: "bg-[#a5e8ff]",
+  },
+  {
+    href: "/sentences",
+    title: "문장 연습",
+    description: (
+      <>
+        짧은 문장을
+        <br />
+        반복해 교정해요
+      </>
+    ),
+    icon: "/figma/home/sentence.svg",
+    iconWidth: 26.54,
+    iconHeight: 25.27,
+    badgeClassName: "bg-[#aeebb4]",
+  },
+  {
+    href: "/announcer",
+    title: "따라 읽기",
+    description: (
+      <>
+        아나운서의
+        <br />
+        음성을 듣고 따라 해요
+      </>
+    ),
+    icon: "/figma/home/follow.svg",
+    iconWidth: 14.15,
+    iconHeight: 31.85,
+    badgeClassName: "bg-[#bfceff]",
+  },
+  {
+    href: "/practice/custom",
+    title: "내 문장 연습",
+    description: (
+      <>
+        발표 원고를
+        <br />
+        붙여넣고 연습해요
+      </>
+    ),
+    icon: "/figma/home/custom.svg",
+    iconWidth: 24.77,
+    iconHeight: 23.97,
+    badgeClassName: "bg-[#c9bbff]",
+  },
+];
+
+const HOME_TABS = [
+  { href: "/home", label: "홈", icon: "/figma/home/tab-home.svg" },
+  {
+    href: "/class",
+    label: "클래스",
+    icon: "/figma/home/tab-class.svg",
+  },
+  { href: "/mypage", label: "마이", icon: "/figma/home/tab-my.svg" },
+] as const;
 
 function generalRecommendations(
   items: PracticeContentSummary[],
@@ -40,28 +123,32 @@ function combineRecommendations(
   fallback: ReadonlyArray<RecommendationCard>,
 ) {
   const seen = new Set<string>();
-  return [...primary, ...fallback]
-    .filter((item) => {
-      const id = String(item.contentId);
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })
-    .slice(0, 3);
+  return [...primary, ...fallback].filter((item) => {
+    const id = String(item.contentId);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 export default function Home() {
-  const { profile } = useProfile();
+  const history = usePrototypeHistory();
+  const completed = todaySummary(history.items);
   const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
-  const [recommendations, setRecommendations] = useState<
-    RecommendationCard[]
-  >([]);
-  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
-  const [activeRecommendation, setActiveRecommendation] = useState(0);
+  const [recommendations, setRecommendations] = useState<RecommendationCard[]>(
+    [],
+  );
   const [error, setError] = useState<string | null>(null);
-  const goal = profile?.goals[0];
+  const [developmentPreview, setDevelopmentPreview] = useState(false);
 
   useEffect(() => {
+    const preview = process.env.NODE_ENV === "development";
+    setDevelopmentPreview(preview);
+    if (preview) {
+      setDashboard(EMPTY_DASHBOARD);
+      return;
+    }
+
     let active = true;
     void (async () => {
       const [dashboardResult, recommendationResult] = await Promise.allSettled([
@@ -81,7 +168,8 @@ export default function Home() {
       } else if (nextDashboard.recommendations.length === 0) {
         try {
           const fallback = await api.content.list({ page: 0, size: 3 });
-          if (active) setRecommendations(generalRecommendations(fallback.items));
+          if (active)
+            setRecommendations(generalRecommendations(fallback.items));
         } catch (reason) {
           if (active) {
             setError(
@@ -92,204 +180,183 @@ export default function Home() {
           }
         }
       }
-
-      if (active) setRecommendationsLoaded(true);
     })();
     return () => {
       active = false;
     };
   }, []);
 
-  const recommendationItems = combineRecommendations(
+  const firstRecommendation = combineRecommendations(
     recommendations,
     dashboard?.recommendations ?? [],
-  );
-  const recommendationIndex =
-    recommendationItems.length === 0
-      ? 0
-      : activeRecommendation % recommendationItems.length;
-  const visibleRecommendation = recommendationItems[recommendationIndex];
-
-  useEffect(() => {
-    if (recommendationItems.length < 2) return;
-    const interval = window.setInterval(
-      () => setActiveRecommendation((index) => index + 1),
-      4500,
-    );
-    return () => window.clearInterval(interval);
-  }, [recommendationItems.length]);
-
-  const recent = dashboard?.recentTraining;
-  const recentHref = recent
-    ? recent.status === "COMPLETED"
-      ? `/mypage/history/${recent.sessionId}`
-      : `/practice/${recent.contentId}?sessionId=${recent.sessionId}&resumeType=${recent.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
-    : "/home";
+  )[0];
+  const todayHref =
+    process.env.NODE_ENV === "development"
+      ? "/news/today"
+      : firstRecommendation
+        ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome`
+        : "/news/today";
 
   return (
-    <AppShell>
-      <div className="px-5 pt-8 pb-10">
-        <h1 className="text-4xl font-black tracking-tighter">SpeakAI</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {profile && goal ? (
-            <>
-              {profile.name}님, 오늘의 목표는{" "}
-              <span className="font-semibold text-foreground">
-                {GOAL_LABELS[goal]}
-              </span>
-              예요.
-            </>
-          ) : (
-            "프로필을 불러오는 중…"
-          )}
-        </p>
-        {error && (
-          <p role="alert" className="mt-3 text-xs text-destructive">
-            {error}
-          </p>
-        )}
+    <IPhoneFrame>
+      <div className="flex h-full flex-col bg-[#f5f6f8] text-[#191f28]">
+        <div className="h-11 shrink-0" aria-hidden="true" />
 
-        <div className="mt-5 flex gap-2">
-          <Stat
-            icon={<Flame className="size-3.5" />}
-            label="오늘 완료"
-            value={
-              dashboard ? `${dashboard.today.completedCount}회` : undefined
-            }
+        <header className="flex h-12 shrink-0 items-center px-5 pt-1.5 pb-3.5">
+          <Image
+            src="/figma/home/logo.svg"
+            alt="SpeakAI"
+            width={36}
+            height={30.31584}
+            className="h-auto w-[36px]"
+            priority
           />
-          <Stat
-            icon={<TrendingUp className="size-3.5" />}
-            label="오늘 목표"
-            value={dashboard ? `${dashboard.today.goalCount}회` : undefined}
-          />
-          <Stat
-            icon={<Mic className="size-3.5" />}
-            label="학습 시간"
-            value={
-              dashboard
-                ? `${Math.round(dashboard.today.learningSeconds / 60)}분`
-                : undefined
-            }
-          />
-        </div>
+          <span className="flex-1" />
+          <button
+            type="button"
+            aria-label="알림"
+            className="mr-2 flex size-8 items-center justify-center rounded-full transition-transform duration-150 active:scale-90"
+          >
+            <Image src="/figma/home/bell.svg" alt="" width={28} height={28} />
+          </button>
+        </header>
 
-        <p className="mt-8 mb-3 text-xs font-semibold text-muted-foreground">
-          개인화 추천
-        </p>
-        {visibleRecommendation ? (
-          <div className="overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]">
+          {error ? <p className="sr-only">{error}</p> : null}
+
+          <section className="h-[360px] overflow-hidden rounded-[20px] bg-white px-5 pt-6 pb-5 shadow-[0_2px_8px_rgba(26,33,48,0.06)]">
+            <p className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.034em] text-[#2f6bff]">
+              발표 코스 1일차
+            </p>
+
+            <h1 className="mt-3.5 text-[22px] leading-[30px] font-bold tracking-[-0.0194em]">
+              {completed.dailyDone
+                ? "오늘의 연습을 마쳤어요"
+                : "오늘은 뉴스 읽기예요"}
+              <br />
+              {completed.dailyDone
+                ? "조금씩 꾸준히, 잘하고 있어요"
+                : "3문장이면 끝나요"}
+            </h1>
+
+            <div className="mt-[18px] flex h-[124px] items-center justify-center">
+              <div className="flex size-[124px] items-center justify-center overflow-hidden rounded-[36px] bg-[#a5e8ff]">
+                <Image
+                  src="/figma/home/news-hero.svg"
+                  alt="뉴스 읽기"
+                  width={66}
+                  height={80}
+                  priority
+                />
+              </div>
+            </div>
+
             <Link
-              key={String(visibleRecommendation.contentId)}
-              href={`/practice/${visibleRecommendation.contentId}?returnTo=%2Fhome`}
-              className="block animate-in rounded-2xl border border-border px-5 py-4 text-[15px] font-semibold fade-in-0 slide-in-from-bottom-2 duration-500 hover:bg-surface"
+              href={completed.dailyDone ? "/home/history" : todayHref}
+              className="mt-[18px] flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-base leading-6 font-bold tracking-[0.0057em] text-white transition duration-150 active:scale-[0.985] active:bg-[#1f55e0]"
             >
-              <span className="mr-2 rounded-full bg-brand px-2 py-0.5 text-[10px] text-brand-foreground align-middle">
-                {recommendationIndex + 1}순위
-              </span>
-              {visibleRecommendation.title}
-              <p className="mt-2 text-xs font-normal text-muted-foreground">
-                {visibleRecommendation.reason}
+              {completed.dailyDone
+                ? "오늘의 연습 기록 보기"
+                : "오늘의 연습 시작하기"}
+            </Link>
+          </section>
+
+          {process.env.NODE_ENV === "development" && (
+            <Link
+              href="/home/history"
+              className="mt-4 block rounded-2xl bg-white p-4 shadow-sm"
+            >
+              <p className="text-sm font-bold">
+                {history.error
+                  ? "연습 기록을 불러오지 못했어요"
+                  : `오늘 ${completed.sentences}문장 · ${completed.count}회 연습 완료`}
+              </p>
+              <p className="mt-1 text-xs text-[#8b95a1]">
+                {history.items[0]
+                  ? `최근 연습: ${history.items[0].title}`
+                  : "연습을 마치면 기록이 쌓여요"}{" "}
+                · 기록 보기
               </p>
             </Link>
-            {recommendationItems.length > 1 && (
-              <div
-                className="mt-2 flex justify-center gap-1.5"
-                aria-label="개인화 추천 순위"
-              >
-                {recommendationItems.map((item, index) => (
-                  <button
-                    key={String(item.contentId)}
-                    type="button"
-                    aria-label={`${index + 1}순위 추천 보기`}
-                    aria-pressed={recommendationIndex === index}
-                    onClick={() => setActiveRecommendation(index)}
-                    className={`h-1.5 rounded-full transition-all ${
-                      recommendationIndex === index
-                        ? "w-5 bg-foreground"
-                        : "w-1.5 bg-border"
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <p className="rounded-2xl border border-border px-5 py-4 text-sm text-muted-foreground">
-            {recommendationsLoaded
-              ? "추천할 학습 콘텐츠가 아직 없습니다."
-              : "추천 학습을 불러오는 중…"}
-          </p>
-        )}
+          )}
+          <h2 className="mt-[22px] text-xl leading-7 font-bold tracking-[-0.012em]">
+            무엇을 연습할까요?
+          </h2>
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Tile to="/news" title="오늘의 뉴스" sub="난이도별 스크립트" />
-          <Tile to="/sentences" title="문장 연습" sub="받침·자음·모음" />
-          <Tile
-            to="/announcer"
-            title={"아나운서\n따라 읽기"}
-            sub="예시 듣고 비교"
-          />
-          <Tile
-            to="/class/pronunciation"
-            title="발음 클래스"
-            sub="원리부터 단계별로"
-          />
-          <Tile to="/class/intonation" title="억양 클래스" sub="리듬·높낮이" />
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {PRACTICE_CARDS.map((card) => {
+              const href =
+                developmentPreview &&
+                ["/announcer", "/sentences"].includes(card.href)
+                  ? `${card.href}?preview=1`
+                  : card.href;
+
+              return <PracticeTile key={card.href} {...card} href={href} />;
+            })}
+          </div>
         </div>
 
-        {recent && (
-          <Link
-            href={recentHref}
-            className="mt-3 flex items-center justify-between rounded-2xl border border-border px-5 py-4 text-sm font-semibold"
-          >
-            최근 학습 이어하기 ·
-            {recent.title}
-            <span className="text-xs text-muted-foreground">
-              {recent.status}
-            </span>
-          </Link>
-        )}
-        <Link
-          href="/class"
-          className="mt-3 flex items-center justify-between rounded-2xl bg-surface px-5 py-4 text-sm font-semibold"
-        >
-          클래스 전체 보기
-          <PenLine className="size-4 text-muted-foreground" />
-        </Link>
+        <nav className="h-[63px] shrink-0 border-t border-[#e6eaee] bg-white">
+          <ul className="flex h-full items-start py-2">
+            {HOME_TABS.map((tab) => {
+              const active = tab.href === "/home";
+              return (
+                <li key={tab.href} className="min-w-0 flex-1">
+                  <Link
+                    href={tab.href}
+                    aria-current={active ? "page" : undefined}
+                    className="flex flex-col items-center gap-1 active:opacity-70"
+                  >
+                    <Image src={tab.icon} alt="" width={28} height={28} />
+                    <span
+                      className={`text-xs leading-4 tracking-[0.0252em] ${
+                        active
+                          ? "font-bold text-[#2f6bff]"
+                          : "font-medium text-[#8b95a1]"
+                      }`}
+                    >
+                      {tab.label}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <div
+          className="h-[max(34px,env(safe-area-inset-bottom))] shrink-0 bg-white"
+          aria-hidden="true"
+        />
       </div>
-    </AppShell>
+    </IPhoneFrame>
   );
 }
 
-function Stat({
+function PracticeTile({
+  href,
+  title,
+  description,
   icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-}) {
-  return (
-    <div className="flex-1 rounded-2xl border border-border px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <p className="mt-1 text-lg font-bold tracking-tight">{value ?? "—"}</p>
-    </div>
-  );
-}
-
-function Tile({ to, title, sub }: { to: string; title: string; sub: string }) {
+  iconWidth,
+  iconHeight,
+  badgeClassName,
+}: PracticeCard) {
   return (
     <Link
-      href={to}
-      className="flex aspect-square flex-col justify-between rounded-2xl bg-surface p-4 transition-colors hover:bg-muted"
+      href={href}
+      className="flex h-[138px] min-w-0 touch-manipulation flex-col overflow-hidden rounded-[18px] bg-white px-4 pt-4 pb-3 shadow-[0_2px_8px_rgba(26,33,48,0.06)] transition duration-150 active:scale-[0.98] active:shadow-[0_1px_4px_rgba(26,33,48,0.05)]"
     >
-      <span className="text-[10px] text-muted-foreground">{sub}</span>
-      <span className="text-[15px] leading-snug font-semibold whitespace-pre-line">
+      <h3 className="text-sm leading-5 font-bold tracking-[0.0145em]">
         {title}
+      </h3>
+      <p className="mt-1 text-xs leading-4 font-normal tracking-[0.0252em] text-[#4e5968]">
+        {description}
+      </p>
+      <span className="flex-1" />
+      <span
+        className={`ml-auto flex size-11 shrink-0 items-center justify-center rounded-[17px] ${badgeClassName}`}
+      >
+        <Image src={icon} alt="" width={iconWidth} height={iconHeight} />
       </span>
     </Link>
   );
