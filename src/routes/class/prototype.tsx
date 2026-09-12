@@ -3,6 +3,7 @@ import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
+import { Check } from "lucide-react";
 import { practiceCopy } from "@/lib/practice-copy";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -280,22 +281,26 @@ export default function PronunciationPrototype({
       <section className="relative flex h-full flex-col bg-[#fafbfc] text-[#191f28]">
         <div className="h-11 shrink-0" />
         {screen !== "complete" && (
-          <header className="relative flex h-12 shrink-0 items-center justify-center">
-            <button
-              onClick={back}
-              aria-label={
-                screen === "principle" || screen === "listen"
-                  ? "단계 닫기"
-                  : "뒤로 가기"
-              }
-              className="absolute left-2 flex size-10 items-center justify-center active:opacity-50"
-            >
-              {screen === "principle" || screen === "listen" ? (
-                <NavigationIcon close />
-              ) : (
-                <NavigationIcon />
-              )}
-            </button>
+          <header
+            className={`relative flex h-12 shrink-0 items-center ${screen === "list" ? "px-5" : "justify-center"}`}
+          >
+            {screen !== "list" && (
+              <button
+                onClick={back}
+                aria-label={
+                  screen === "principle" || screen === "listen"
+                    ? "단계 닫기"
+                    : "뒤로 가기"
+                }
+                className="absolute left-2 flex size-10 items-center justify-center active:opacity-50"
+              >
+                {screen === "principle" || screen === "listen" ? (
+                  <NavigationIcon close />
+                ) : (
+                  <NavigationIcon />
+                )}
+              </button>
+            )}
             <h1 className="text-[17px] font-bold">{title}</h1>
             {(screen === "principle" || screen === "listen") && (
               <span className="absolute right-5 text-xs text-[#8b95a1]">
@@ -486,7 +491,18 @@ export default function PronunciationPrototype({
                       <span
                         className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs ${index < completed ? "bg-[#2f6bff] text-white" : index === completed ? "border border-[#2f6bff] text-[#2f6bff]" : "bg-[#f2f4f6]"}`}
                       >
-                        {index < completed ? "✓" : index + 1}
+                        {index < completed ? (
+                          <>
+                            <Check
+                              size={14}
+                              strokeWidth={3}
+                              aria-hidden="true"
+                            />
+                            <span className="sr-only">완료</span>
+                          </>
+                        ) : (
+                          index + 1
+                        )}
                       </span>
                       <span className="flex-1">{label}</span>
                       {index <= completed && (
