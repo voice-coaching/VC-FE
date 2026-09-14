@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import localFont from "next/font/local";
 import "../styles.css";
 import { Providers } from "./providers";
+
+const designFont = localFont({
+  src: "../assets/fonts/NotoSansKR.woff",
+  display: "swap",
+  weight: "100 900",
+});
 
 export const metadata: Metadata = {
   metadataBase: process.env.NEXT_PUBLIC_SITE_URL
@@ -30,7 +37,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
-      <body>
+      <body className={designFont.className}>
         <Providers>{children}</Providers>
       </body>
     </html>

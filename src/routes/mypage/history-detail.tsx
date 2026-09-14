@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
-import { scoreColor } from "@/lib/app-data";
+import { ReferencePlayer } from "@/components/reference-player";
 import { api, type TrainingHistoryDetail } from "@/lib/api";
 
 export default function LearningHistoryDetail({
@@ -15,6 +15,7 @@ export default function LearningHistoryDetail({
   const router = useRouter();
   const [detail, setDetail] = useState<TrainingHistoryDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playbackUrl, setPlaybackUrl] = useState<string>();
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function LearningHistoryDetail({
       const { playbackUrl } = await api.training.getRecordingPlaybackUrl(
         detail.recording.id,
       );
-      await new Audio(playbackUrl).play();
+      setPlaybackUrl(playbackUrl);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -71,7 +72,7 @@ export default function LearningHistoryDetail({
 
   return (
     <AppShell nav={false}>
-      <TopBar to="/mypage/history" title="학습 기록 상세" />
+      <TopBar to="/mypage/history" title="연습 기록" />
       <div className="space-y-4 px-5 pb-10">
         {error && (
           <p
@@ -88,7 +89,7 @@ export default function LearningHistoryDetail({
         )}
         {detail && (
           <>
-            <section className="rounded-3xl bg-surface p-5">
+            <section className="design-card">
               <p className="text-xs text-muted-foreground">
                 {new Date(detail.session.completedAt).toLocaleString("ko-KR")}
               </p>
@@ -100,19 +101,20 @@ export default function LearningHistoryDetail({
                 <button
                   type="button"
                   onClick={() => void playRecording()}
-                  className="rounded-full border border-border px-4 py-2 text-xs font-semibold"
+                  className="rounded-full bg-primary/10 px-4 py-3 text-xs font-semibold text-primary"
                 >
                   내 녹음 듣기
                 </button>
-                <strong
-                  className={`text-4xl ${scoreColor(detail.analysis.overallScore)}`}
-                >
+                <strong className="text-4xl text-primary">
                   {Math.round(detail.analysis.overallScore)}
                 </strong>
               </div>
             </section>
 
-            <section className="rounded-3xl border border-border p-5">
+            {playbackUrl && (
+              <ReferencePlayer source={playbackUrl} title="내 녹음" />
+            )}
+            <section className="design-card">
               <h2 className="text-sm font-semibold">분석 결과</h2>
               <p className="mt-3 text-sm text-muted-foreground">
                 {detail.analysis.transcript}
@@ -132,7 +134,7 @@ export default function LearningHistoryDetail({
                       </span>
                     )}
                     <span className="float-right text-muted-foreground">
-                      {segment.resultStatus}
+                      {segment.resultStatus === "NORMAL" ? "정확" : "개선 필요"}
                     </span>
                   </div>
                 ))}
