@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Mic,
+  Check,
+  TrendingUp,
   RotateCcw,
   Square,
   Trash2,
   UploadCloud,
-  Volume2,
+  CircleAlert,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
@@ -19,7 +21,12 @@ import {
   type PracticeContent,
   type PracticeContentRecommendation,
   type VoiceRecording,
+  type CourseDetail,
 } from "@/lib/api";
+import { ReferencePlayer } from "@/components/reference-player";
+import { AnalysisView } from "@/components/analysis-view";
+import { courseResultProgress } from "@/lib/course-result-progress";
+import { sampleAnalysis } from "@/lib/design-samples";
 import { cn } from "@/lib/utils";
 
 type Phase =
@@ -33,11 +40,23 @@ type Phase =
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function PracticeSession({ content }: { content: PracticeContent }) {
+export function PracticeSession({
+  content,
+  onTitleChange,
+  localOnly = false,
+}: {
+  content: PracticeContent;
+  localOnly?: boolean;
+  onTitleChange?: (title: string) => void;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const resumedSessionId = searchParams.get("sessionId");
+  const resumedSessionId = localOnly ? null : searchParams.get("sessionId");
   const resumeType = searchParams.get("resumeType");
+  const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
+  const [courseFinished, setCourseFinished] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [resultAudioUrl, setResultAudioUrl] = useState<string | undefined>();
   const [phase, setPhase] = useState<Phase>("idle");
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
@@ -69,10 +88,45 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
-  const overall = analysis?.overallScore ?? 0;
-  const selectedSegments = segments.filter(
-    (segment) => segment.resultStatus !== "NORMAL",
-  );
+  useEffect(() => {
+    if (!courseId) return;
+    let active = true;
+    api.courses
+      .get(courseId)
+      .then((value) => {
+        if (active) setCourseDetail(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [courseId]);
+  useEffect(() => {
+    onTitleChange?.(
+      phase === "result"
+        ? "분석 결과"
+        : phase === "analyzing"
+          ? "분석 중"
+          : "연습하기",
+    );
+  }, [phase, onTitleChange]);
+
+  useEffect(() => {
+    if (phase !== "result" || recorder.previewUrl) return;
+    const recording = recordingAttempts.find((item) => item.selected);
+    const recordingId = recording?.recordingId ?? recording?.id;
+    if (recordingId == null) return;
+    let active = true;
+    api.training
+      .getRecordingPlaybackUrl(recordingId)
+      .then((value) => {
+        if (active) setResultAudioUrl(value.playbackUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [phase, recorder.previewUrl, recordingAttempts]);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -188,7 +242,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   }, [content.id, resumeType, resumedSessionId]);
 
   useEffect(() => {
-    if (phase !== "result") return;
+    if (phase !== "result" || localOnly) return;
     let active = true;
     setRecommendationsLoading(true);
     setRecommendationError(null);
@@ -212,7 +266,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     return () => {
       active = false;
     };
-  }, [content.id, phase]);
+  }, [content.id, phase, localOnly]);
 
   async function ensureSession() {
     if (sessionId) return sessionId;
@@ -231,7 +285,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   async function startRecording() {
     setRequestError(null);
     try {
-      await ensureSession();
+      if (!localOnly) await ensureSession();
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
@@ -295,24 +349,37 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     completedRef.current = true;
 
     if (courseId && courseStepId) {
-      const steps = await api.courses.getSteps(courseId);
-      const stepIndex = steps.findIndex(
-        (step) => String(step.id) === courseStepId,
-      );
-      const progressPercent = Math.round(
-        ((Math.max(0, stepIndex) + 1) / Math.max(1, steps.length)) * 100,
-      );
-      await api.courses.updateProgress(courseId, {
-        lastStepId: courseStepId,
-        progressPercent,
-      });
-      if (progressPercent >= 100) await api.courses.complete(courseId);
+      const [steps, currentProgress] = await Promise.all([
+        api.courses.getSteps(courseId),
+        api.courses.getProgress(courseId),
+      ]);
+      const update = courseResultProgress(steps, currentProgress, courseStepId);
+      const { progressPercent } = update;
+      await api.courses.updateProgress(courseId, update);
+      if (progressPercent >= 100) {
+        await api.courses.complete(courseId);
+        setCourseFinished(true);
+      }
     }
     setPhase("result");
   }
 
   async function analyze() {
     if (!recorder.blob) return;
+    if (localOnly) {
+      setRequestError(null);
+      setPhase("analyzing");
+      setAnalysisProgress(35);
+      await wait(400);
+      setAnalysisProgress(75);
+      await wait(400);
+      const example = sampleAnalysis(content.scriptText);
+      setAnalysis(example.analysis);
+      setSegments(example.segments);
+      setAnalysisProgress(100);
+      setPhase("result");
+      return;
+    }
     if (recorder.durationMs < 1_000) {
       setRequestError("분석하려면 1초 이상 녹음해 주세요.");
       return;
@@ -352,8 +419,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
       setRecordingAttempts((current) =>
         current.map((item) => ({
           ...item,
-          selected:
-            String(item.recordingId ?? item.id) === String(recordingId),
+          selected: String(item.recordingId ?? item.id) === String(recordingId),
         })),
       );
       const requested = await api.training.analyze(activeSessionId);
@@ -369,7 +435,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
           ? reason.message
           : "음성 분석 요청에 실패했습니다.",
       );
-      setPhase("review");
+      setPhase("error");
     }
   }
 
@@ -395,6 +461,10 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
 
   async function regenerateFeedback() {
     if (!analysis) return;
+    if (localOnly) {
+      setAnalysis(sampleAnalysis(content.scriptText).analysis);
+      return;
+    }
     setRegenerating(true);
     setRequestError(null);
     try {
@@ -427,7 +497,8 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     if (!sessionId) return;
     const recordingId = recording.recordingId ?? recording.id;
     if (recordingId == null) return;
-    if (!window.confirm(`${recording.attemptNo}번째 녹음을 삭제할까요?`)) return;
+    if (!window.confirm(`${recording.attemptNo}번째 녹음을 삭제할까요?`))
+      return;
 
     const key = String(recordingId);
     setDeletingRecordingId(key);
@@ -458,6 +529,22 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
   }
 
   async function goToNextContent() {
+    if (localOnly) {
+      router.push("/sentences");
+      return;
+    }
+    if (courseId) {
+      if (courseFinished) {
+        setShowCompletion(true);
+        onTitleChange?.("클래스 완료");
+      } else
+        router.push(
+          searchParams.get("returnTo")?.startsWith("/class")
+            ? searchParams.get("returnTo")!
+            : "/class",
+        );
+      return;
+    }
     setLoadingNext(true);
     setRequestError(null);
     try {
@@ -481,49 +568,173 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
     }
   }
 
-  async function playReference() {
-    try {
-      const audios = await api.content.getReferenceAudios(content.id);
-      const target = audios.find((audio) => audio.primary) ?? audios[0];
-      if (!target) throw new Error("등록된 기준 음성이 없습니다.");
-      const { playbackUrl } = await api.content.getReferenceAudioPlaybackUrl(
-        target.id,
-      );
-      await new Audio(playbackUrl).play();
-    } catch (reason) {
-      setRequestError(
-        reason instanceof Error
-          ? reason.message
-          : "기준 음성을 재생하지 못했습니다.",
-      );
-    }
+  if (phase === "error") {
+    const quality = /음질|소리|마이크|녹음/.test(
+      requestError ?? recorder.error ?? "",
+    );
+    return (
+      <div className="flex min-h-[calc(100dvh-92px)] flex-col px-5 pb-8">
+        <div className="my-auto py-10 text-center">
+          <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
+            <CircleAlert className="size-9" />
+          </span>
+          <h2 className="mt-6 text-2xl font-bold">
+            {quality ? "소리가 잘 들리지 않았어요" : "분석에 실패했어요"}
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            {quality
+              ? "아래 내용을 확인하고 다시 녹음해 주세요"
+              : "네트워크 상태를 확인하고 다시 시도해 주세요"}
+          </p>
+          {quality ? (
+            <ul className="design-card mt-6 space-y-4 text-left text-sm">
+              {[
+                "조용한 곳에서 녹음해 주세요",
+                "마이크에서 20센티미터 정도 떨어져 주세요",
+                "평소 말하는 크기로 읽어 주세요",
+              ].map((text) => (
+                <li key={text} className="flex gap-3">
+                  <Check className="size-4 shrink-0 text-primary" />
+                  {text}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-6 text-sm text-muted-foreground">
+              {recorder.previewUrl
+                ? "녹음한 음성은 그대로 남아 있어요"
+                : "학습 기록에서 진행 상태를 확인할 수 있어요"}
+            </p>
+          )}
+          <p
+            role="alert"
+            className="mt-4 text-xs leading-5 text-muted-foreground"
+          >
+            {requestError ?? recorder.error}
+          </p>
+        </div>
+        <button
+          className="design-action"
+          onClick={() => {
+            if (canRetryAnalysis) {
+              void retryFailedAnalysis();
+              return;
+            }
+            if (!quality && recorder.blob) {
+              void analyze();
+              return;
+            }
+            recorder.reset();
+            setRequestError(null);
+            setPhase("idle");
+          }}
+        >
+          {quality ? "다시 녹음하기" : "다시 시도하기"}
+        </button>
+        <button
+          className="mt-4 py-3 text-sm text-muted-foreground"
+          onClick={() => router.push("/home")}
+        >
+          나중에 하기
+        </button>
+      </div>
+    );
   }
 
-  return (
-    <div className="flex flex-col gap-6 px-5 pb-10">
-      <section className="rounded-3xl bg-surface p-5">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{content.title}</span>
-          {content.referenceAudioAvailable && (
-            <button
-              onClick={() => void playReference()}
-              className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1.5 font-medium text-foreground"
-            >
-              <Volume2 className="size-3.5" />
-              기준 음성 듣기
-            </button>
-          )}
+  if (showCompletion)
+    return (
+      <div className="flex min-h-[calc(100dvh-80px)] flex-col px-5 text-center">
+        <div className="my-auto py-12">
+          <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-primary text-white">
+            <Check className="size-10" />
+          </span>
+          <h2 className="mt-6 text-2xl leading-9 font-bold">
+            {courseDetail?.title ?? "클래스"}를<br />
+            완료했어요
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {courseDetail
+              ? `${courseDetail.stepCount}단계를 모두 마쳤어요`
+              : "모든 단계를 마쳤어요"}
+          </p>
+          <section className="design-card mt-8 grid grid-cols-3 divide-x divide-border !px-2">
+            <div>
+              <b className="text-xl text-primary">
+                {Math.round(analysis?.overallScore ?? 0)}점
+              </b>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                마지막 점수
+              </p>
+            </div>
+            <div>
+              <b className="text-xl">
+                {Math.max(1, Math.round(recorder.durationMs / 1000))}초
+              </b>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                이번 연습 시간
+              </p>
+            </div>
+            <div>
+              <b className="text-xl">{courseDetail?.stepCount ?? "—"}개</b>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                완료 단계
+              </p>
+            </div>
+          </section>
         </div>
-        <p className="mt-4 text-[22px] leading-[1.6] font-semibold tracking-tight">
-          {content.scriptText}
+        <div className="space-y-3 pb-6">
+          <button
+            type="button"
+            className="design-action"
+            onClick={() => router.push("/class")}
+          >
+            다른 클래스 보기
+          </button>
+          <button
+            type="button"
+            className="py-3 text-sm text-muted-foreground"
+            onClick={() => router.push("/home")}
+          >
+            홈으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="flex min-h-[calc(100dvh-80px)] flex-col gap-5 px-5 pb-6">
+      {localOnly && (
+        <p className="rounded-xl bg-primary/5 px-4 py-3 text-xs leading-5 text-primary">
+          내 문장 체험 · 녹음은 이 기기에서만 재생되며 분석 결과는 예시로
+          제공됩니다.
         </p>
-        <p className="mt-3 text-xs text-muted-foreground">
-          {content.description}
-        </p>
-      </section>
+      )}
+      {!["result", "uploading", "analyzing"].includes(phase) && (
+        <>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span className="rounded-md bg-primary/5 px-2 py-1 text-primary">
+              {content.contentType === "NEWS"
+                ? "뉴스 읽기"
+                : content.contentType === "ANNOUNCER"
+                  ? "아나운서 따라 읽기"
+                  : courseId
+                    ? "클래스"
+                    : "문장 연습"}
+            </span>
+            <span>
+              약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
+            </span>
+          </div>
+          <section className="design-card">
+            <p className="text-[18px] leading-[1.7] font-medium">
+              {content.scriptText}
+            </p>
+          </section>
+        </>
+      )}
 
       {phase !== "result" ? (
-        <div className="flex flex-col items-center gap-4 py-6">
+        <div className="mt-auto flex flex-1 flex-col items-center justify-end gap-5 py-6">
           {(phase === "idle" || phase === "recording") && (
             <button
               onClick={() =>
@@ -531,11 +742,10 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               }
               disabled={recorder.status === "requesting"}
               className={cn(
-                "flex size-24 items-center justify-center rounded-full transition-all",
-                phase === "idle" &&
-                  "bg-foreground text-background hover:scale-105",
+                "flex size-20 items-center justify-center rounded-full transition-all",
+                phase === "idle" && "bg-primary text-white hover:scale-105",
                 phase === "recording" &&
-                  "animate-pulse bg-destructive text-destructive-foreground",
+                  "animate-pulse bg-primary text-white ring-[14px] ring-primary/10",
               )}
               aria-label={phase === "recording" ? "녹음 종료" : "녹음 시작"}
             >
@@ -549,8 +759,10 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
 
           {phase === "review" && recorder.previewUrl && (
             <div className="w-full rounded-3xl border border-border p-5">
-              <p className="mb-3 text-sm font-semibold">녹음 미리 듣기</p>
-              <audio controls src={recorder.previewUrl} className="w-full" />
+              <ReferencePlayer
+                source={recorder.previewUrl}
+                title="내 녹음 듣기"
+              />
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
@@ -565,7 +777,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
                 </button>
                 <button
                   onClick={() => void analyze()}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-foreground py-3 text-xs font-semibold text-background"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-primary py-3 text-xs font-semibold text-white"
                 >
                   <UploadCloud className="size-4" />
                   분석 요청
@@ -577,7 +789,9 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
           {phase === "review" &&
             recordingAttempts.some((recording) => !recording.selected) && (
               <section className="w-full rounded-3xl bg-surface p-5">
-                <h2 className="text-sm font-semibold">서버에 저장된 녹음 시도</h2>
+                <h2 className="text-sm font-semibold">
+                  서버에 저장된 녹음 시도
+                </h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                   분석하지 않을 녹음은 여기서 삭제할 수 있습니다.
                 </p>
@@ -598,8 +812,12 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
                           </span>
                           <button
                             type="button"
-                            disabled={recordingId == null || deletingRecordingId === key}
-                            onClick={() => void deleteRecordingAttempt(recording)}
+                            disabled={
+                              recordingId == null || deletingRecordingId === key
+                            }
+                            onClick={() =>
+                              void deleteRecordingAttempt(recording)
+                            }
                             className="inline-flex items-center gap-1 text-xs font-semibold text-destructive disabled:opacity-40"
                           >
                             <Trash2 className="size-3.5" />
@@ -613,10 +831,45 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
             )}
 
           {(phase === "uploading" || phase === "analyzing") && (
-            <div className="w-full rounded-3xl bg-surface p-5 text-center">
-              <p className="text-sm font-semibold">
-                {phase === "uploading" ? "음성 업로드 중…" : "음성 분석 중…"}
+            <div className="my-auto w-full p-5 text-center">
+              <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-full bg-primary/5 text-primary">
+                {phase === "uploading" ? (
+                  <UploadCloud className="size-7" />
+                ) : (
+                  <TrendingUp className="size-7" />
+                )}
+              </div>
+              <p className="text-xl font-bold">
+                {phase === "uploading"
+                  ? "음성을 보내고 있어요"
+                  : localOnly
+                    ? "예시 결과를 준비하고 있어요"
+                    : "발음을 분석하고 있어요"}
               </p>
+              <p className="mt-3 text-sm text-muted-foreground">
+                잠시만 기다려 주세요
+              </p>
+              {phase === "analyzing" && (
+                <ol className="mx-auto mt-10 max-w-56 space-y-6 text-left">
+                  {["음성 품질 확인", "텍스트로 변환", "발음과 억양 분석"].map(
+                    (label, index) => (
+                      <li
+                        key={label}
+                        className={`flex items-center gap-3 text-sm ${analysisProgress >= (index + 1) * 33 ? "text-primary" : "text-muted-foreground"}`}
+                      >
+                        <span className="flex size-7 items-center justify-center rounded-full border">
+                          {analysisProgress >= (index + 1) * 33 ? (
+                            <Check className="size-4" />
+                          ) : (
+                            index + 1
+                          )}
+                        </span>
+                        {label}
+                      </li>
+                    ),
+                  )}
+                </ol>
+              )}
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
                 <div
                   className="h-full rounded-full bg-brand transition-[width]"
@@ -628,26 +881,6 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               <p className="mt-2 text-xs text-muted-foreground">
                 {phase === "uploading" ? uploadProgress : analysisProgress}%
               </p>
-            </div>
-          )}
-
-          {phase === "error" && (
-            <div className="w-full rounded-3xl bg-destructive/10 p-5 text-center">
-              <p className="text-sm font-semibold text-destructive">
-                녹음을 시작할 수 없습니다
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {recorder.error ?? requestError}
-              </p>
-              <button
-                onClick={() => {
-                  recorder.reset();
-                  setPhase("idle");
-                }}
-                className="mt-4 rounded-full border border-border px-5 py-2.5 text-xs font-semibold"
-              >
-                다시 시도
-              </button>
             </div>
           )}
 
@@ -668,7 +901,7 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
                 <button
                   type="button"
                   onClick={() => void retryFailedAnalysis()}
-                  className="mt-3 rounded-full bg-foreground px-5 py-2.5 text-xs font-semibold text-background"
+                  className="mt-3 rounded-full bg-primary px-5 py-2.5 text-xs font-semibold text-white"
                 >
                   분석 다시 시도
                 </button>
@@ -678,88 +911,37 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
         </div>
       ) : analysis ? (
         <>
-          <section className="rounded-3xl border border-border p-5">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">종합 점수</p>
-                <p className="text-4xl font-bold">{Math.round(overall)}</p>
-              </div>
-              <div className="text-right text-xs text-muted-foreground">
-                <p>
-                  발음 {Math.round(analysis.pronunciationScore)} · 억양{" "}
-                  {Math.round(analysis.intonationScore)}
-                </p>
-                <p className="mt-1">
-                  속도 {Math.round(analysis.speedWpm)} WPM ·{" "}
-                  {analysis.speedStatus}
-                </p>
-              </div>
-            </div>
-          </section>
-          <section className="rounded-3xl bg-surface p-5">
-            <h2 className="text-sm font-semibold">STT 결과</h2>
-            <p className="mt-3 text-base leading-relaxed">
-              {analysis.transcript}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              신뢰도 {Math.round(analysis.sttConfidence * 100)}%
-            </p>
-          </section>
-          <section>
-            <h2 className="mb-3 text-sm font-semibold">개선이 필요한 구간</h2>
-            <div className="space-y-2">
-              {selectedSegments.map((segment) => (
-                <div
-                  key={String(segment.id)}
-                  className="rounded-2xl border border-border p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <b>{segment.expectedText}</b>
-                    <span className="text-xs text-destructive">
-                      {Math.round(segment.pronunciationScore)}점
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    인식: {segment.recognizedText || "누락"} ·{" "}
-                    {segment.errorType}
-                  </p>
-                  <p className="mt-2 text-xs">{segment.feedback}</p>
-                </div>
-              ))}
-              {selectedSegments.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  모든 구간을 안정적으로 발음했습니다.
-                </p>
-              )}
-            </div>
-          </section>
-          <section className="grid gap-3">
-            <div className="rounded-3xl bg-success/10 p-5">
-              <h2 className="text-sm font-semibold">강점</h2>
-              <ul className="mt-2 text-xs text-muted-foreground">
+          <AnalysisView
+            analysis={analysis}
+            courseMode={Boolean(courseId)}
+            segments={segments}
+            content={content}
+            recordingUrl={recorder.previewUrl ?? resultAudioUrl}
+          />
+          {!courseId && (
+            <details className="design-card">
+              <summary className="cursor-pointer text-sm font-semibold">
+                AI 코칭
+              </summary>
+              <div className="mt-4 space-y-3 text-sm">
                 {analysis.strengths.map((item) => (
-                  <li key={item}>· {item}</li>
+                  <p key={item}>{item}</p>
                 ))}
-              </ul>
-            </div>
-            <div className="rounded-3xl bg-destructive/10 p-5">
-              <h2 className="text-sm font-semibold">개선할 점</h2>
-              <ul className="mt-2 text-xs text-muted-foreground">
                 {analysis.weaknesses.map((item) => (
-                  <li key={item}>· {item}</li>
+                  <p key={item}>{item}</p>
                 ))}
-              </ul>
-              <p className="mt-3 text-xs">{analysis.summaryFeedback}</p>
-              <button
-                type="button"
-                disabled={regenerating}
-                onClick={() => void regenerateFeedback()}
-                className="mt-4 rounded-full border border-border px-4 py-2 text-xs font-semibold disabled:opacity-50"
-              >
-                {regenerating ? "코칭 생성 중…" : "AI 코칭 다시 생성"}
-              </button>
-            </div>
-          </section>
+                <p>{analysis.summaryFeedback}</p>
+                <button
+                  type="button"
+                  disabled={regenerating}
+                  onClick={() => void regenerateFeedback()}
+                  className="text-primary"
+                >
+                  {regenerating ? "코칭 생성 중…" : "AI 코칭 다시 생성"}
+                </button>
+              </div>
+            </details>
+          )}
           {requestError && (
             <p
               role="alert"
@@ -768,35 +950,39 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
               {requestError}
             </p>
           )}
-          <section className="rounded-3xl bg-surface p-5">
-            <h2 className="text-sm font-semibold">비슷한 콘텐츠</h2>
-            {recommendationsLoading ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                추천 콘텐츠를 불러오는 중…
-              </p>
-            ) : recommendations.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {recommendations.map((item) => (
-                  <button
-                    key={String(item.id)}
-                    type="button"
-                    onClick={() => goToRecommendation(item)}
-                    className="block w-full rounded-2xl bg-background p-4 text-left"
-                  >
-                    <span className="text-sm font-semibold">{item.title}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {item.similarityReason}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-muted-foreground">
-                {recommendationError ?? "추천할 비슷한 콘텐츠가 없습니다."}
-              </p>
-            )}
-          </section>
-          <div className="grid grid-cols-2 gap-2">
+          {!courseId && (
+            <section className="rounded-3xl bg-surface p-5">
+              <h2 className="text-sm font-semibold">비슷한 콘텐츠</h2>
+              {recommendationsLoading ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  추천 콘텐츠를 불러오는 중…
+                </p>
+              ) : recommendations.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {recommendations.map((item) => (
+                    <button
+                      key={String(item.id)}
+                      type="button"
+                      onClick={() => goToRecommendation(item)}
+                      className="block w-full rounded-2xl bg-background p-4 text-left"
+                    >
+                      <span className="text-sm font-semibold">
+                        {item.title}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {item.similarityReason}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {recommendationError ?? "추천할 비슷한 콘텐츠가 없습니다."}
+                </p>
+              )}
+            </section>
+          )}
+          <div className="sticky bottom-0 -mx-5 grid grid-cols-2 gap-2 border-t border-border bg-white p-5">
             <button
               type="button"
               onClick={() => {
@@ -815,10 +1001,18 @@ export function PracticeSession({ content }: { content: PracticeContent }) {
             <button
               type="button"
               disabled={loadingNext}
-              onClick={() => void goToNextContent()}
-              className="rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-50"
+              onClick={() =>
+                courseId ? void goToNextContent() : router.push("/home")
+              }
+              className="rounded-full bg-primary py-4 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {loadingNext ? "이동 중…" : "다음 콘텐츠"}
+              {loadingNext
+                ? "이동 중…"
+                : courseId
+                  ? courseFinished
+                    ? "클래스 완료"
+                    : "다음 단계"
+                  : "연습 마치기"}
             </button>
           </div>
         </>

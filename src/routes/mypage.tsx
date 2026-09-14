@@ -2,25 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  CheckCircle2,
-  Clock,
-  Settings,
-  ThumbsDown,
-  ThumbsUp,
-} from "lucide-react";
+import { Settings, ChevronRight, UserRound, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { GOAL_LABELS, LEVEL_LABELS, scoreColor } from "@/lib/app-data";
 import {
   api,
-  type ScoreTrend,
   type Statistics,
   type StrengthsWeaknesses,
   type TrainingHistoryItem,
   type UserAccount,
-  type WeaknessRecommendations,
 } from "@/lib/api";
 import { useProfile } from "@/lib/use-profile";
+import { METHOD_OPTIONS } from "@/lib/onboarding-options";
 import { getCachedUser } from "@/lib/auth-session";
 
 export default function MyPage() {
@@ -29,9 +21,6 @@ export default function MyPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
   const [history, setHistory] = useState<TrainingHistoryItem[]>([]);
-  const [scoreTrend, setScoreTrend] = useState<ScoreTrend | null>(null);
-  const [recommendations, setRecommendations] =
-    useState<WeaknessRecommendations | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,27 +35,14 @@ export default function MyPage() {
         page: 0,
         size: 5,
       }),
-      api.myPage.getScoreTrends("PRONUNCIATION", "MONTH"),
-      api.myPage.getWeaknessRecommendations({ limit: 3 }),
     ])
-      .then(
-        ([
-          user,
-          stats,
-          strengthsWeaknesses,
-          sessions,
-          trend,
-          weaknessRecommendations,
-        ]) => {
-          if (!active) return;
-          setAccount(user);
-          setStatistics(stats);
-          setFeedback(strengthsWeaknesses);
-          setHistory(sessions.items);
-          setScoreTrend(trend);
-          setRecommendations(weaknessRecommendations);
-        },
-      )
+      .then(([user, stats, strengthsWeaknesses, sessions]) => {
+        if (!active) return;
+        setAccount(user);
+        setStatistics(stats);
+        setFeedback(strengthsWeaknesses);
+        setHistory(sessions.items);
+      })
       .catch((reason) => {
         if (active)
           setError(
@@ -81,242 +57,239 @@ export default function MyPage() {
   }, []);
 
   const displayName = account?.nickname ?? profile?.name;
-
+  const hours = Math.floor((statistics?.totalLearningSeconds ?? 0) / 3600);
+  const minutes = Math.floor(
+    ((statistics?.totalLearningSeconds ?? 0) % 3600) / 60,
+  );
+  const methods = profile?.learningSituations
+    .map(
+      (value) =>
+        METHOD_OPTIONS.find((item) => item.value === value)?.summary ?? value,
+    )
+    .join(", ");
   return (
     <AppShell>
-      <div className="px-5 pt-6 pb-10">
-        <div className="flex justify-end">
-          <Link
-            href="/mypage/settings"
-            aria-label="계정 설정"
-            className="text-muted-foreground"
-          >
-            <Settings className="size-5" />
-          </Link>
+      <header className="flex h-[92px] items-end justify-between px-5 pb-5">
+        <h1 className="text-lg font-bold">마이</h1>
+        <Link href="/mypage/settings" aria-label="설정" className="-m-2 p-2">
+          <Settings className="size-5" />
+        </Link>
+      </header>
+      <Link
+        href="/mypage/settings/profile"
+        className="flex items-center gap-3 bg-white px-5 py-1"
+      >
+        <span className="flex size-12 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
+          <UserRound className="size-7 fill-current" />
+        </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold">
+              {displayName ?? "불러오는 중…"}
+            </h2>
+            {profile && (
+              <span className="rounded-full bg-[#e8efff] px-3 py-1 text-xs font-semibold text-primary">
+                {
+                  { beginner: "초급", intermediate: "중급", advanced: "고급" }[
+                    profile.level
+                  ]
+                }
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-[#8b95a1]">
+            {profile
+              ? `하루 ${profile.minutesPerDay}분 연습`
+              : "나만의 말하기 연습"}
+          </p>
         </div>
-
+        <ChevronRight className="size-5 text-[#8b95a1]" />
+      </Link>
+      <div className="space-y-4 px-5 pt-3 pb-8">
         {error && (
-          <p role="alert" className="mb-4 text-sm text-destructive">
+          <p
+            role="alert"
+            className="rounded-xl bg-destructive/5 p-3 text-xs text-destructive"
+          >
             {error}
           </p>
         )}
-
-        <div className="mt-2">
-          <div>
-            <p className="text-xl font-bold tracking-tight">
-              {displayName ?? "불러오는 중…"}
-            </p>
-            {statistics && (
-              <div className="mt-1.5 flex gap-2">
-                <Chip
-                  icon={<CheckCircle2 className="size-3" />}
-                  label="연속 학습"
-                  value={`${statistics.consecutiveLearningDays}일`}
-                />
-                <Chip
-                  icon={<Clock className="size-3" />}
-                  label="학습 기록"
-                  value={`${statistics.totalSessionCount}회`}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <section className="mt-6 rounded-3xl border border-border p-5">
-          <h2 className="text-sm font-semibold">AI Total Feedback</h2>
-          <div className="mt-4 flex flex-col gap-3">
-            <Block
-              icon={<ThumbsUp className="size-3.5 text-success" />}
-              title="강점"
-              items={(feedback?.strengths ?? []).map(
-                (item) => `${item.label} · ${Math.round(item.averageScore)}점`,
-              )}
+        <section className="design-card">
+          <p className="flex items-baseline gap-2">
+            <strong className="text-[26px] font-bold text-primary">
+              {statistics?.consecutiveLearningDays ?? 0}일째
+            </strong>
+            <span className="text-sm font-bold">연속 연습 중이에요</span>
+          </p>
+          <div className="mt-4 grid grid-cols-3 divide-x divide-[#f2f4f6] border-t border-[#f2f4f6] pt-5 text-center">
+            <Metric
+              label="연습 횟수"
+              value={`${statistics?.totalSessionCount ?? 0}회`}
             />
-            <Block
-              icon={<ThumbsDown className="size-3.5 text-destructive" />}
-              title="약점"
-              items={(feedback?.weaknesses ?? []).map(
-                (item) => `${item.label} · ${item.commonErrorType}`,
-              )}
+            <Metric label="연습 시간" value={`${hours}시간 ${minutes}분`} />
+            <Metric
+              label="평균 점수"
+              value={
+                statistics?.totalSessionCount
+                  ? `${Math.round(statistics.averageOverallScore)}점`
+                  : "—"
+              }
             />
           </div>
-          {!feedback?.minimumDataSatisfied && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              정확한 분석을 위해 학습 기록이 더 필요합니다.
-            </p>
-          )}
-          <Link
-            href="/class/pronunciation"
-            className="mt-4 block w-full rounded-full bg-foreground py-3.5 text-center text-xs font-semibold text-background"
-          >
-            약점 집중 훈련 시작
-          </Link>
         </section>
-
-        {scoreTrend && scoreTrend.points.length > 0 && (
-          <section className="mt-6 rounded-3xl bg-surface p-5">
-            <h2 className="text-sm font-semibold">발음 점수 변화</h2>
-            <div className="mt-4 flex h-28 items-end gap-2">
-              {scoreTrend.points.map((point) => (
-                <div
-                  key={point.date}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-2"
-                >
-                  <span className="text-[10px] font-semibold">
-                    {Math.round(point.score)}
-                  </span>
-                  <span
-                    className="w-full rounded-t-lg bg-brand"
-                    style={{ height: `${Math.max(8, point.score)}%` }}
-                  />
-                  <span className="text-[9px] text-muted-foreground">
-                    {new Date(point.date).toLocaleDateString("ko-KR", {
-                      month: "numeric",
-                      day: "numeric",
-                    })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {recommendations && recommendations.recommendations.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-3 text-sm font-semibold">약점 맞춤 추천</h2>
-            <div className="space-y-2">
-              {recommendations.recommendations.map((item) => {
-                const href = item.contentId
-                  ? `/practice/${item.contentId}?returnTo=%2Fmypage`
-                  : "/class";
-                return (
-                  <Link
-                    key={`${item.targetType}-${item.contentId ?? item.courseId ?? item.title}`}
-                    href={href}
-                    className="block rounded-2xl border border-border px-4 py-3.5"
-                  >
-                    <p className="text-sm font-semibold">{item.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.reason}
-                    </p>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        <section className="mt-6">
+        <section>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">내 훈련 기록</h2>
+            <h2 className="flex items-center text-sm font-bold">
+              <Sparkles className="mr-1 size-5 fill-primary text-primary" />내
+              발음 리포트
+            </h2>
+            <span className="text-[11px] text-[#8b95a1]">
+              이번 달 연습 기준
+            </span>
+          </div>
+          <div className="rounded-[20px] bg-[#edf2ff] p-[18px]">
+            <ReportRow
+              title="잘하는 발음"
+              tone="green"
+              items={(feedback?.strengths ?? []).map((item) => item.label)}
+            />
+            <ReportRow
+              title="자주 틀리는 발음"
+              tone="red"
+              items={(feedback?.weaknesses ?? []).map((item) => item.label)}
+            />
+            <ReportRow
+              title="억양 특성"
+              tone="blue"
+              items={["문장 끝을 올려 읽는 편"]}
+              sample
+            />
             <Link
-              href="/mypage/history"
-              className="text-xs font-semibold underline"
+              href="/class/pronunciation"
+              className="design-action mt-4 !min-h-12"
             >
-              전체 보기·필터
+              약점 집중 연습하기
             </Link>
           </div>
-          <div className="flex flex-col gap-2">
-            {history.map((item) => (
-              <Link
-                key={String(item.sessionId)}
-                href={`/mypage/history/${item.sessionId}`}
-                className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5"
-              >
-                <div>
-                  <p className="text-[13px] font-semibold">{item.title}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {new Date(item.completedAt).toLocaleDateString("ko-KR")}
-                  </p>
-                </div>
-                <span
-                  className={`text-lg font-bold ${scoreColor(item.overallScore)}`}
+        </section>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-bold">연습 기록</h2>
+            <Link href="/mypage/history" className="text-xs text-primary">
+              전체 보기
+            </Link>
+          </div>
+          <div className="design-card divide-y divide-[#f2f4f6] !px-[18px] !py-0">
+            {history.length ? (
+              history.slice(0, 3).map((item) => (
+                <Link
+                  key={String(item.sessionId)}
+                  href={`/mypage/history/${item.sessionId}`}
+                  className="flex items-center gap-3 py-4"
                 >
-                  {Math.round(item.overallScore)}
-                </span>
-              </Link>
-            ))}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-bold">{item.title}</h3>
+                    <p className="mt-1 text-xs text-[#8b95a1]">연습 완료</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold text-primary">
+                      {Math.round(item.overallScore)}점
+                    </p>
+                    <p className="mt-1 text-[10px] text-[#8b95a1]">
+                      {new Date(item.completedAt).toLocaleDateString("ko-KR")}
+                    </p>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <p className="py-8 text-center text-sm text-[#8b95a1]">
+                아직 연습 기록이 없어요
+              </p>
+            )}
           </div>
         </section>
-
-        <section className="mt-6 rounded-3xl bg-surface p-5">
-          <h2 className="text-sm font-semibold">
-            내가 이 앱에서 이루고 싶은 것
-          </h2>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {(profile?.goals ?? []).map((goal) => (
-              <li
-                key={goal}
-                className="rounded-full bg-background px-3 py-1.5 text-xs font-medium"
-              >
-                {GOAL_LABELS[goal]}
-              </li>
-            ))}
-          </ul>
-          {profile && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              현재 수준: {LEVEL_LABELS[profile.level]} · 하루{" "}
-              {profile.minutesPerDay}분
-            </p>
-          )}
-          <p className="mt-4 text-xs text-muted-foreground">
-            온보딩 설문은 가입할 때 한 번만 진행합니다.
-          </p>
+        <section className="design-card !p-[18px]">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-bold">내 연습 계획</h2>
+            <Link href="/mypage/plan" className="text-xs text-primary">
+              수정
+            </Link>
+          </div>
+          <dl className="space-y-4 text-xs">
+            <PlanRow
+              label="목표"
+              value={profile?.goalDescription || "연습 목표를 설정해 보세요"}
+            />
+            <PlanRow
+              label="연습 일정"
+              value={
+                profile ? `주 ${profile.weeklySessions}일` : "불러오는 중…"
+              }
+            />
+            <PlanRow
+              label="연습 방식"
+              value={methods || "연습 방식을 선택해 주세요"}
+            />
+          </dl>
         </section>
       </div>
     </AppShell>
   );
 }
-
-function Chip({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <span className="flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[10px]">
-      {icon}
-      <span className="text-muted-foreground">{label}</span>
-      <b className="font-semibold">{value}</b>
-    </span>
+    <div>
+      <p className="whitespace-nowrap text-base font-bold">{value}</p>
+      <p className="mt-1 text-xs text-[#8b95a1]">{label}</p>
+    </div>
   );
 }
-
-function Block({
-  icon,
-  title,
-  items,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  items: string[];
-}) {
+function PlanRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-surface p-4">
-      <p className="flex items-center gap-1.5 text-xs font-semibold">
-        {icon}
+    <div className="flex items-start justify-between gap-5">
+      <dt className="shrink-0 text-[#6b7684]">{label}</dt>
+      <dd className="text-right font-semibold leading-5">{value}</dd>
+    </div>
+  );
+}
+function ReportRow({
+  title,
+  tone,
+  items,
+  sample = false,
+}: {
+  title: string;
+  tone: "green" | "red" | "blue";
+  items: string[];
+  sample?: boolean;
+}) {
+  const colors = {
+    green: "bg-[#e3f7ef] text-[#079777]",
+    red: "bg-[#ffebe5] text-[#f05a38]",
+    blue: "bg-white text-[#3468ff]",
+  };
+  return (
+    <div className="mb-4">
+      <h3 className="mb-2 text-xs text-[#6b7684]">
         {title}
-      </p>
-      <ul className="mt-2 flex flex-col gap-1.5">
-        {items.map((item) => (
-          <li
-            key={item}
-            className="text-xs leading-relaxed text-muted-foreground"
-          >
-            · {item}
-          </li>
-        ))}
-        {items.length === 0 && (
-          <li className="text-xs text-muted-foreground">
-            아직 분석 데이터가 없습니다.
-          </li>
+        {sample && (
+          <span className="ml-1 text-[10px] text-[#8b95a1]">· 예시</span>
         )}
-      </ul>
+      </h3>
+      <div className="flex flex-wrap gap-1.5">
+        {items.length ? (
+          items.map((item) => (
+            <span
+              key={item}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${colors[tone]}`}
+            >
+              {item}
+            </span>
+          ))
+        ) : (
+          <p className="text-xs text-[#8b95a1]">아직 분석할 기록이 없어요</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ const PROTECTED_PREFIXES = [
   "/onboarding",
   "/news",
   "/sentences",
+  "/my-script",
   "/announcer",
   "/class",
   "/practice",
