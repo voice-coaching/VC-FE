@@ -48,6 +48,10 @@ export const IMPROVEMENT_OPTIONS = [
   { value: "말이 자꾸 빨라져요", summary: "빠른 말하기" },
   { value: "말할 때 목소리가 떨려요", summary: "목소리 떨림" },
   { value: "발표할 때 전달이 어려워요", summary: "전달력" },
+  {
+    value: "소리를 듣기 어려워서 의사소통이 불편해요",
+    summary: "청취 어려움",
+  },
   { value: "“음…”, “어…”를 자주 말해요", summary: "말 습관" },
 ] as const;
 

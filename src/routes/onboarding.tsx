@@ -91,7 +91,7 @@ export default function Onboarding() {
     );
 
   const goBack = () => {
-    if (step === 1) router.replace("/terms/complete");
+    if (step === 1) router.replace("/terms");
     else {
       setTransitionDirection("back");
       setStep((current) => current - 1);
@@ -159,7 +159,7 @@ export default function Onboarding() {
         weeklySessions: scheduleOption.weeklySessions,
         goalDescription: purposeOption.title,
       });
-      router.replace("/home");
+      router.replace("/terms/complete");
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -366,7 +366,7 @@ function QuestionScreen({
 }) {
   return (
     <div
-      className={`min-h-0 flex-1 overflow-hidden ${
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
         direction === "forward"
           ? "onboarding-step-enter-forward"
           : "onboarding-step-enter-back"
