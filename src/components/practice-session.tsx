@@ -762,6 +762,7 @@ export function PracticeSession({
               <ReferencePlayer
                 source={recorder.previewUrl}
                 title="내 녹음 듣기"
+                durationSeconds={recorder.durationMs / 1_000}
               />
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button

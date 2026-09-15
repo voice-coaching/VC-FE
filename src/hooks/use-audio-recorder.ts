@@ -106,8 +106,11 @@ export function useAudioRecorder() {
         if (!recorded.size)
           setError("녹음된 음성이 없습니다. 다시 시도해 주세요.");
       };
-      recorder.start(250);
       startedAtRef.current = Date.now();
+      // A timeslice produces fragmented MP4 chunks in Safari/iOS. Joining those
+      // chunks can leave the resulting recording playable only up to the first
+      // fragment, so let MediaRecorder emit one finalized file when it stops.
+      recorder.start();
       setStatus("recording");
       intervalRef.current = setInterval(
         () => setElapsedMs(Date.now() - startedAtRef.current),

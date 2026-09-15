@@ -2,10 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
 import type { SocialProvider } from "@/lib/api";
+import { requestDeveloperSession } from "@/lib/developer-login";
 import { redirectToOAuthProvider } from "@/lib/oauth";
+import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const SOCIAL_METHODS = [
   {
@@ -33,11 +36,34 @@ const SOCIAL_METHODS = [
   className: string;
 }>;
 
+const DEVELOPER_UNLOCK_COUNT = 5;
+
 export function LandingLoginScreen() {
+  const router = useRouter();
   const [oauthProvider, setOAuthProvider] = useState<SocialProvider | null>(
     null,
   );
+  const [developerSubmitting, setDeveloperSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const developerUnlockClicks = useRef(0);
+  const submitting = oauthProvider !== null || developerSubmitting;
+
+  useEffect(() => {
+    const resetPendingOAuth = () => setOAuthProvider(null);
+    const resetPendingOAuthWhenVisible = () => {
+      if (document.visibilityState === "visible") resetPendingOAuth();
+    };
+
+    window.addEventListener("pageshow", resetPendingOAuth);
+    document.addEventListener("visibilitychange", resetPendingOAuthWhenVisible);
+    return () => {
+      window.removeEventListener("pageshow", resetPendingOAuth);
+      document.removeEventListener(
+        "visibilitychange",
+        resetPendingOAuthWhenVisible,
+      );
+    };
+  }, []);
 
   const startOAuth = useCallback((provider: SocialProvider) => {
     setOAuthProvider(provider);
@@ -52,6 +78,30 @@ export function LandingLoginScreen() {
       );
     }
   }, []);
+
+  async function signInAsDeveloper() {
+    setDeveloperSubmitting(true);
+    setError(null);
+    try {
+      const session = await requestDeveloperSession();
+      router.replace(getPostLoginDestination(session, "/home"));
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "개발자 로그인에 실패했습니다.",
+      );
+    } finally {
+      setDeveloperSubmitting(false);
+    }
+  }
+
+  function handleDeveloperUnlock() {
+    developerUnlockClicks.current += 1;
+    if (developerUnlockClicks.current < DEVELOPER_UNLOCK_COUNT) return;
+    developerUnlockClicks.current = 0;
+    void signInAsDeveloper();
+  }
 
   return (
     <IPhoneFrame>
@@ -74,16 +124,27 @@ export function LandingLoginScreen() {
         </section>
 
         <section className="mt-[190px]" aria-labelledby="landing-login-methods">
-          <h2 id="landing-login-methods" className="sr-only">
-            로그인 방법
+          <h2
+            id="landing-login-methods"
+            className="text-center text-[12px] leading-4 font-medium text-[#8b95a1]"
+          >
+            <button
+              type="button"
+              disabled={submitting}
+              aria-busy={developerSubmitting}
+              onClick={handleDeveloperUnlock}
+              className="cursor-default select-none rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] disabled:opacity-60"
+            >
+              {developerSubmitting ? "개발자 로그인 중…" : "로그인 옵션"}
+            </button>
           </h2>
 
-          <div className="flex flex-col gap-2.5">
+          <div className="mt-3 flex flex-col gap-2.5">
             {SOCIAL_METHODS.map((method) => (
               <button
                 key={method.provider}
                 type="button"
-                disabled={oauthProvider !== null}
+                disabled={submitting}
                 onClick={() => startOAuth(method.provider)}
                 className={`relative flex h-[50px] w-full items-center justify-center rounded-full px-12 text-[16px] leading-6 font-bold tracking-[0.0912px] transition-[filter,opacity] active:brightness-[0.97] disabled:opacity-45 ${method.className}`}
               >

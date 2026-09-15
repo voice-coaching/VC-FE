@@ -8,11 +8,13 @@ export function ReferencePlayer({
   contentId,
   title = "기준 발음 듣기",
   source,
+  durationSeconds,
   compact = false,
 }: {
   contentId?: Id;
   title?: string;
   source?: string;
+  durationSeconds?: number;
   compact?: boolean;
 }) {
   const audio = useRef<HTMLAudioElement>(null);
@@ -21,16 +23,18 @@ export function ReferencePlayer({
   const [loading, setLoading] = useState(false);
   const [repeat, setRepeat] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const fallbackDuration =
+    durationSeconds && Number.isFinite(durationSeconds) ? durationSeconds : 0;
+  const [duration, setDuration] = useState(fallbackDuration);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setUrl(source);
     setPlaying(false);
     setElapsed(0);
-    setDuration(0);
+    setDuration(fallbackDuration);
     setError(null);
-  }, [contentId, source]);
+  }, [contentId, fallbackDuration, source]);
   async function toggle() {
     if (!audio.current) return;
     if (playing) {
@@ -94,7 +98,7 @@ export function ReferencePlayer({
           setDuration(
             Number.isFinite(event.currentTarget.duration)
               ? event.currentTarget.duration
-              : 0,
+              : fallbackDuration,
           )
         }
         onError={() => {
