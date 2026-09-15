@@ -152,7 +152,6 @@ export default function Home() {
     };
   }, []);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
   const headerVisibleRef = useRef(true);
   const previousScrollTop = useRef(0);
@@ -279,16 +278,6 @@ export default function Home() {
             className="h-auto w-[36px]"
             priority
           />
-          <span className="flex-1" />
-          <button
-            type="button"
-            aria-label="알림"
-            tabIndex={headerVisible ? 0 : -1}
-            onClick={() => setNotice((value) => !value)}
-            className="mr-2 flex size-8 items-center justify-center rounded-full transition-transform duration-150 active:scale-90"
-          >
-            <Image src="/figma/home/bell.svg" alt="" width={28} height={28} />
-          </button>
         </header>
 
         <div
@@ -296,14 +285,6 @@ export default function Home() {
           onScroll={handleHomeScroll}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]"
         >
-          {notice && (
-            <p
-              role="status"
-              className="mb-3 rounded-xl bg-white px-4 py-3 text-xs text-[#6b7684]"
-            >
-              등록된 알림이 없습니다.
-            </p>
-          )}
           {error ? (
             <p
               role="alert"

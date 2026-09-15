@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { setTabTransitionDirection } from "@/lib/tab-transition";
 import styles from "./prototype-bottom-nav.module.css";
 
 const tabs = [
@@ -12,10 +13,14 @@ const tabs = [
 
 export function PrototypeBottomNav() {
   const pathname = usePathname();
+  const activeTabIndex = tabs.findIndex(
+    ({ href }) => pathname === href || pathname.startsWith(`${href}/`),
+  );
+
   return (
     <nav aria-label="주 메뉴" className={styles.nav}>
       <ul className={styles.list}>
-        {tabs.map(({ href, label, icon }) => {
+        {tabs.map(({ href, label, icon }, tabIndex) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href} className={styles.item}>
@@ -23,6 +28,13 @@ export function PrototypeBottomNav() {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={styles.link}
+                onNavigate={() =>
+                  setTabTransitionDirection(
+                    activeTabIndex >= 0 && tabIndex < activeTabIndex
+                      ? "left"
+                      : "right",
+                  )
+                }
               >
                 <span
                   aria-hidden="true"
