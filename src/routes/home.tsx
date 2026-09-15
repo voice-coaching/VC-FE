@@ -3,7 +3,7 @@ import { AppShell } from "@/components/app-shell";
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type UIEvent } from "react";
 import {
   api,
   type HomeDashboard,
@@ -153,6 +153,51 @@ export default function Home() {
   }, []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const headerVisibleRef = useRef(true);
+  const previousScrollTop = useRef(0);
+  const scrollDirection = useRef<"up" | "down" | null>(null);
+  const directionalDistance = useRef(0);
+  const suppressScrollUntil = useRef(0);
+
+  function updateHeaderVisibility(visible: boolean) {
+    if (headerVisibleRef.current === visible) return;
+    headerVisibleRef.current = visible;
+    suppressScrollUntil.current = Date.now() + 240;
+    setHeaderVisible(visible);
+  }
+
+  function handleHomeScroll(event: UIEvent<HTMLDivElement>) {
+    const scrollTop = Math.max(0, event.currentTarget.scrollTop);
+    const delta = scrollTop - previousScrollTop.current;
+    previousScrollTop.current = scrollTop;
+
+    if (scrollTop <= 12) {
+      scrollDirection.current = null;
+      directionalDistance.current = 0;
+      updateHeaderVisibility(true);
+      return;
+    }
+    if (Math.abs(delta) < 1) return;
+    if (Date.now() < suppressScrollUntil.current) {
+      scrollDirection.current = null;
+      directionalDistance.current = 0;
+      return;
+    }
+
+    const nextDirection = delta > 0 ? "down" : "up";
+    if (scrollDirection.current !== nextDirection) {
+      scrollDirection.current = nextDirection;
+      directionalDistance.current = 0;
+    }
+    directionalDistance.current += Math.abs(delta);
+
+    const threshold = nextDirection === "down" ? 24 : 10;
+    if (directionalDistance.current < threshold) return;
+
+    updateHeaderVisibility(nextDirection === "up");
+    directionalDistance.current = 0;
+  }
 
   useEffect(() => {
     let active = true;
@@ -217,7 +262,15 @@ export default function Home() {
   return (
     <AppShell viewportLocked>
       <div className="flex h-full min-h-0 flex-col bg-[#f5f6f8] text-[#191f28]">
-        <header className="flex h-16 shrink-0 items-center px-5 py-3">
+        <header
+          data-state={headerVisible ? "visible" : "hidden"}
+          aria-hidden={!headerVisible}
+          className={`flex shrink-0 items-center overflow-hidden px-5 transition-[height,opacity,transform] duration-200 ease-out motion-reduce:transition-none ${
+            headerVisible
+              ? "h-16 translate-y-0 py-3 opacity-100"
+              : "h-0 -translate-y-3 py-0 opacity-0"
+          }`}
+        >
           <Image
             src="/figma/home/logo.svg"
             alt="SpeakAI"
@@ -230,6 +283,7 @@ export default function Home() {
           <button
             type="button"
             aria-label="알림"
+            tabIndex={headerVisible ? 0 : -1}
             onClick={() => setNotice((value) => !value)}
             className="mr-2 flex size-8 items-center justify-center rounded-full transition-transform duration-150 active:scale-90"
           >
@@ -237,7 +291,11 @@ export default function Home() {
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]">
+        <div
+          data-scroll-container="home"
+          onScroll={handleHomeScroll}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]"
+        >
           {notice && (
             <p
               role="status"
@@ -303,14 +361,9 @@ export default function Home() {
             {dashboard?.recentTraining && (
               <div className="flex items-center gap-3 py-5">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[#edf2ff] px-2 py-1 text-[10px] font-semibold text-primary">
-                      최근
-                    </span>
-                    <h3 className="truncate text-sm font-bold">
-                      {dashboard.recentTraining.title}
-                    </h3>
-                  </div>
+                  <h3 className="truncate text-sm font-bold">
+                    {dashboard.recentTraining.title}
+                  </h3>
                   <p className="mt-1 text-xs text-[#8b95a1]">
                     {dashboard.recentTraining.status === "COMPLETED"
                       ? "완료한 연습"
