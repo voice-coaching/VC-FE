@@ -353,7 +353,6 @@ export function CourseCatalog({
         to="/home"
         onBack={selectedCourse ? () => setExpandedId(null) : undefined}
         title={selectedCourse?.title ?? "클래스"}
-        compact
       />
       <div className="flex min-h-[calc(100dvh-80px)] flex-col">
         <div className="px-5 pb-6">
