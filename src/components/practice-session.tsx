@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { RecordingWaveform } from "@/components/recording-waveform";
+import { RecordingPlayback } from "@/components/recording-playback";
+import { MyScriptResult } from "@/components/my-script-result";
 import {
   Mic,
   Check,
@@ -700,6 +704,281 @@ export function PracticeSession({
         </div>
       </div>
     );
+
+  if (localOnly && phase === "result" && analysis) {
+    return (
+      <MyScriptResult
+        analysis={analysis}
+        content={content}
+        source={recorder.previewUrl ?? undefined}
+        durationSeconds={recorder.durationMs / 1000}
+        segments={segments}
+        regenerating={regenerating}
+        onRegenerate={() => void regenerateFeedback()}
+        onRetry={() => {
+          recorder.reset();
+          setAnalysis(null);
+          setSegments([]);
+          setPhase("idle");
+          setSessionId(null);
+          sessionIdRef.current = null;
+          completedRef.current = false;
+        }}
+        onFinish={() => router.push("/home")}
+      />
+    );
+  }
+
+  if (localOnly && phase === "analyzing") {
+    const activeStep =
+      analysisProgress < 33 ? 0 : analysisProgress < 66 ? 1 : 2;
+    return (
+      <div className="script-analysis flex min-h-[calc(100dvh-92px)] flex-col">
+        <div className="flex-1" />
+        <div className="flex flex-col items-center gap-5 px-10" role="status">
+          <div className="flex size-[72px] items-center justify-center rounded-full bg-[#edf2ff]">
+            <Image
+              src="/figma/auth/analysis-hero.svg"
+              alt=""
+              width={30}
+              height={30}
+            />
+          </div>
+          <div className="space-y-2 text-center">
+            <h2 className="text-xl leading-7 font-bold tracking-[-0.24px]">
+              발음을 분석하고 있어요
+            </h2>
+            <p className="text-sm leading-5 tracking-[0.203px] text-[#4e5968]">
+              보통 10초 정도 걸려요
+            </p>
+          </div>
+        </div>
+        <div className="px-5 pt-8">
+          <ol className="rounded-2xl px-3 py-2">
+            {["음성 품질 확인", "텍스트로 변환", "발음과 억양 분석"].map(
+              (label, index) => {
+                const complete = index < activeStep;
+                const current = index === activeStep;
+                return (
+                  <li
+                    key={label}
+                    aria-current={current ? "step" : undefined}
+                    className="flex h-14 items-center gap-3 pl-2 pr-2.5"
+                  >
+                    <div className="relative flex h-14 w-7 shrink-0 items-center">
+                      {index < 2 && (
+                        <span
+                          aria-hidden="true"
+                          className={`absolute left-[13px] top-7 h-14 w-0.5 ${complete ? "bg-[#2f6bff]" : current ? "bg-gradient-to-b from-[#8bacff] to-[#e5e8eb]" : "bg-[#e5e8eb]"}`}
+                        />
+                      )}
+                      {complete ? (
+                        <span className="relative flex size-7 items-center justify-center rounded-full bg-[#2f6bff]">
+                          <Image
+                            src="/figma/auth/analysis-check.svg"
+                            alt=""
+                            width={16}
+                            height={16}
+                          />
+                        </span>
+                      ) : (
+                        <Image
+                          className="relative"
+                          src={
+                            current
+                              ? "/figma/auth/analysis-active.svg"
+                              : "/figma/auth/analysis-pending.svg"
+                          }
+                          alt=""
+                          width={28}
+                          height={28}
+                        />
+                      )}
+                    </div>
+                    <span
+                      className={`text-[15px] leading-[22px] tracking-[0.144px] ${current ? "font-bold text-[#143498]" : complete ? "font-medium text-[#4e5968]" : "text-[#b0b8c1]"}`}
+                    >
+                      {label}
+                    </span>
+                    <span className="sr-only">
+                      {complete ? "완료" : current ? "진행 중" : "대기"}
+                    </span>
+                  </li>
+                );
+              },
+            )}
+          </ol>
+        </div>
+        <div className="flex-1" />
+      </div>
+    );
+  }
+
+  if (localOnly && phase === "review") {
+    const scriptSentences =
+      content.scriptText
+        .trim()
+        .match(/[^.!?。！？]+[.!?。！？]*/g)
+        ?.filter((sentence) => sentence.trim()) ?? [];
+    return (
+      <div className="script-record-ready flex min-h-[calc(100dvh-92px)] flex-col">
+        <div className="flex items-center gap-2 px-5 pt-1 pb-3.5">
+          <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-xs leading-4 font-medium tracking-[0.3024px] text-[#1f55e0]">
+            내 문장
+          </span>
+          <span className="ml-auto text-[13px] leading-[18px] tracking-[0.2522px] text-[#8b95a1]">
+            {scriptSentences.length}문장 녹음 완료
+          </span>
+        </div>
+        <div className="space-y-5 px-5 pb-5">
+          <RecordingPlayback
+            source={recorder.previewUrl ?? undefined}
+            durationSeconds={recorder.durationMs / 1000}
+            title="내 녹음"
+          />
+          <section
+            className="space-y-2"
+            aria-labelledby="recorded-script-title"
+          >
+            <h3
+              id="recorded-script-title"
+              className="text-sm leading-5 font-bold tracking-[0.203px]"
+            >
+              읽은 문장
+            </h3>
+            <div className="space-y-3.5 rounded-2xl bg-white p-[18px] text-base leading-6 font-medium tracking-[0.0912px] shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
+              {scriptSentences.map((sentence, index) => (
+                <p key={index} className="[overflow-wrap:anywhere]">
+                  {sentence.trim()}
+                </p>
+              ))}
+            </div>
+          </section>
+        </div>
+        <div className="sticky bottom-0 mt-auto flex gap-2 border-t border-[#e5e8eb] bg-white px-5 pt-3 pb-[calc(12px+max(24px,env(safe-area-inset-bottom)))]">
+          <button
+            type="button"
+            onClick={() => {
+              recorder.reset();
+              setRequestError(null);
+              setPhase("idle");
+            }}
+            className="h-14 min-w-0 flex-1 rounded-full border border-[#e5e8eb] text-base leading-6 font-bold tracking-[0.0912px]"
+          >
+            다시 녹음
+          </button>
+          <button
+            type="button"
+            onClick={() => void analyze()}
+            className="h-14 min-w-0 flex-1 rounded-full bg-[#2f6bff] text-base leading-6 font-bold tracking-[0.0912px] text-white"
+          >
+            분석 요청
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (localOnly && (phase === "idle" || phase === "recording")) {
+    const isRecording = phase === "recording";
+    const seconds = Math.floor(recorder.elapsedMs / 1000);
+    const elapsedLabel = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+    const scriptSentences =
+      content.scriptText
+        .trim()
+        .match(/[^.!?。！？]+[.!?。！？]*/g)
+        ?.filter((sentence) => sentence.trim()) ?? [];
+    return (
+      <div className="script-record-ready relative flex min-h-[calc(100dvh-92px)] flex-col">
+        <div className="flex items-center gap-2 px-5 pt-1 pb-3.5">
+          <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-xs leading-4 font-medium tracking-[0.3024px] text-[#143498]">
+            내 문장
+          </span>
+          <div className="ml-auto flex items-center gap-2 text-[13px] leading-[18px] tracking-[0.2522px] text-[#8b95a1]">
+            {isRecording ? (
+              <span>이어서 읽어주세요</span>
+            ) : (
+              <>
+                <span>{scriptSentences.length}문장</span>
+                <span aria-hidden="true" className="h-2.5 w-px bg-[#dfe3e8]" />
+                <span>
+                  약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="px-5">
+          <section
+            aria-label="전체 문장"
+            className="space-y-3.5 rounded-2xl bg-white p-[18px] text-base leading-6 font-medium tracking-[0.0912px] shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+          >
+            {scriptSentences.map((sentence, index) => (
+              <p
+                key={index}
+                className={cn(
+                  "[overflow-wrap:anywhere]",
+                  isRecording && index > 0 && "font-normal text-[#8b95a1]",
+                )}
+              >
+                {sentence.trim()}
+              </p>
+            ))}
+          </section>
+        </div>
+        <div className="flex-1" />
+        <div className="flex flex-col items-center gap-4 px-5 pt-4 pb-7">
+          {isRecording && (
+            <>
+              <RecordingWaveform getStream={recorder.getStream} />
+              <div
+                className="flex items-center justify-center gap-2"
+                aria-label={`녹음 경과 시간 ${elapsedLabel}`}
+              >
+                <Image
+                  src="/figma/auth/script-rec-dot.svg"
+                  alt=""
+                  width={8}
+                  height={8}
+                />
+                <span className="text-[15px] leading-[22px] font-bold tracking-[0.144px] tabular-nums">
+                  {elapsedLabel}
+                </span>
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              isRecording ? recorder.stop() : void startRecording()
+            }
+            disabled={recorder.status === "requesting"}
+            aria-label={isRecording ? "녹음 종료" : "녹음 시작"}
+            className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-50"
+          >
+            {isRecording ? (
+              <span
+                aria-hidden="true"
+                className="size-6 rounded-[6px] bg-white"
+              />
+            ) : (
+              <Image
+                src="/figma/auth/script-record.svg"
+                alt=""
+                width={32}
+                height={32}
+              />
+            )}
+          </button>
+          <p className="text-center text-sm leading-5 font-medium tracking-[0.203px] text-[#4e5968]">
+            {isRecording
+              ? "마지막 문장까지 읽었으면 눌러주세요"
+              : "버튼을 누르고 전체 문장을 이어서 읽어주세요"}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100dvh-80px)] flex-col gap-5 px-5 pb-6">

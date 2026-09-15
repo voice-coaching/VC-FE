@@ -216,6 +216,131 @@
   border-top: 1px solid #e8eaed;
   padding: 12px 20px max(20px, env(safe-area-inset-bottom));
 }
+
+/* Figma 18 My Script · 입력 — scoped to preserve the other practice steps. */
+.my-script-input > header,
+.my-script-confirm > header,
+.my-script-preview > header,
+.my-script-practice:has(.script-record-ready, .script-analysis, .script-result)
+  > header {
+  padding: 48px 8px 4px;
+}
+.my-script-input > header h1,
+.my-script-confirm > header h1,
+.my-script-preview > header h1,
+.my-script-practice:has(.script-record-ready, .script-analysis, .script-result)
+  > header
+  h1 {
+  font-size: 17px;
+  line-height: 24px;
+}
+.my-script-input > header > a,
+.my-script-confirm > header > button,
+.my-script-preview > header > button,
+.my-script-practice:has(.script-record-ready, .script-analysis, .script-result)
+  > header
+  > button {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+.my-script-practice:has(.script-analysis) > header > button {
+  visibility: hidden;
+}
+.result-audio > section {
+  padding: 6px 12px 6px 6px;
+  background: rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  box-shadow: none;
+}
+.result-audio > section > div:first-child {
+  display: none;
+}
+.result-audio > section > div:nth-of-type(2) {
+  margin-top: 0;
+  gap: 12px;
+}
+.result-audio button {
+  width: 40px;
+  height: 40px;
+  background: white;
+  color: #2f6bff;
+}
+.result-audio button img {
+  filter: brightness(0) saturate(100%) invert(38%) sepia(93%) saturate(3687%)
+    hue-rotate(217deg) brightness(103%);
+}
+.result-audio div[aria-hidden="true"] {
+  height: 34px;
+}
+.result-audio div[aria-hidden="true"] > span {
+  max-height: 34px;
+  background: rgb(255 255 255 / 60%);
+}
+.result-audio > section > div:nth-of-type(2) > span {
+  color: rgb(255 255 255 / 72%);
+}
+.my-script-input h2,
+.my-script-confirm h2,
+.my-script-preview h2 {
+  font-size: 22px;
+  line-height: 30px;
+  letter-spacing: -0.4268px;
+}
+.my-script-input h2 + p,
+.my-script-preview h2 + p {
+  margin-top: 6px;
+  color: #4e5968;
+  line-height: 20px;
+  letter-spacing: 0.203px;
+}
+.my-script-input .design-dock,
+.my-script-confirm .design-dock,
+.my-script-preview .design-dock {
+  background: #fff;
+  border-color: #e5e8eb;
+  padding-bottom: calc(12px + max(24px, env(safe-area-inset-bottom)));
+}
+.my-script-input .design-action,
+.my-script-confirm .design-action,
+.my-script-preview .design-action {
+  font-weight: 700;
+  line-height: 24px;
+}
+.my-script-input .design-action:disabled {
+  background: #f2f4f6;
+  color: #b0b8c1;
+  opacity: 1;
+}
+.my-script-confirm,
+.my-script-preview {
+  --primary: #2f6bff;
+}
+.script-seek {
+  display: block;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.script-seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #2f6bff;
+}
+.script-seek::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #2f6bff;
+}
 .design-tabs {
   display: flex;
   gap: 4px;
