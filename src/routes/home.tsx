@@ -217,9 +217,7 @@ export default function Home() {
   return (
     <AppShell>
       <div className="flex flex-col bg-[#f5f6f8] text-[#191f28]">
-        <div className="h-11 shrink-0" aria-hidden="true" />
-
-        <header className="flex h-12 shrink-0 items-center px-5 pt-1.5 pb-3.5">
+        <header className="flex h-16 shrink-0 items-center px-5 py-3">
           <Image
             src="/figma/home/logo.svg"
             alt="SpeakAI"

@@ -102,7 +102,7 @@ export function TermsScreen({
         qualityImprovement: terms.quality,
         marketing: terms.marketing,
       });
-      router.replace("/terms/complete");
+      router.replace("/onboarding");
     } catch (reason) {
       setError(
         reason instanceof Error

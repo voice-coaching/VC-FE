@@ -99,22 +99,6 @@ export function LandingLoginScreen() {
                 {oauthProvider === method.provider ? "이동 중…" : method.label}
               </button>
             ))}
-
-            <Link
-              href="/login/email"
-              className="relative flex h-[50px] w-full items-center justify-center rounded-full border border-[#e5e8eb] bg-white px-12 text-[16px] leading-6 font-bold tracking-[0.0912px] text-[#191f28] transition-colors active:bg-[#f9fafb]"
-            >
-              <span className="absolute left-[18px] top-1/2 flex size-5 -translate-y-1/2 items-center justify-center">
-                <Image
-                  src="/figma/auth/email.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                  aria-hidden="true"
-                />
-              </span>
-              이메일로 시작하기
-            </Link>
           </div>
 
           <p className="mt-6 text-center text-[12px] leading-4 font-medium tracking-[0.15px] text-[#8b95a1]">

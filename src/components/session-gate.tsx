@@ -13,6 +13,7 @@ import { hasAcceptedTerms } from "@/lib/terms-flow";
 const PROTECTED_PREFIXES = [
   "/home",
   "/onboarding",
+  "/terms/complete",
   "/news",
   "/sentences",
   "/my-script",
