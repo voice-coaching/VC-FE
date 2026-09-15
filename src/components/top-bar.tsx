@@ -18,7 +18,7 @@ export function TopBar({
   onBack?: () => void;
 }) {
   return (
-    <header className="relative flex min-h-[92px] items-center gap-3 px-5 pt-11">
+    <header className="relative flex h-16 shrink-0 items-center gap-3 px-5 py-3">
       {onBack ? (
         <button
           onClick={onBack}

@@ -102,9 +102,13 @@ export default function MyPage() {
 
   return (
     <AppShell>
-      <header className="flex h-[92px] items-end justify-between px-5 pb-5">
+      <header className="flex h-16 shrink-0 items-center justify-between px-5 py-3">
         <h1 className="text-lg font-bold">마이</h1>
-        <Link href="/mypage/settings" aria-label="설정" className="-m-2 p-2">
+        <Link
+          href="/mypage/settings"
+          aria-label="설정"
+          className="mr-2 flex size-8 items-center justify-center rounded-full"
+        >
           <Settings className="size-5" />
         </Link>
       </header>

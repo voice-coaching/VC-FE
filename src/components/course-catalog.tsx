@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen, Check, ChevronRight, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CourseLesson } from "@/components/course-lesson";
@@ -55,6 +55,8 @@ export function CourseCatalog({
     count: number;
   } | null>(null);
   const activeType = type ?? "PRONUNCIATION";
+  const [indicatorType, setIndicatorType] = useState<CourseType>(activeType);
+  const tabNavigationTimer = useRef<number | null>(null);
   const [stepsByCourse, setStepsByCourse] = useState<
     Record<string, CourseStep[]>
   >({});
@@ -73,6 +75,50 @@ export function CourseCatalog({
     Record<string, CourseDetail>
   >({});
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIndicatorType(activeType);
+    return () => {
+      if (tabNavigationTimer.current !== null) {
+        window.clearTimeout(tabNavigationTimer.current);
+      }
+    };
+  }, [activeType]);
+
+  function navigateToType(
+    event: MouseEvent<HTMLAnchorElement>,
+    nextType: CourseType,
+    href: string,
+  ) {
+    if (
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+
+    event.preventDefault();
+    if (tabNavigationTimer.current !== null) {
+      window.clearTimeout(tabNavigationTimer.current);
+      tabNavigationTimer.current = null;
+    }
+    setIndicatorType(nextType);
+    if (nextType === activeType) return;
+
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? 0
+      : 280;
+    if (delay === 0) {
+      router.push(href);
+      return;
+    }
+    tabNavigationTimer.current = window.setTimeout(() => {
+      router.push(href);
+      tabNavigationTimer.current = null;
+    }, delay);
+  }
 
   useEffect(() => {
     let active = true;
@@ -314,18 +360,50 @@ export function CourseCatalog({
             {title} · {description}
           </p>
           {!selectedCourse && (
-            <nav className="design-tabs mb-5" aria-label="클래스 유형">
+            <nav
+              className="relative mb-5 grid grid-cols-2 gap-1 rounded-xl bg-[#f3f4f5] p-1"
+              aria-label="클래스 유형"
+            >
+              <span
+                aria-hidden="true"
+                data-active-indicator={indicatorType.toLowerCase()}
+                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%_-_6px)] rounded-[9px] bg-white shadow-[0_2px_5px_#0000000a] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                style={{
+                  transform:
+                    indicatorType === "INTONATION"
+                      ? "translate3d(calc(100% + 4px), 0, 0)"
+                      : "translate3d(0, 0, 0)",
+                }}
+              />
               <Link
                 href="/class/pronunciation"
-                aria-current={
-                  activeType === "PRONUNCIATION" ? "page" : undefined
+                onClick={(event) =>
+                  navigateToType(event, "PRONUNCIATION", "/class/pronunciation")
                 }
+                aria-current={
+                  indicatorType === "PRONUNCIATION" ? "page" : undefined
+                }
+                className={`relative z-10 rounded-[9px] px-1 py-2.5 text-center text-sm transition-colors duration-200 ${
+                  indicatorType === "PRONUNCIATION"
+                    ? "font-semibold text-[#191f28]"
+                    : "text-[#8b929a]"
+                }`}
               >
                 발음 클래스
               </Link>
               <Link
                 href="/class/intonation"
-                aria-current={activeType === "INTONATION" ? "page" : undefined}
+                onClick={(event) =>
+                  navigateToType(event, "INTONATION", "/class/intonation")
+                }
+                aria-current={
+                  indicatorType === "INTONATION" ? "page" : undefined
+                }
+                className={`relative z-10 rounded-[9px] px-1 py-2.5 text-center text-sm transition-colors duration-200 ${
+                  indicatorType === "INTONATION"
+                    ? "font-semibold text-[#191f28]"
+                    : "text-[#8b929a]"
+                }`}
               >
                 억양 클래스
               </Link>
