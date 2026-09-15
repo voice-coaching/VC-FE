@@ -215,8 +215,8 @@ export default function Home() {
     : "/news";
 
   return (
-    <AppShell>
-      <div className="flex flex-col bg-[#f5f6f8] text-[#191f28]">
+    <AppShell viewportLocked>
+      <div className="flex h-full min-h-0 flex-col bg-[#f5f6f8] text-[#191f28]">
         <header className="flex h-16 shrink-0 items-center px-5 py-3">
           <Image
             src="/figma/home/logo.svg"

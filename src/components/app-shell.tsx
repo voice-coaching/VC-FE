@@ -16,14 +16,29 @@ export function AppShell({
   children,
   nav = true,
   className,
+  viewportLocked = false,
 }: {
   children: ReactNode;
   nav?: boolean;
   className?: string;
+  viewportLocked?: boolean;
 }) {
   return (
-    <div className="app-shell learning-shell flex flex-col">
-      <main className={cn("flex-1", className)}>{children}</main>
+    <div
+      className={cn(
+        "app-shell learning-shell flex flex-col",
+        viewportLocked && "h-dvh min-h-0 overflow-hidden",
+      )}
+    >
+      <main
+        className={cn(
+          "flex-1",
+          viewportLocked && "min-h-0 overflow-hidden",
+          className,
+        )}
+      >
+        {children}
+      </main>
       {nav ? <BottomNav /> : null}
     </div>
   );

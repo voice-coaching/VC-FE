@@ -18,6 +18,7 @@ import {
   type CourseType,
   type UserCourseProgress,
 } from "@/lib/api";
+import type { PracticeExample } from "@/lib/practice-examples";
 
 function progressMap(items: UserCourseProgress[]) {
   return Object.fromEntries(items.map((item) => [String(item.courseId), item]));
@@ -238,14 +239,20 @@ export function CourseCatalog({
       return;
     }
     setExpandedId(key);
-    if (detailsByCourse[key]) return;
+    const cachedDetail = detailsByCourse[key];
+    const cachedSteps = stepsByCourse[key];
+    if (cachedDetail && cachedSteps) return;
 
     setDetailLoadingId(key);
     setError(null);
     try {
       const [detail, steps] = await Promise.all([
-        api.courses.get(course.id),
-        api.courses.getSteps(course.id),
+        cachedDetail
+          ? Promise.resolve(cachedDetail)
+          : api.courses.get(course.id),
+        cachedSteps
+          ? Promise.resolve(cachedSteps)
+          : api.courses.getSteps(course.id),
       ]);
       setStepsByCourse((current) => ({
         ...current,
@@ -279,11 +286,17 @@ export function CourseCatalog({
           stepCount={lesson.count}
           description={detailsByCourse[String(lesson.course.id)]?.description}
           onClose={() => setLesson(null)}
-          onPractice={() =>
+          onPractice={(example: PracticeExample) => {
+            const params = new URLSearchParams({
+              courseId: String(lesson.course.id),
+              courseStepId: String(lesson.step.id),
+              returnTo: type ? `/class/${type.toLowerCase()}` : "/class",
+              exampleId: example.id,
+            });
             router.push(
-              `/practice/${lesson.step.practiceContentId}?courseId=${lesson.course.id}&courseStepId=${lesson.step.id}&returnTo=${encodeURIComponent(type ? `/class/${type.toLowerCase()}` : "/class")}`,
-            )
-          }
+              `/practice/${lesson.step.practiceContentId}?${params.toString()}`,
+            );
+          }}
         />
       </AppShell>
     );

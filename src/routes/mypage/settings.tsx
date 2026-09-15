@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -13,6 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { TopBar } from "@/components/top-bar";
 import {
   Dialog,
@@ -27,6 +27,9 @@ import { getCachedUser } from "@/lib/auth-session";
 export default function AccountSettings() {
   const router = useRouter();
   const [nickname, setNickname] = useState(getCachedUser()?.nickname ?? "");
+  const [profileImageUrl, setProfileImageUrl] = useState(
+    getCachedUser()?.profileImageUrl ?? null,
+  );
   const [panel, setPanel] = useState<string | null>(null);
   const [reminders, setReminders] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -34,7 +37,10 @@ export default function AccountSettings() {
   useEffect(() => {
     api.users
       .getMe()
-      .then((user) => setNickname(user.nickname))
+      .then((user) => {
+        setNickname(user.nickname);
+        setProfileImageUrl(user.profileImageUrl);
+      })
       .catch(() => undefined);
     try {
       setReminders(localStorage.getItem("speakai:reminder-preview") !== "off");
@@ -53,7 +59,7 @@ export default function AccountSettings() {
     try {
       if (kind === "logout") await api.auth.signOut();
       else await api.users.withdraw();
-      router.replace("/auth");
+      router.replace("/");
     } catch (reason) {
       setMessage(
         reason instanceof Error
@@ -76,7 +82,7 @@ export default function AccountSettings() {
         href="/mypage/settings/profile"
         className="flex items-center gap-3.5 px-5 pt-8 pb-6"
       >
-        <Image src="/figma/mypage/avatar.svg" alt="" width={60} height={60} />
+        <ProfileAvatar src={profileImageUrl} size={60} />
         <div>
           <h1 className="text-xl font-bold">{nickname || "프로필"}</h1>
           <p className="mt-1 flex items-center gap-1 text-[13px] text-[#8b95a1]">

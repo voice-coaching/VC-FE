@@ -8,7 +8,11 @@ import {
   type CourseStep,
   type PracticeContent,
 } from "@/lib/api";
-import { ReferencePlayer } from "@/components/reference-player";
+import { TtsPracticePlayer } from "@/components/tts-practice-player";
+import {
+  getPracticeExampleSet,
+  type PracticeExample,
+} from "@/lib/practice-examples";
 
 export function CourseLesson({
   course,
@@ -23,9 +27,10 @@ export function CourseLesson({
   stepCount: number;
   description?: string;
   onClose: () => void;
-  onPractice: () => void;
+  onPractice: (example: PracticeExample) => void;
 }) {
   const [example, setExample] = useState(false);
+  const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
   const [content, setContent] = useState<PracticeContent | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -63,6 +68,12 @@ export function CourseLesson({
           "끝까지 힘을 유지해요",
         ]
       : [];
+  const exampleSet = getPracticeExampleSet({
+    courseType: course.courseType,
+    courseTitle: course.title,
+    stepTitle: step.title,
+  });
+  const selectedExample = exampleSet.examples[selectedExampleIndex];
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-5 pt-8 pb-5">
@@ -106,17 +117,50 @@ export function CourseLesson({
         )}
         {example ? (
           <>
-            {content?.referenceAudioAvailable ? (
-              <ReferencePlayer contentId={content.id} />
-            ) : (
-              <p className="design-card text-sm text-muted-foreground">
-                등록된 예시 음성이 없습니다. 연습 문장을 읽고 시작해 주세요.
-              </p>
-            )}
-            <h3 className="pt-2 text-base font-semibold">연습 문장</h3>
-            <p className="design-card !py-8 text-center text-xl leading-8 font-semibold">
-              {content?.scriptText ?? "학습 자료를 불러오는 중…"}
-            </p>
+            <div className="flex items-end justify-between gap-3 pt-1">
+              <div>
+                <h3 className="text-base font-semibold">연습 문제 5개</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  한 문장을 골라 음성을 듣고 따라 읽어보세요.
+                </p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-primary">
+                {selectedExampleIndex + 1}/5
+              </span>
+            </div>
+            <ol className="space-y-2.5">
+              {exampleSet.examples.map((practiceExample, index) => {
+                const selected = index === selectedExampleIndex;
+                return (
+                  <li key={practiceExample.id}>
+                    <button
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setSelectedExampleIndex(index)}
+                      className={`flex w-full gap-3 rounded-2xl border p-4 text-left ${selected ? "border-primary bg-[#edf2ff]" : "border-border bg-white"}`}
+                    >
+                      <span
+                        className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${selected ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="block text-[15px] leading-6">
+                          {practiceExample.text}
+                        </strong>
+                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                          {practiceExample.hint}
+                          {practiceExample.focus
+                            ? ` · 강조: ${practiceExample.focus}`
+                            : ""}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+            <TtsPracticePlayer example={selectedExample} />
           </>
         ) : (
           <>
@@ -236,11 +280,13 @@ export function CourseLesson({
       <div className="design-dock">
         <button
           type="button"
-          disabled={!content}
-          onClick={() => (example ? onPractice() : setExample(true))}
+          disabled={!content && !example}
+          onClick={() =>
+            example ? onPractice(selectedExample) : setExample(true)
+          }
           className="design-action"
         >
-          {example ? "따라 읽기 시작" : "예시 들어보기"}
+          {example ? "선택한 문제 따라 읽기" : "예시 들어보기"}
         </button>
       </div>
     </div>
