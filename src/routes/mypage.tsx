@@ -1,27 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Settings, ChevronRight, UserRound, Sparkles } from "lucide-react";
+import { Award, Settings, ChevronRight, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import {
   api,
   type Statistics,
   type StrengthsWeaknesses,
   type TrainingHistoryItem,
   type UserAccount,
+  type UserTitleProgress,
 } from "@/lib/api";
 import { useProfile } from "@/lib/use-profile";
 import { METHOD_OPTIONS } from "@/lib/onboarding-options";
 import { getCachedUser } from "@/lib/auth-session";
+import { getUserTitleProgress } from "@/lib/user-title";
 
 export default function MyPage() {
+  const router = useRouter();
   const { profile } = useProfile();
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
   const [history, setHistory] = useState<TrainingHistoryItem[]>([]);
+  const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [examStarting, setExamStarting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -35,13 +44,18 @@ export default function MyPage() {
         page: 0,
         size: 5,
       }),
+      api.users.getTitle().catch(() => null),
     ])
-      .then(([user, stats, strengthsWeaknesses, sessions]) => {
+      .then(([user, stats, strengthsWeaknesses, sessions, userTitle]) => {
         if (!active) return;
         setAccount(user);
         setStatistics(stats);
         setFeedback(strengthsWeaknesses);
         setHistory(sessions.items);
+        setTitleProgress(
+          userTitle ??
+            getUserTitleProgress("ABSOLUTE_BEGINNER", stats.totalSessionCount),
+        );
       })
       .catch((reason) => {
         if (active)
@@ -67,6 +81,25 @@ export default function MyPage() {
         METHOD_OPTIONS.find((item) => item.value === value)?.summary ?? value,
     )
     .join(", ");
+
+  async function startTitleExam() {
+    setExamStarting(true);
+    setError(null);
+    try {
+      const exam = await api.users.createTitleExam();
+      router.push(
+        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage`,
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "승급 시험을 시작하지 못했습니다.",
+      );
+      setExamStarting(false);
+    }
+  }
+
   return (
     <AppShell>
       <header className="flex h-[92px] items-end justify-between px-5 pb-5">
@@ -79,21 +112,15 @@ export default function MyPage() {
         href="/mypage/settings/profile"
         className="flex items-center gap-3 bg-white px-5 py-1"
       >
-        <span className="flex size-12 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
-          <UserRound className="size-7 fill-current" />
-        </span>
+        <ProfileAvatar src={account?.profileImageUrl} size={48} />
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold">
               {displayName ?? "불러오는 중…"}
             </h2>
-            {profile && (
+            {titleProgress && (
               <span className="rounded-full bg-[#e8efff] px-3 py-1 text-xs font-semibold text-primary">
-                {
-                  { beginner: "초급", intermediate: "중급", advanced: "고급" }[
-                    profile.level
-                  ]
-                }
+                {titleProgress.label}
               </span>
             )}
           </div>
@@ -113,6 +140,13 @@ export default function MyPage() {
           >
             {error}
           </p>
+        )}
+        {titleProgress && (
+          <TitleProgressCard
+            progress={titleProgress}
+            starting={examStarting}
+            onStart={() => void startTitleExam()}
+          />
         )}
         <section className="design-card">
           <p className="flex items-baseline gap-2">
@@ -236,6 +270,70 @@ export default function MyPage() {
     </AppShell>
   );
 }
+
+function TitleProgressCard({
+  progress,
+  starting,
+  onStart,
+}: {
+  progress: UserTitleProgress;
+  starting: boolean;
+  onStart: () => void;
+}) {
+  const levelSpan = progress.next
+    ? progress.next.requiredTrainingCount - progress.minimumTrainingCount
+    : 1;
+  const completedInLevel = progress.next
+    ? progress.completedTrainingCount - progress.minimumTrainingCount
+    : levelSpan;
+  const percent = Math.min(
+    100,
+    Math.max(0, Math.round((completedInLevel / levelSpan) * 100)),
+  );
+
+  return (
+    <section className="design-card" aria-label="칭호 진행도">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-full bg-[#fff4d6] text-[#b77900]">
+            <Award className="size-5" />
+          </span>
+          <div>
+            <p className="text-xs text-[#8b95a1]">나의 칭호</p>
+            <h2 className="text-base font-bold">{progress.label}</h2>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-primary">
+          누적 {progress.completedTrainingCount}회
+        </span>
+      </div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf2ff]">
+        <div
+          className="h-full rounded-full bg-primary"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-[#6b7684]">
+        {progress.next?.eligible
+          ? `${progress.next.label} 승급 시험 · ${progress.next.passingScore}점 이상 합격`
+          : progress.next
+            ? `승급 시험까지 학습 ${progress.next.remainingTrainingCount}회 남았어요`
+            : "최고 칭호를 달성했어요"}
+      </p>
+      {progress.next?.eligible && (
+        <button
+          type="button"
+          disabled={starting}
+          onClick={onStart}
+          className="mt-4 flex min-h-11 w-full items-center justify-center rounded-full bg-primary text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {starting ? "시험 준비 중…" : "승급 시험 보기"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>

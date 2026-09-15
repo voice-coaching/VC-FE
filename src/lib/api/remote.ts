@@ -40,6 +40,12 @@ function query(params: Record<string, QueryValue>) {
 
 const id = (value: Id) => encodeURIComponent(String(value));
 
+function profileImageForm(input: { file: Blob; fileName: string }) {
+  const form = new FormData();
+  form.set("file", input.file, input.fileName);
+  return form;
+}
+
 export function createRemoteApi(baseUrl: string): ApiContract {
   const { request, upload } = createHttpClient(baseUrl);
 
@@ -164,6 +170,29 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
       updateProfile: (input) =>
         request("/api/users/me", { method: "PATCH", body: input }),
+      getProfileImage: () => request("/api/users/me/profile-image"),
+      createProfileImage: (input) =>
+        request("/api/users/me/profile-image", {
+          method: "POST",
+          body: profileImageForm(input),
+        }),
+      updateProfileImage: (input) =>
+        request("/api/users/me/profile-image", {
+          method: "PUT",
+          body: profileImageForm(input),
+        }),
+      deleteProfileImage: () =>
+        request("/api/users/me/profile-image", { method: "DELETE" }),
+      getTitle: () => request("/api/users/me/title"),
+      createTitleExam: () =>
+        request("/api/users/me/title-exams", { method: "POST" }),
+      getTitleExam: (examId) =>
+        request(`/api/users/me/title-exams/${id(examId)}`),
+      submitTitleExam: (examId, analysisId) =>
+        request(`/api/users/me/title-exams/${id(examId)}/submit`, {
+          method: "POST",
+          body: { analysisId },
+        }),
       async withdraw() {
         const result = await request<{ withdrawnAt: string }>("/api/users/me", {
           method: "DELETE",

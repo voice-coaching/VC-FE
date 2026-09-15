@@ -14,6 +14,7 @@ import type {
   OnboardingProfile,
   PageResult,
   PracticeContent,
+  ProfileImage,
   ReferenceAudio,
   Statistics,
   StrengthsWeaknesses,
@@ -22,9 +23,12 @@ import type {
   TrainingSession,
   UserAccount,
   UserCourseProgress,
+  UserTitleCode,
+  UserTitleExam,
   VoiceRecording,
   WeaknessRecommendations,
 } from "./types";
+import { getUserTitleProgress } from "../user-title";
 
 const NOW = "2026-08-08T12:00:00.000Z";
 const DEV_TOKEN = "ttobak-local-development-token";
@@ -271,11 +275,40 @@ let account: UserAccount = {
   id: "local-dev-user",
   email: "dev@ttobak.local",
   nickname: "개발자",
+  profileImageUrl: null,
   status: "ACTIVE",
   loginProviders: ["LOCAL"],
   onboardingCompleted: true,
   createdAt: NOW,
 };
+
+let profileImage: ProfileImage | null = null;
+
+function releaseProfileImage() {
+  if (profileImage?.imageUrl.startsWith("blob:"))
+    URL.revokeObjectURL(profileImage.imageUrl);
+  profileImage = null;
+  account = { ...account, profileImageUrl: null };
+}
+
+function saveProfileImage(
+  input: { file: Blob; fileName: string },
+  existingId: Id,
+) {
+  if (profileImage?.imageUrl.startsWith("blob:"))
+    URL.revokeObjectURL(profileImage.imageUrl);
+  const imageUrl = URL.createObjectURL(input.file);
+  profileImage = {
+    id: existingId,
+    imageUrl,
+    originalFileName: input.fileName,
+    mimeType: input.file.type as ProfileImage["mimeType"],
+    sizeBytes: input.file.size,
+    updatedAt: new Date().toISOString(),
+  };
+  account = { ...account, profileImageUrl: imageUrl };
+  return clone(profileImage);
+}
 
 let onboarding: OnboardingProfile = {
   currentLevel: "BEGINNER",
@@ -315,7 +348,38 @@ let history: TrainingHistoryItem[] = [
     overallScore: 79,
     completedAt: "2026-08-07T12:00:00.000Z",
   },
+  {
+    sessionId: 398,
+    contentId: 103,
+    contentType: "ANNOUNCER",
+    title: "핵심 단어 강조 연습",
+    status: "COMPLETED",
+    overallScore: 82,
+    completedAt: "2026-08-06T12:00:00.000Z",
+  },
+  {
+    sessionId: 397,
+    contentId: 104,
+    contentType: "CLASS_PRACTICE",
+    title: "첫 문장 자신감 연습",
+    status: "COMPLETED",
+    overallScore: 80,
+    completedAt: "2026-08-05T12:00:00.000Z",
+  },
+  {
+    sessionId: 396,
+    contentId: 102,
+    contentType: "SENTENCE",
+    title: "유음화 복습",
+    status: "COMPLETED",
+    overallScore: 78,
+    completedAt: "2026-08-04T12:00:00.000Z",
+  },
 ];
+
+let currentTitleCode: UserTitleCode = "ABSOLUTE_BEGINNER";
+const titleExams = new Map<string, UserTitleExam>();
+let titleExamSequence = 901;
 
 const analysisResult = (analysisId: Id): AnalysisResult => ({
   id: analysisId,
@@ -496,7 +560,86 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         account = { ...account, nickname };
         return { id: account.id, nickname, updatedAt: NOW };
       },
+      getProfileImage: async () => clone(profileImage),
+      createProfileImage: async (input) => {
+        if (profileImage)
+          throw new ApiError("이미 프로필 사진이 있습니다.", 409);
+        return saveProfileImage(input, "local-dev-profile-image");
+      },
+      updateProfileImage: async (input) => {
+        if (!profileImage)
+          throw new ApiError("수정할 프로필 사진이 없습니다.", 404);
+        return saveProfileImage(input, profileImage.id);
+      },
+      deleteProfileImage: async () => releaseProfileImage(),
+      getTitle: async () =>
+        getUserTitleProgress(currentTitleCode, history.length, NOW),
+      createTitleExam: async () => {
+        const progress = getUserTitleProgress(
+          currentTitleCode,
+          history.length,
+          NOW,
+        );
+        if (!progress.next)
+          throw new ApiError("이미 최고 칭호를 달성했습니다.", 409);
+        if (!progress.next.eligible)
+          throw new ApiError(
+            `승급 시험까지 학습 ${progress.next.remainingTrainingCount}회가 더 필요합니다.`,
+            409,
+          );
+        const active = [...titleExams.values()].find(
+          (exam) =>
+            exam.targetTitle === progress.next?.label &&
+            ["READY", "IN_PROGRESS"].includes(exam.status),
+        );
+        if (active) return clone(active);
+        const exam: UserTitleExam = {
+          id: titleExamSequence++,
+          currentTitle: progress.label,
+          targetTitle: progress.next.label,
+          practiceContentId: 104,
+          requiredTrainingCount: progress.next.requiredTrainingCount,
+          passingScore: progress.next.passingScore,
+          status: "READY",
+          createdAt: new Date().toISOString(),
+        };
+        titleExams.set(String(exam.id), exam);
+        return clone(exam);
+      },
+      getTitleExam: async (examId) => {
+        const exam = titleExams.get(String(examId));
+        if (!exam) throw new ApiError("승급 시험을 찾지 못했습니다.", 404);
+        return clone(exam);
+      },
+      submitTitleExam: async (examId, analysisId) => {
+        const exam = titleExams.get(String(examId));
+        if (!exam) throw new ApiError("승급 시험을 찾지 못했습니다.", 404);
+        if (["PASSED", "FAILED"].includes(exam.status))
+          throw new ApiError("이미 채점된 승급 시험입니다.", 409);
+        const score = Math.round(analysisResult(analysisId).overallScore);
+        const passed = score >= exam.passingScore;
+        const progress = getUserTitleProgress(
+          currentTitleCode,
+          history.length,
+          NOW,
+        );
+        if (passed && progress.next?.label === exam.targetTitle)
+          currentTitleCode = progress.next.code;
+        const status = passed ? "PASSED" : "FAILED";
+        titleExams.set(String(examId), { ...exam, status });
+        return {
+          examId: exam.id,
+          status,
+          score,
+          passingScore: exam.passingScore,
+          passed,
+          previousTitle: exam.currentTitle,
+          currentTitle: passed ? exam.targetTitle : exam.currentTitle,
+          evaluatedAt: new Date().toISOString(),
+        };
+      },
       withdraw: async () => {
+        releaseProfileImage();
         clearAccessToken();
         markAnonymousSession();
         onSessionEnded?.();

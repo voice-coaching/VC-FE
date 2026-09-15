@@ -26,6 +26,14 @@ export type SegmentMatchType =
   "MATCH" | "SUBSTITUTION" | "OMISSION" | "ADDITION";
 export type SegmentResultStatus = "NORMAL" | "CAUTION" | "NEEDS_IMPROVEMENT";
 export type SpeedStatus = "TOO_SLOW" | "NORMAL" | "TOO_FAST" | "SLOW" | "FAST";
+export type UserTitleCode =
+  | "ABSOLUTE_BEGINNER"
+  | "BEGINNER"
+  | "LOCAL_ANNOUNCER"
+  | "ASPIRING_ANNOUNCER"
+  | "ANNOUNCER";
+export type UserTitleLabel =
+  "왕초보" | "초보" | "동네 아나운서" | "아나운서 지망생" | "아나운서";
 
 export interface ApiEnvelope<T> {
   result: boolean;
@@ -47,10 +55,65 @@ export interface UserAccount {
   id: Id;
   email: string | null;
   nickname: string;
+  profileImageUrl: string | null;
   status: UserStatus;
   loginProviders: Array<"LOCAL" | SocialProvider>;
   onboardingCompleted: boolean;
   createdAt: string;
+}
+
+export interface ProfileImage {
+  id: Id;
+  imageUrl: string;
+  originalFileName: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  sizeBytes: number;
+  updatedAt: string;
+}
+
+export interface ProfileImageInput {
+  file: Blob;
+  fileName: string;
+}
+
+export interface UserTitleProgress {
+  code: UserTitleCode;
+  label: UserTitleLabel;
+  completedTrainingCount: number;
+  minimumTrainingCount: number;
+  next: {
+    code: UserTitleCode;
+    label: UserTitleLabel;
+    requiredTrainingCount: number;
+    remainingTrainingCount: number;
+    passingScore: number;
+    eligible: boolean;
+  } | null;
+  updatedAt: string;
+}
+
+export type TitleExamStatus = "READY" | "IN_PROGRESS" | "PASSED" | "FAILED";
+
+export interface UserTitleExam {
+  id: Id;
+  currentTitle: UserTitleLabel;
+  targetTitle: UserTitleLabel;
+  practiceContentId: Id;
+  requiredTrainingCount: number;
+  passingScore: number;
+  status: TitleExamStatus;
+  createdAt: string;
+}
+
+export interface UserTitleExamResult {
+  examId: Id;
+  status: Extract<TitleExamStatus, "PASSED" | "FAILED">;
+  score: number;
+  passingScore: number;
+  passed: boolean;
+  previousTitle: UserTitleLabel;
+  currentTitle: UserTitleLabel;
+  evaluatedAt: string;
 }
 
 export interface AuthUser {
@@ -436,6 +499,14 @@ export interface ApiContract {
     updateProfile(input: {
       nickname: string;
     }): Promise<{ id: Id; nickname: string; updatedAt: string }>;
+    getProfileImage(): Promise<ProfileImage | null>;
+    createProfileImage(input: ProfileImageInput): Promise<ProfileImage>;
+    updateProfileImage(input: ProfileImageInput): Promise<ProfileImage>;
+    deleteProfileImage(): Promise<void>;
+    getTitle(): Promise<UserTitleProgress>;
+    createTitleExam(): Promise<UserTitleExam>;
+    getTitleExam(examId: Id): Promise<UserTitleExam>;
+    submitTitleExam(examId: Id, analysisId: Id): Promise<UserTitleExamResult>;
     withdraw(): Promise<{ withdrawnAt: string }>;
   };
   onboarding: {
@@ -500,6 +571,7 @@ export interface ApiContract {
     create(input: {
       contentId: Id;
       courseStepId?: Id | null;
+      titleExamId?: Id | null;
       learningFocus: LearningFocus;
     }): Promise<TrainingSession>;
     get(sessionId: Id): Promise<TrainingSession>;

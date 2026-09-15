@@ -22,6 +22,7 @@ import {
   type PracticeContentRecommendation,
   type VoiceRecording,
   type CourseDetail,
+  type UserTitleExamResult,
 } from "@/lib/api";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
@@ -53,6 +54,7 @@ export function PracticeSession({
   const searchParams = useSearchParams();
   const resumedSessionId = localOnly ? null : searchParams.get("sessionId");
   const resumeType = searchParams.get("resumeType");
+  const titleExamId = searchParams.get("titleExamId");
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
@@ -64,6 +66,9 @@ export function PracticeSession({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [titleExamResult, setTitleExamResult] =
+    useState<UserTitleExamResult | null>(null);
+  const [titleExamError, setTitleExamError] = useState<string | null>(null);
   const [canRetryAnalysis, setCanRetryAnalysis] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
@@ -104,12 +109,16 @@ export function PracticeSession({
   useEffect(() => {
     onTitleChange?.(
       phase === "result"
-        ? "분석 결과"
+        ? titleExamId
+          ? "승급 시험 결과"
+          : "분석 결과"
         : phase === "analyzing"
           ? "분석 중"
-          : "연습하기",
+          : titleExamId
+            ? "승급 시험"
+            : "연습하기",
     );
-  }, [phase, onTitleChange]);
+  }, [phase, onTitleChange, titleExamId]);
 
   useEffect(() => {
     if (phase !== "result" || recorder.previewUrl) return;
@@ -273,6 +282,7 @@ export function PracticeSession({
     const session = await api.training.create({
       contentId: content.id,
       courseStepId: courseStepId || null,
+      titleExamId: titleExamId || null,
       learningFocus: content.learningFocus,
     });
     const createdId = session.sessionId ?? session.id;
@@ -359,6 +369,19 @@ export function PracticeSession({
       if (progressPercent >= 100) {
         await api.courses.complete(courseId);
         setCourseFinished(true);
+      }
+    }
+    if (titleExamId) {
+      try {
+        setTitleExamResult(
+          await api.users.submitTitleExam(titleExamId, analysisId),
+        );
+      } catch (reason) {
+        setTitleExamError(
+          reason instanceof Error
+            ? reason.message
+            : "승급 시험 결과를 저장하지 못했습니다.",
+        );
       }
     }
     setPhase("result");
@@ -912,6 +935,42 @@ export function PracticeSession({
         </div>
       ) : analysis ? (
         <>
+          {titleExamResult && (
+            <section
+              className={`design-card border ${titleExamResult.passed ? "border-[#84dfb7] bg-[#effcf6]" : "border-[#ffc4b8] bg-[#fff5f2]"}`}
+              aria-label="승급 시험 결과"
+            >
+              <p className="text-xs font-semibold text-[#6b7684]">
+                승급 시험 {titleExamResult.score}점 · 합격 기준{" "}
+                {titleExamResult.passingScore}점
+              </p>
+              <h2 className="mt-2 text-xl font-bold">
+                {titleExamResult.passed
+                  ? `${titleExamResult.currentTitle} 칭호로 승급했어요!`
+                  : "아쉽게도 이번에는 불합격이에요"}
+              </h2>
+              <p className="mt-2 text-sm text-[#6b7684]">
+                {titleExamResult.passed
+                  ? "새 칭호는 마이페이지에 바로 반영됩니다."
+                  : "학습 횟수는 유지되며 언제든 다시 응시할 수 있어요."}
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push("/mypage")}
+                className="mt-4 min-h-11 w-full rounded-full bg-primary text-sm font-semibold text-white"
+              >
+                마이페이지에서 칭호 확인
+              </button>
+            </section>
+          )}
+          {titleExamError && (
+            <p
+              role="alert"
+              className="rounded-2xl bg-destructive/10 px-4 py-3 text-xs text-destructive"
+            >
+              {titleExamError}
+            </p>
+          )}
           <AnalysisView
             analysis={analysis}
             courseMode={Boolean(courseId)}

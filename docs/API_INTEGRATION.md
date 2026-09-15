@@ -2,7 +2,7 @@
 
 기준 문서: [운영 Swagger](https://api.voice-coaching.site/swagger-ui/index.html), [Notion API 명세서(ver.08/07)](https://app.notion.com/p/API-ver-08-07-3b5fd927f58c806db009d42373cbeb2a)
 
-프론트엔드는 `src/lib/api/types.ts`의 `ApiContract`만 사용하며, `src/lib/api/remote.ts`가 운영 Swagger의 53개 operation을 구현합니다. 응답은 공통 `{ result, message, data }` 래퍼에서 `data`만 반환합니다.
+프론트엔드는 `src/lib/api/types.ts`의 `ApiContract`만 사용합니다. `src/lib/api/remote.ts`에는 운영 Swagger 53개와 신규 프로필 사진·칭호 계약 8개를 합친 61개 operation이 정의돼 있습니다. 신규 8개는 백엔드 구현 전까지 [API 연동 보류 항목](API_INTEGRATION_GAPS.md)으로 관리합니다. 응답은 공통 `{ result, message, data }` 래퍼에서 `data`만 반환합니다.
 
 2026-08-25 재검증 시 Notion 데이터베이스에는 50개가 있고 운영 Swagger에는 53개가 있습니다. Swagger에만 있는 아래 3개는 운영 서버에 실제 존재하고 마이페이지에서 사용하므로 삭제하지 않습니다.
 
@@ -79,4 +79,4 @@ npx tsc --noEmit
 npm run build
 ```
 
-`verify:api`는 운영 Swagger의 53개 operation에 대해 HTTP 메서드, 경로, 쿼리 파라미터와 401 refresh 재시도를 검증합니다.
+`verify:api`는 기존 53개와 신규 프로필 사진·칭호 8개, 총 61개 operation의 HTTP 메서드·경로·쿼리 파라미터와 401 refresh 재시도를 검증합니다.

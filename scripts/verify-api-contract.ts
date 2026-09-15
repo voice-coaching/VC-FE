@@ -11,6 +11,14 @@ const expected = [
   "POST /api/auth/logout",
   "GET /api/users/me",
   "PATCH /api/users/me",
+  "GET /api/users/me/profile-image",
+  "POST /api/users/me/profile-image",
+  "PUT /api/users/me/profile-image",
+  "DELETE /api/users/me/profile-image",
+  "GET /api/users/me/title",
+  "POST /api/users/me/title-exams",
+  "GET /api/users/me/title-exams/1",
+  "POST /api/users/me/title-exams/1/submit",
   "DELETE /api/users/me",
   "GET /api/onboarding/me",
   "PUT /api/onboarding/me",
@@ -118,6 +126,18 @@ await api.auth.refresh();
 await api.auth.signOut();
 await api.users.getMe();
 await api.users.updateProfile({ nickname: "tester" });
+await api.users.getProfileImage();
+const profileImage = {
+  file: new Blob(["profile"], { type: "image/png" }),
+  fileName: "profile.png",
+};
+await api.users.createProfileImage(profileImage);
+await api.users.updateProfileImage(profileImage);
+await api.users.deleteProfileImage();
+await api.users.getTitle();
+await api.users.createTitleExam();
+await api.users.getTitleExam(1);
+await api.users.submitTitleExam(1, 1);
 await api.users.withdraw();
 await api.onboarding.get();
 await api.onboarding.save({
@@ -194,8 +214,8 @@ await api.myPage.getWeaknessRecommendations({
 
 assert.equal(
   expected.length,
-  53,
-  "Frontend adapter endpoint count must be 53 (not backend implementation coverage).",
+  61,
+  "Frontend adapter endpoint count must include 53 existing and 8 new profile/title contracts.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
 assert.ok(requestOptions.every((init) => init.credentials === "include"));

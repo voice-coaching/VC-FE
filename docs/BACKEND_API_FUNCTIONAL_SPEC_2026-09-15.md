@@ -6,7 +6,7 @@
 
 ## 1. 범위
 
-프론트에는 인증, 사용자, 온보딩, 홈, 콘텐츠, 클래스, 학습 세션, 녹음, 분석, 마이 영역의 기존 API 어댑터 53개가 정의돼 있다. 기존 경로와 상세 타입은 [API 연동 문서](API_INTEGRATION.md)를 기준으로 한다.
+운영 Swagger 기준 기존 API는 53개다. 프론트 어댑터에는 여기에 프로필 사진 4개와 칭호·승급 시험 4개를 추가해 총 61개 계약이 정의돼 있다. 기존 경로와 상세 타입은 [API 연동 문서](API_INTEGRATION.md)를 기준으로 한다.
 
 현재 인접 로컬 `VC-BE`에서 실제 매핑이 확인된 API는 다음 3개뿐이다.
 
@@ -29,6 +29,9 @@
 | P0       | 클래스 실제 교육 내용   | `GET /api/courses/{courseId}/steps/{stepId}`     |
 | P0       | 결과·마이 억양 실데이터 | 분석 prosody curve, 사용자 prosody profile       |
 | P0       | 법적 동의 이력          | 법률 문서 조회, 동의 조회·변경, signup 요청 확장 |
+| P0       | 프로필 사진             | 사진 조회·등록·교체·삭제                         |
+| P0       | 칭호와 승급 시험        | 칭호 진행도, 시험 생성·조회·서버 채점            |
+| P0       | 예문·Chirp 음성         | 단계별 예문 5개, 서버 합성 음성                  |
 | P1       | 콘텐츠 카드와 필터      | facets, summary 메타데이터 확장, adjacent        |
 | P1       | 비밀번호 재설정         | reset request, reset confirm                     |
 | P1       | 연습 알림과 알림함      | preferences, push subscriptions, notifications   |
@@ -590,9 +593,212 @@ Figma의 “속도와 억양” 탭에서 내 억양과 기준 억양을 실제 
 ## 16. 권장 구현 순서
 
 1. 기존 53개 계약 중 로컬 미구현 API와 인증 사용자 식별을 완성한다.
-2. custom content, course step detail, prosody curve/profile, versioned consent를 구현한다.
-3. content facets·summary·adjacent와 password reset을 구현한다.
-4. notification preferences·push·notification center를 구현한다.
-5. notices와 inquiries를 구현한다.
-6. 결제 정책 확정 후 subscription API를 구현한다.
-7. 각 단계가 끝날 때 목 응답을 제거하고 실제 서버 종단 테스트와 모바일 시각 회귀를 통과시킨다.
+2. 프로필 사진 CRUD와 칭호·승급 시험을 구현한다.
+3. custom content, course step detail, prosody curve/profile, versioned consent를 구현한다.
+4. 단계별 예문과 Chirp 음성 캐시를 구현한다.
+5. content facets·summary·adjacent와 password reset을 구현한다.
+6. notification preferences·push·notification center를 구현한다.
+7. notices와 inquiries를 구현한다.
+8. 결제 정책 확정 후 subscription API를 구현한다.
+9. 각 단계가 끝날 때 목 응답을 제거하고 실제 서버 종단 테스트와 모바일 시각 회귀를 통과시킨다.
+
+## 17. 프로필 사진 CRUD
+
+사용자 사진은 닉네임과 분리된 리소스로 관리한다. 기존 `GET /api/users/me`에는 목록·헤더에서 추가 조회 없이 표시할 수 있도록 `profileImageUrl: string | null`을 추가한다.
+
+### 17.1 조회
+
+`GET /api/users/me/profile-image` — P0
+
+사진이 없을 때도 오류 대신 `200`과 `data: null`을 반환한다. 사진이 있으면 다음 형식이다.
+
+```json
+{
+  "result": true,
+  "message": "OK",
+  "data": {
+    "id": 501,
+    "imageUrl": "https://cdn.example.com/profiles/501.webp",
+    "originalFileName": "profile.png",
+    "mimeType": "image/webp",
+    "sizeBytes": 184320,
+    "updatedAt": "2026-09-15T05:00:00Z"
+  }
+}
+```
+
+### 17.2 등록·교체·삭제
+
+- `POST /api/users/me/profile-image` — 최초 등록, `multipart/form-data`의 `file`
+- `PUT /api/users/me/profile-image` — 기존 사진 교체, 동일한 multipart 계약
+- `DELETE /api/users/me/profile-image` — 현재 사진 삭제, 성공 `204`
+
+`POST`는 사진이 이미 있으면 409 `PROFILE_IMAGE_EXISTS`, `PUT`은 기존 사진이 없으면 404 `PROFILE_IMAGE_NOT_FOUND`다. `DELETE`는 멱등 처리하며 이미 사진이 없어도 `204`를 반환한다.
+
+검증·보안 규칙:
+
+- 허용 형식: JPEG, PNG, WebP; 최대 5MB
+- 확장자나 요청 Content-Type이 아니라 파일 signature를 검증한다.
+- 디코딩 실패, 가로·세로 128px 미만, 4096px 초과 이미지는 400 `INVALID_PROFILE_IMAGE`다.
+- 서버에서 정사각형 썸네일을 생성하고 EXIF 위치·촬영 정보를 제거한다.
+- 교체·삭제 성공 후 기존 원본과 파생 이미지는 비동기로 제거하되 응답 직후 새 URL만 노출한다.
+- 이미지 URL은 사용자 인증 토큰을 query string에 포함하지 않는 안정적인 CDN URL이어야 한다.
+- 탈퇴 시 원본·파생 이미지 모두 개인정보 파기 대상에 포함한다.
+
+## 18. 사용자 칭호와 승급 시험
+
+칭호 순서는 `왕초보 → 초보 → 동네 아나운서 → 아나운서 지망생 → 아나운서`다. 학습 횟수는 **시험 응시 자격**만 열며 자동 승급시키지 않는다. 승급은 서버가 소유한 분석 점수가 합격 기준 이상일 때만 원자적으로 반영한다.
+
+기본 정책은 다음과 같고, 운영 변경을 위해 프론트 하드코딩 대신 API 응답을 최종 기준으로 사용한다.
+
+| 목표 칭호       | 누적 완료 학습 | 합격 점수 |
+| --------------- | -------------- | --------- |
+| 초보            | 5회            | 70점      |
+| 동네 아나운서   | 15회           | 75점      |
+| 아나운서 지망생 | 30회           | 80점      |
+| 아나운서        | 60회           | 85점      |
+
+### 18.1 내 칭호와 응시 자격
+
+`GET /api/users/me/title` — P0
+
+```json
+{
+  "result": true,
+  "message": "OK",
+  "data": {
+    "code": "ABSOLUTE_BEGINNER",
+    "label": "왕초보",
+    "completedTrainingCount": 5,
+    "minimumTrainingCount": 0,
+    "next": {
+      "code": "BEGINNER",
+      "label": "초보",
+      "requiredTrainingCount": 5,
+      "remainingTrainingCount": 0,
+      "passingScore": 70,
+      "eligible": true
+    },
+    "updatedAt": "2026-09-15T05:00:00Z"
+  }
+}
+```
+
+최고 칭호는 `next: null`이다. `completedTrainingCount`에는 `COMPLETED` 상태이며 삭제·무효 처리되지 않은 학습만 포함한다. 재분석과 결과 재열람은 횟수를 늘리지 않는다.
+
+### 18.2 시험 생성과 조회
+
+- `POST /api/users/me/title-exams` — 현재 단계의 다음 승급 시험 생성
+- `GET /api/users/me/title-exams/{examId}` — 진행 중이거나 완료한 시험 조회
+
+생성 응답 `201`:
+
+```json
+{
+  "result": true,
+  "message": "승급 시험을 준비했습니다.",
+  "data": {
+    "id": 901,
+    "currentTitle": "왕초보",
+    "targetTitle": "초보",
+    "practiceContentId": 4101,
+    "requiredTrainingCount": 5,
+    "passingScore": 70,
+    "status": "READY",
+    "createdAt": "2026-09-15T05:01:00Z"
+  }
+}
+```
+
+- 자격 미달은 409 `TITLE_EXAM_NOT_ELIGIBLE`, 최고 칭호는 409 `MAX_TITLE_REACHED`다.
+- 같은 목표의 `READY | IN_PROGRESS` 시험이 있으면 새 시험을 중복 생성하지 않고 기존 시험을 반환한다.
+- 시험 콘텐츠는 일반 콘텐츠와 동일하게 조회하지만 시험 ID와 사용자에게 고정한다.
+- `POST /api/training-sessions`는 선택 필드 `titleExamId`를 받고, 해당 시험의 `practiceContentId`와 일치하는지 검증한다.
+
+### 18.3 시험 제출과 승급
+
+`POST /api/users/me/title-exams/{examId}/submit` — P0
+
+```json
+{ "analysisId": 7301 }
+```
+
+응답 `200`:
+
+```json
+{
+  "result": true,
+  "message": "승급 시험 채점이 완료됐습니다.",
+  "data": {
+    "examId": 901,
+    "status": "PASSED",
+    "score": 78,
+    "passingScore": 70,
+    "passed": true,
+    "previousTitle": "왕초보",
+    "currentTitle": "초보",
+    "evaluatedAt": "2026-09-15T05:03:00Z"
+  }
+}
+```
+
+- 클라이언트는 점수를 제출하지 않는다. 서버가 시험 세션에 연결된 `analysisId`의 `overallScore`를 조회한다.
+- 분석·시험·사용자의 소유권과 지정 콘텐츠 일치를 모두 검증한다.
+- `score >= passingScore`일 때만 시험 `PASSED`와 사용자 칭호 변경을 한 트랜잭션으로 처리한다.
+- 제출 재시도는 같은 결과를 반환하는 멱등 요청이어야 한다. 이미 채점된 시험의 다른 분석 제출은 409 `TITLE_EXAM_ALREADY_GRADED`다.
+- 불합격해도 누적 학습 횟수는 유지한다. 새 시험을 생성해 재응시할 수 있다.
+- 정책 변경은 이미 생성된 시험의 `passingScore`를 바꾸지 않는다.
+
+## 19. 추가 누락 API: 단계별 예문과 Chirp 음성
+
+현재 프론트의 단계별 예문 5개와 Google Chirp 3 HD 합성은 로컬 데이터 및 프론트 서버 route에 머물러 있다. 운영 콘텐츠 관리와 다기기 일관성을 위해 다음 계약이 추가로 필요하다.
+
+### 19.1 단계별 연습 예문
+
+`GET /api/courses/{courseId}/steps/{stepId}/practice-examples` — P0
+
+응답은 정확히 5개의 게시된 예문을 `order` 순서로 반환한다.
+
+```json
+{
+  "result": true,
+  "message": "OK",
+  "data": {
+    "courseId": 203,
+    "stepId": 306,
+    "revision": 4,
+    "items": [
+      {
+        "id": "final-consonant-2",
+        "order": 2,
+        "text": "꽃밭 끝에 햇빛이 밝게 비칩니다.",
+        "hint": "받침 ㅊ·ㅌ·ㅆ이 대표음으로 나는 것을 익혀요.",
+        "focus": null,
+        "locale": "ko-KR"
+      }
+    ]
+  }
+}
+```
+
+`courseId`와 `stepId`가 일치하지 않으면 404다. 예문 revision은 시험·학습 세션에 저장해 결과 재조회 시 문장이 바뀌지 않게 한다.
+
+### 19.2 Chirp 합성 음성
+
+`GET /api/practice-examples/{exampleId}/audio?voice=ko-KR-Chirp3-HD-Aoede` — P0
+
+- 성공 응답은 envelope가 아닌 `audio/mpeg` binary이며 `ETag`와 private cache header를 제공한다.
+- 허용된 게시 예문 ID만 합성한다. 임의 text query를 받지 않아 비용 남용과 임의 콘텐츠 합성을 막는다.
+- 기본 화자는 `ko-KR-Chirp3-HD-Aoede`, 속도는 `0.92`이며 허용 화자는 서버 allowlist로 제한한다.
+- `(exampleId, revision, voice, speakingRate)` 조합으로 결과를 저장·캐시한다.
+- 생성 실패는 JSON envelope와 503 `TTS_UNAVAILABLE`, 제한 초과는 429 `TTS_RATE_LIMITED`다.
+- Google Cloud 자격증명은 서버에서만 사용하며 브라우저와 API 응답에 노출하지 않는다.
+
+## 20. 추가 기능 통합 완료 조건
+
+- 프로필 사진 등록 → 조회 → 교체 → 삭제가 새로고침과 다른 기기에서도 동일하다.
+- 잘못된 이미지 형식·크기·이미지 위장 파일이 저장되지 않는다.
+- 학습 횟수만 충족한 사용자는 현재 칭호가 유지되고 승급 시험 버튼만 활성화된다.
+- 합격점 미만은 칭호가 유지되고, 기준 이상 분석은 정확히 한 단계만 승급한다.
+- 다른 사용자의 시험·분석 ID 제출과 동일 분석의 중복 승급이 차단된다.
+- 단계별 예문은 항상 5개이며 선택한 문장과 합성 음성·녹음 분석 기준 문장이 일치한다.
