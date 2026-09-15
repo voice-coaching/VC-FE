@@ -272,11 +272,11 @@ export default function Home() {
           }`}
         >
           <Image
-            src="/app-icon-512.png"
+            src="/figma/home/logo.svg"
             alt="SpeakAI"
             width={36}
-            height={36}
-            className="size-9 rounded-[10px]"
+            height={30.31584}
+            className="h-auto w-[36px]"
             priority
           />
           <span className="flex-1" />
