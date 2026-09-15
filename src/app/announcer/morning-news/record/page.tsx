@@ -1,1 +1,5 @@
-export { default } from "@/routes/announcer/record";
+import { redirect } from "next/navigation";
+
+export default function MorningNewsRecordPage() {
+  redirect("/announcer");
+}

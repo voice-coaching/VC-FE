@@ -154,13 +154,89 @@
 @utility app-shell {
   margin-inline: auto;
   width: 100%;
-  max-width: 26rem;
   min-height: 100dvh;
   background-color: var(--color-background);
   position: relative;
-  box-shadow:
-    0 0 0 1px oklch(0 0 0 / 6%),
-    0 24px 60px -24px oklch(0 0 0 / 25%);
+}
+
+/* 03_Screen / Frame 1000002915 learning screens. */
+.learning-shell {
+  background-color: #fafbfc;
+  color: #191f28;
+  --background: #fafbfc;
+  --foreground: #191f28;
+  --primary: #3468ff;
+  --primary-foreground: #fff;
+  --brand: #3468ff;
+  --brand-foreground: #fff;
+  --muted: #f3f4f5;
+  --muted-foreground: #8b929a;
+  --surface: #fff;
+  --border: #e8eaed;
+  --ring: #3468ff;
+  --success: #07865f;
+  max-width: 402px;
+}
+
+.design-card {
+  border-radius: 20px;
+  background: #fff;
+  padding: 20px;
+  box-shadow: 0 2px 4px #191f2806;
+}
+
+.design-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 56px;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.design-action:disabled {
+  opacity: 0.45;
+}
+.design-action:focus-visible,
+.learning-shell button:focus-visible,
+.learning-shell a:focus-visible {
+  outline: 2px solid #3468ff;
+  outline-offset: 3px;
+}
+.design-dock {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  background: #fafbfcf5;
+  border-top: 1px solid #e8eaed;
+  padding: 12px 20px max(20px, env(safe-area-inset-bottom));
+}
+.design-tabs {
+  display: flex;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 4px;
+  background: #f3f4f5;
+}
+.design-tabs > * {
+  flex: 1;
+  padding: 10px 4px;
+  text-align: center;
+  border-radius: 9px;
+  font-size: 14px;
+  color: #8b929a;
+}
+.design-tabs > [aria-selected="true"],
+.design-tabs > [aria-current="page"] {
+  background: white;
+  color: #191f28;
+  font-weight: 600;
+  box-shadow: 0 2px 5px #0000000a;
 }
 
 @keyframes signup-field-reveal {

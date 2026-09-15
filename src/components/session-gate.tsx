@@ -15,6 +15,7 @@ const PROTECTED_PREFIXES = [
   "/onboarding",
   "/news",
   "/sentences",
+  "/my-script",
   "/announcer",
   "/class",
   "/practice",
@@ -39,20 +40,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const protectedPath = isProtectedPath(pathname);
-  const prototypePath =
-    process.env.NODE_ENV === "development" &&
-    (pathname === "/mypage" ||
-      [
-        "/home",
-        "/sentences",
-        "/announcer",
-        "/news",
-        "/practice/custom",
-        "/class",
-      ].some(
-        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-      ));
-  const [developmentPreview, setDevelopmentPreview] = useState(false);
   const [status, setStatus] = useState<"checking" | "ready" | "error">(() =>
     protectedPath && getAuthSessionSnapshot().status === "unknown"
       ? "checking"
@@ -62,16 +49,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
-    if (!protectedPath || prototypePath) return;
-
-    const previewEnabled =
-      process.env.NODE_ENV === "development" &&
-      new URLSearchParams(window.location.search).get("preview") === "1";
-    setDevelopmentPreview(previewEnabled);
-    if (previewEnabled) {
-      setStatus("ready");
-      return;
-    }
+    if (!protectedPath) return;
 
     const cachedSession = getAuthSessionSnapshot();
     if (cachedSession.status === "anonymous") {
@@ -152,14 +130,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [pathname, protectedPath, prototypePath, retryKey, router]);
+  }, [pathname, protectedPath, retryKey, router]);
 
-  if (
-    !protectedPath ||
-    prototypePath ||
-    developmentPreview ||
-    (status === "ready" && canOpenPath(pathname))
-  )
+  if (!protectedPath || (status === "ready" && canOpenPath(pathname)))
     return children;
 
   return (

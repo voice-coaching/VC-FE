@@ -1,13 +1,18 @@
 "use client";
 
+import Link from "next/link";
+import Image from "next/image";
+import { BookOpen, Check, ChevronRight, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { CourseLesson } from "@/components/course-lesson";
 import { TopBar } from "@/components/top-bar";
 import {
   ApiError,
   api,
   type CourseDetail,
+  type CourseStep,
   type CourseProgress,
   type CourseSummary,
   type CourseType,
@@ -43,6 +48,15 @@ export function CourseCatalog({
   showBack?: boolean;
 }) {
   const router = useRouter();
+  const [lesson, setLesson] = useState<{
+    course: CourseSummary;
+    step: CourseStep;
+    count: number;
+  } | null>(null);
+  const activeType = type ?? "PRONUNCIATION";
+  const [stepsByCourse, setStepsByCourse] = useState<
+    Record<string, CourseStep[]>
+  >({});
   const [items, setItems] = useState<CourseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -64,7 +78,12 @@ export function CourseCatalog({
     setLoading(true);
     setError(null);
     Promise.all([
-      api.courses.list({ type, status: "PUBLISHED", page: 0, size: 20 }),
+      api.courses.list({
+        type: activeType,
+        status: "PUBLISHED",
+        page: 0,
+        size: 20,
+      }),
       api.courses.getMyProgress(),
     ])
       .then(([result, userProgress]) => {
@@ -72,6 +91,21 @@ export function CourseCatalog({
         const byCourse = progressMap(userProgress);
         setProgressByCourse(byCourse);
         setItems(mergeProgress(result.items, byCourse));
+        void Promise.allSettled(
+          result.items.map((course) => api.courses.get(course.id)),
+        ).then((results) => {
+          if (!active) return;
+          setDetailsByCourse((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              results.flatMap((result) =>
+                result.status === "fulfilled"
+                  ? [[String(result.value.id), result.value]]
+                  : [],
+              ),
+            ),
+          }));
+        });
         setPage(result.page);
         setHasNext(
           result.hasNext ?? result.page + 1 < (result.totalPages ?? 0),
@@ -90,14 +124,14 @@ export function CourseCatalog({
     return () => {
       active = false;
     };
-  }, [type]);
+  }, [activeType]);
 
   async function loadMore() {
     setLoadingMore(true);
     setError(null);
     try {
       const result = await api.courses.list({
-        type,
+        type: activeType,
         status: "PUBLISHED",
         page: page + 1,
         size: 20,
@@ -119,7 +153,7 @@ export function CourseCatalog({
     }
   }
 
-  async function start(course: CourseSummary) {
+  async function start(course: CourseSummary, requestedStep?: CourseStep) {
     setStartingId(String(course.id));
     setError(null);
     try {
@@ -151,7 +185,9 @@ export function CourseCatalog({
       replayFromStart =
         replayFromStart || currentProgress?.status === "COMPLETED";
 
-      const steps = await api.courses.getSteps(course.id);
+      const steps = (await api.courses.getSteps(course.id)).sort(
+        (a, b) => a.stepOrder - b.stepOrder,
+      );
       const lastStepIndex = steps.findIndex(
         (step) => String(step.id) === String(currentProgress?.lastStepId),
       );
@@ -164,14 +200,26 @@ export function CourseCatalog({
                 : lastStepIndex,
             )
           : steps;
+      const requestedPractice = requestedStep
+        ? steps.find(
+            (step) =>
+              step.stepOrder >= requestedStep.stepOrder &&
+              step.practiceContentId != null,
+          )
+        : undefined;
       const practice =
+        requestedPractice ??
         remainingSteps.find((step) => step.practiceContentId != null) ??
         steps.find((step) => step.practiceContentId != null);
       if (!practice?.practiceContentId)
         throw new Error("이 클래스의 연습 콘텐츠가 아직 준비되지 않았습니다.");
-      router.push(
-        `/practice/${practice.practiceContentId}?courseId=${course.id}&courseStepId=${practice.id}&returnTo=${encodeURIComponent(type ? `/class/${type.toLowerCase()}` : "/class")}`,
-      );
+      setLesson({
+        course,
+        step: requestedStep
+          ? { ...practice, title: requestedStep.title }
+          : practice,
+        count: steps.length,
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -195,7 +243,14 @@ export function CourseCatalog({
     setDetailLoadingId(key);
     setError(null);
     try {
-      const detail = await api.courses.get(course.id);
+      const [detail, steps] = await Promise.all([
+        api.courses.get(course.id),
+        api.courses.getSteps(course.id),
+      ]);
+      setStepsByCourse((current) => ({
+        ...current,
+        [key]: steps.sort((a, b) => a.stepOrder - b.stepOrder),
+      }));
       setDetailsByCourse((current) => ({ ...current, [key]: detail }));
     } catch (reason) {
       setExpandedId(null);
@@ -209,111 +264,249 @@ export function CourseCatalog({
     }
   }
 
+  const selectedCourse = items.find((item) => String(item.id) === expandedId);
+  const detail = expandedId ? detailsByCourse[expandedId] : undefined;
+  const steps = expandedId ? (stepsByCourse[expandedId] ?? []) : [];
+  const level = (value: CourseSummary["difficulty"]) =>
+    ({ BEGINNER: "초급", INTERMEDIATE: "중급", ADVANCED: "고급" })[value];
+
+  if (lesson)
+    return (
+      <AppShell nav={false}>
+        <CourseLesson
+          course={lesson.course}
+          step={lesson.step}
+          stepCount={lesson.count}
+          description={detailsByCourse[String(lesson.course.id)]?.description}
+          onClose={() => setLesson(null)}
+          onPractice={() =>
+            router.push(
+              `/practice/${lesson.step.practiceContentId}?courseId=${lesson.course.id}&courseStepId=${lesson.step.id}&returnTo=${encodeURIComponent(type ? `/class/${type.toLowerCase()}` : "/class")}`,
+            )
+          }
+        />
+      </AppShell>
+    );
+
   return (
-    <AppShell>
-      {showBack && <TopBar to="/class" title={title} />}
-      <div className={showBack ? "px-5 pb-10" : "px-5 pt-8 pb-10"}>
-        <h1 className="text-3xl font-black tracking-tighter">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        {error && (
-          <p role="alert" className="mt-4 text-sm text-destructive">
-            {error}
+    <AppShell nav={!selectedCourse && !showBack}>
+      <TopBar
+        to="/home"
+        onBack={selectedCourse ? () => setExpandedId(null) : undefined}
+        title={selectedCourse?.title ?? "클래스"}
+      />
+      <div className="flex min-h-[calc(100dvh-80px)] flex-col">
+        <div className="px-5 pb-6">
+          <p className="sr-only">
+            {title} · {description}
           </p>
-        )}
-        {loading ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            클래스를 불러오는 중…
-          </p>
-        ) : (
-          <div className="mt-6 flex flex-col gap-3">
-            {items.map((course) => {
-              const courseProgress = progressByCourse[String(course.id)];
-              const completed =
-                courseProgress?.status === "COMPLETED" ||
-                course.progressPercent >= 100;
-
-              const key = String(course.id);
-              const detail = detailsByCourse[key];
-
-              return (
-                <article
-                  key={String(course.id)}
-                  className="rounded-3xl bg-surface p-5"
-                >
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>
-                      {course.courseType === "PRONUNCIATION" ? "발음" : "억양"}
-                      {" · "}
-                      {course.difficulty}
-                    </span>
-                    <span>
-                      {completed ? "완료 · " : ""}
-                      {Math.round(course.progressPercent)}%
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[17px] font-semibold">
-                    {course.title}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    약 {course.estimatedMinutes}분
-                  </p>
-                  {expandedId === key && (
-                    <div className="mt-4 rounded-2xl bg-background p-4 text-xs text-muted-foreground">
-                      {detailLoadingId === key ? (
-                        <p>상세 정보를 불러오는 중…</p>
-                      ) : detail ? (
-                        <>
-                          <p className="leading-relaxed">{detail.description}</p>
-                          <p className="mt-2">
-                            전체 {detail.stepCount}단계 · 현재{" "}
-                            {Math.round(detail.progress.progressPercent)}%
-                          </p>
-                        </>
-                      ) : null}
-                    </div>
-                  )}
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void toggleDetails(course)}
-                      disabled={detailLoadingId === key}
-                      className="rounded-full border border-border py-2.5 text-xs font-semibold disabled:opacity-50"
-                    >
-                      {expandedId === key ? "상세 닫기" : "상세 보기"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void start(course)}
-                      disabled={startingId === key}
-                      className="rounded-full bg-foreground py-2.5 text-xs font-semibold text-background disabled:opacity-50"
-                    >
-                      {startingId === key
-                        ? "시작 중…"
-                        : completed
-                          ? "다시 학습"
-                          : course.progressPercent > 0
-                            ? "이어 학습"
-                            : "학습 시작"}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-            {items.length === 0 && (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                조건에 맞는 클래스가 없습니다.
-              </p>
-            )}
-            {hasNext && (
-              <button
-                type="button"
-                disabled={loadingMore}
-                onClick={() => void loadMore()}
-                className="mt-2 rounded-full border border-border py-3 text-sm font-semibold disabled:opacity-50"
+          {!selectedCourse && (
+            <nav className="design-tabs mb-5" aria-label="클래스 유형">
+              <Link
+                href="/class/pronunciation"
+                aria-current={
+                  activeType === "PRONUNCIATION" ? "page" : undefined
+                }
               >
-                {loadingMore ? "불러오는 중…" : "클래스 더 보기"}
-              </button>
-            )}
+                발음 클래스
+              </Link>
+              <Link
+                href="/class/intonation"
+                aria-current={activeType === "INTONATION" ? "page" : undefined}
+              >
+                억양 클래스
+              </Link>
+            </nav>
+          )}
+          {error && (
+            <p
+              role="alert"
+              className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
+            >
+              {error}
+            </p>
+          )}
+          {selectedCourse ? (
+            <>
+              <div className="mb-3 flex gap-2 text-xs text-muted-foreground">
+                <span className="rounded bg-muted px-2 py-1">
+                  {level(selectedCourse.difficulty)}
+                </span>
+                {detail && (
+                  <span className="rounded bg-muted px-2 py-1">
+                    {detail.stepCount}단계
+                  </span>
+                )}
+                <span className="rounded bg-muted px-2 py-1">
+                  약 {selectedCourse.estimatedMinutes}분
+                </span>
+              </div>
+              <h2 className="text-2xl font-bold">{selectedCourse.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                {detail?.description ?? "상세 정보를 불러오는 중…"}
+              </p>
+              <section className="my-5 rounded-[20px] bg-[#edf2ff] p-5 text-primary">
+                <div className="mb-4 flex justify-between text-sm">
+                  <span>진행 상황</span>
+                  <b>{Math.round(selectedCourse.progressPercent)}%</b>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-primary/10">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${selectedCourse.progressPercent}%` }}
+                  />
+                </div>
+                {steps.find((step) => !step.completed) && (
+                  <p className="mt-3 text-xs">
+                    다음: {steps.find((step) => !step.completed)?.title}
+                  </p>
+                )}
+              </section>
+              <div className="mb-4 flex justify-between">
+                <h3 className="text-base font-semibold">구성 단계</h3>
+                <span className="text-sm text-muted-foreground">
+                  {steps.length}단계
+                </span>
+              </div>
+              <ol className="design-card divide-y divide-border !py-0">
+                {steps.map((step, index) => {
+                  const firstIncomplete = steps.findIndex(
+                    (item) => !item.completed,
+                  );
+                  const locked =
+                    !step.completed &&
+                    firstIncomplete >= 0 &&
+                    index > firstIncomplete;
+                  return (
+                    <li key={String(step.id)}>
+                      <button
+                        type="button"
+                        disabled={locked || startingId !== null}
+                        onClick={() => void start(selectedCourse, step)}
+                        className="flex w-full items-center gap-3 py-4 text-left disabled:cursor-default disabled:opacity-35"
+                      >
+                        <span
+                          className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm ${step.completed ? "bg-primary text-white" : locked ? "bg-muted text-muted-foreground" : "border border-primary text-primary"}`}
+                        >
+                          {step.completed ? (
+                            <Check className="size-4" />
+                          ) : (
+                            index + 1
+                          )}
+                        </span>
+                        <span className="flex-1 text-sm font-medium">
+                          {step.title}
+                        </span>
+                        <ChevronRight className="size-4 text-muted-foreground" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          ) : loading ? (
+            <p className="py-12 text-center text-sm text-muted-foreground">
+              클래스를 불러오는 중…
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {items.map((course) => {
+                const detail = detailsByCourse[String(course.id)];
+                const progress = Math.max(
+                  0,
+                  Math.min(100, course.progressPercent),
+                );
+                return (
+                  <button
+                    key={String(course.id)}
+                    type="button"
+                    onClick={() => void toggleDetails(course)}
+                    className="design-card flex w-full items-start gap-3.5 !p-[18px] text-left"
+                  >
+                    <span
+                      className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${activeType === "PRONUNCIATION" ? "bg-[#ccddff]" : "bg-[#edf2ff]"}`}
+                    >
+                      <Image
+                        src={
+                          activeType === "PRONUNCIATION"
+                            ? "/figma/class/icon.svg"
+                            : /의문/.test(course.title)
+                              ? "/figma/class/rising.svg"
+                              : "/figma/class/falling.svg"
+                        }
+                        alt=""
+                        width={28}
+                        height={28}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-[15px] font-bold">
+                          {course.title}
+                        </h2>
+                        <span
+                          className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
+                        >
+                          {detail
+                            ? `${Math.round((progress / 100) * detail.stepCount)}/${detail.stepCount}`
+                            : `${Math.round(progress)}%`}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {detail?.description || "원리부터 차근차근 연습해요"}
+                      </p>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e5e8eb]">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        {level(course.difficulty)}　
+                        {detail ? `|　${detail.stepCount}단계　` : ""}|　약{" "}
+                        {course.estimatedMinutes}분
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+              {items.length === 0 && (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  조건에 맞는 클래스가 없습니다.
+                </p>
+              )}
+              {hasNext && (
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                  className="design-action"
+                >
+                  {loadingMore ? "불러오는 중…" : "클래스 더 보기"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        {selectedCourse && (
+          <div className="design-dock">
+            <button
+              type="button"
+              disabled={
+                startingId === String(selectedCourse.id) ||
+                detailLoadingId !== null
+              }
+              onClick={() => void start(selectedCourse)}
+              className="design-action"
+            >
+              {startingId
+                ? "시작 중…"
+                : selectedCourse.progressPercent >= 100
+                  ? "다시 학습하기"
+                  : selectedCourse.progressPercent > 0
+                    ? "이어서 학습하기"
+                    : "학습 시작하기"}
+            </button>
           </div>
         )}
       </div>

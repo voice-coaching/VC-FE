@@ -1,17 +1,15 @@
 "use client";
-import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
+import { AppShell } from "@/components/app-shell";
 
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { IPhoneFrame } from "@/components/iphone-frame";
-import { usePrototypeHistory } from "@/hooks/use-prototype-history";
-import { todaySummary } from "@/lib/prototype-history";
 import {
   api,
   type HomeDashboard,
   type PracticeContentSummary,
   type Recommendation,
+  type CourseDetail,
 } from "@/lib/api";
 
 type RecommendationCard = Pick<
@@ -83,7 +81,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
     badgeClassName: "bg-[#bfceff]",
   },
   {
-    href: "/practice/custom",
+    href: "/my-script",
     title: "내 문장 연습",
     description: (
       <>
@@ -123,28 +121,45 @@ function combineRecommendations(
 }
 
 export default function Home() {
-  const history = usePrototypeHistory();
-  const completed = todaySummary(history.items);
   const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationCard[]>(
     [],
   );
+  const [recentCourses, setRecentCourses] = useState<CourseDetail[]>([]);
+  useEffect(() => {
+    let active = true;
+    api.courses
+      .getMyProgress()
+      .then((items) =>
+        Promise.all(
+          items
+            .filter(
+              (item) => item.progressPercent > 0 && item.progressPercent < 100,
+            )
+            .slice(0, 2)
+            .map(async (item) => {
+              const course = await api.courses.get(item.courseId);
+              return { ...course, progressPercent: item.progressPercent };
+            }),
+        ),
+      )
+      .then((items) => {
+        if (active) setRecentCourses(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
-  const [developmentPreview, setDevelopmentPreview] = useState(false);
+  const [notice, setNotice] = useState(false);
 
   useEffect(() => {
-    const preview = process.env.NODE_ENV === "development";
-    setDevelopmentPreview(preview);
-    if (preview) {
-      setDashboard(EMPTY_DASHBOARD);
-      return;
-    }
-
     let active = true;
     void (async () => {
       const [dashboardResult, recommendationResult] = await Promise.allSettled([
         api.home.get(),
-        api.home.getRecommendations({ limit: 3 }),
+        api.home.getRecommendations({ type: "NEWS", limit: 3 }),
       ]);
       if (!active) return;
 
@@ -153,12 +168,23 @@ export default function Home() {
           ? dashboardResult.value
           : EMPTY_DASHBOARD;
       setDashboard(nextDashboard);
+      if (dashboardResult.status === "rejected") {
+        setError(
+          dashboardResult.reason instanceof Error
+            ? dashboardResult.reason.message
+            : "오늘의 학습 현황을 불러오지 못했습니다.",
+        );
+      }
 
       if (recommendationResult.status === "fulfilled") {
         setRecommendations(recommendationResult.value.slice(0, 3));
       } else if (nextDashboard.recommendations.length === 0) {
         try {
-          const fallback = await api.content.list({ page: 0, size: 3 });
+          const fallback = await api.content.list({
+            type: "NEWS",
+            page: 0,
+            size: 3,
+          });
           if (active)
             setRecommendations(generalRecommendations(fallback.items));
         } catch (reason) {
@@ -181,16 +207,16 @@ export default function Home() {
     recommendations,
     dashboard?.recommendations ?? [],
   )[0];
-  const todayHref =
-    process.env.NODE_ENV === "development"
-      ? "/news/today"
-      : firstRecommendation
-        ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome`
-        : "/news/today";
+  const today = dashboard?.today ?? EMPTY_DASHBOARD.today;
+  const dailyDone =
+    today.goalCount > 0 && today.completedCount >= today.goalCount;
+  const todayHref = firstRecommendation
+    ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome`
+    : "/news";
 
   return (
-    <IPhoneFrame>
-      <div className="flex h-full flex-col bg-[#f5f6f8] text-[#191f28]">
+    <AppShell>
+      <div className="flex flex-col bg-[#f5f6f8] text-[#191f28]">
         <div className="h-11 shrink-0" aria-hidden="true" />
 
         <header className="flex h-12 shrink-0 items-center px-5 pt-1.5 pb-3.5">
@@ -206,6 +232,7 @@ export default function Home() {
           <button
             type="button"
             aria-label="알림"
+            onClick={() => setNotice((value) => !value)}
             className="mr-2 flex size-8 items-center justify-center rounded-full transition-transform duration-150 active:scale-90"
           >
             <Image src="/figma/home/bell.svg" alt="" width={28} height={28} />
@@ -213,21 +240,34 @@ export default function Home() {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]">
-          {error ? <p className="sr-only">{error}</p> : null}
+          {notice && (
+            <p
+              role="status"
+              className="mb-3 rounded-xl bg-white px-4 py-3 text-xs text-[#6b7684]"
+            >
+              등록된 알림이 없습니다.
+            </p>
+          )}
+          {error ? (
+            <p
+              role="alert"
+              className="mb-3 rounded-xl bg-[#fff0f0] px-4 py-3 text-xs text-[#d91b34]"
+            >
+              {error}
+            </p>
+          ) : null}
 
           <section className="h-[360px] overflow-hidden rounded-[20px] bg-white px-5 pt-6 pb-5 shadow-[0_2px_8px_rgba(26,33,48,0.06)]">
             <p className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.034em] text-[#2f6bff]">
-              발표 코스 1일차
+              오늘 {today.completedCount}/{today.goalCount}회 완료
             </p>
 
             <h1 className="mt-3.5 text-[22px] leading-[30px] font-bold tracking-[-0.0194em]">
-              {completed.dailyDone
-                ? "오늘의 연습을 마쳤어요"
-                : "오늘은 뉴스 읽기예요"}
+              {dailyDone ? "오늘의 연습을 마쳤어요" : "오늘은 뉴스 읽기예요"}
               <br />
-              {completed.dailyDone
+              {dailyDone
                 ? "조금씩 꾸준히, 잘하고 있어요"
-                : "3문장이면 끝나요"}
+                : "추천 문장으로 연습해요"}
             </h1>
 
             <div className="mt-[18px] flex h-[124px] items-center justify-center">
@@ -243,12 +283,10 @@ export default function Home() {
             </div>
 
             <Link
-              href={completed.dailyDone ? "/mypage?tab=history" : todayHref}
+              href={dailyDone ? "/mypage/history" : todayHref}
               className="mt-[18px] flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-base leading-6 font-bold tracking-[0.0057em] text-white transition duration-150 active:scale-[0.985] active:bg-[#1f55e0]"
             >
-              {completed.dailyDone
-                ? "오늘의 연습 기록 보기"
-                : "오늘의 연습 시작하기"}
+              {dailyDone ? "오늘의 연습 기록 보기" : "오늘의 연습 시작하기"}
             </Link>
           </section>
 
@@ -257,21 +295,79 @@ export default function Home() {
           </h2>
 
           <div className="mt-3 grid grid-cols-2 gap-3">
-            {PRACTICE_CARDS.map((card) => {
-              const href =
-                developmentPreview &&
-                ["/announcer", "/sentences"].includes(card.href)
-                  ? `${card.href}?preview=1`
-                  : card.href;
-
-              return <PracticeTile key={card.href} {...card} href={href} />;
-            })}
+            {PRACTICE_CARDS.map((card) => (
+              <PracticeTile key={card.title} {...card} />
+            ))}
           </div>
-        </div>
 
-        <PrototypeBottomNav />
+          <h2 className="mt-12 mb-4 text-xl font-bold">이어서 하기</h2>
+          <section className="design-card divide-y divide-[#f2f4f6] !py-0">
+            {dashboard?.recentTraining && (
+              <div className="flex items-center gap-3 py-5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-[#edf2ff] px-2 py-1 text-[10px] font-semibold text-primary">
+                      최근
+                    </span>
+                    <h3 className="truncate text-sm font-bold">
+                      {dashboard.recentTraining.title}
+                    </h3>
+                  </div>
+                  <p className="mt-1 text-xs text-[#8b95a1]">
+                    {dashboard.recentTraining.status === "COMPLETED"
+                      ? "완료한 연습"
+                      : "지난 연습을 이어서 시작해요"}
+                  </p>
+                </div>
+                <Link
+                  className="shrink-0 rounded-xl bg-[#edf2ff] px-4 py-3 text-xs font-bold text-primary"
+                  href={
+                    dashboard.recentTraining.status === "COMPLETED"
+                      ? `/mypage/history/${dashboard.recentTraining.sessionId}`
+                      : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
+                  }
+                >
+                  {dashboard.recentTraining.status === "COMPLETED"
+                    ? "기록 보기"
+                    : "이어하기"}
+                </Link>
+              </div>
+            )}
+            {recentCourses.map((course) => (
+              <div
+                key={String(course.id)}
+                className="flex items-center gap-3 py-5"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-bold">
+                    {course.courseType === "INTONATION"
+                      ? "억양 클래스"
+                      : "발음 클래스"}
+                    <span className="ml-2 font-medium text-primary">
+                      {Math.round(course.progressPercent)}%
+                    </span>
+                  </h3>
+                  <p className="mt-1 truncate text-xs text-[#8b95a1]">
+                    {course.title}
+                  </p>
+                </div>
+                <Link
+                  href={`/class/${course.courseType.toLowerCase()}`}
+                  className="shrink-0 rounded-xl bg-[#edf2ff] px-4 py-3 text-xs font-bold text-primary"
+                >
+                  이어하기
+                </Link>
+              </div>
+            ))}
+            {!dashboard?.recentTraining && !recentCourses.length && (
+              <p className="py-6 text-sm text-[#8b95a1]">
+                연습을 시작하면 이어서 할 수 있어요.
+              </p>
+            )}
+          </section>
+        </div>
       </div>
-    </IPhoneFrame>
+    </AppShell>
   );
 }
 

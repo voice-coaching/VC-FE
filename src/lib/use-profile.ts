@@ -183,5 +183,18 @@ export function useProfile({ loadExisting = true } = {}) {
     [],
   );
 
-  return { profile, hydrated, error, save, updateLearningGoals };
+  const updatePlan = useCallback(async (value: OnboardingAnswers) => {
+    const input = toApi(value);
+    await api.onboarding.update({
+      goalText: input.goalText,
+      dailyGoalMinutes: input.dailyGoalMinutes,
+      weeklyGoalCount: input.weeklyGoalCount,
+      surveyAnswers: input.surveyAnswers,
+    });
+    cachedProfile = value;
+    cachedProfileUserId = currentUserId();
+    setProfile(value);
+  }, []);
+
+  return { profile, hydrated, error, save, updateLearningGoals, updatePlan };
 }

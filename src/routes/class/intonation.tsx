@@ -1,9 +1,6 @@
 import { CourseCatalog } from "@/components/course-catalog";
-import PronunciationPrototype from "./prototype";
 
 export default function IntonationPage() {
-  if (process.env.NODE_ENV === "development")
-    return <PronunciationPrototype key="intonation" mode="intonation" />;
   return (
     <CourseCatalog
       type="INTONATION"
