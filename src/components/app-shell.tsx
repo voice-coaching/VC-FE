@@ -6,7 +6,7 @@ import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
 
 export function BottomNav() {
   return (
-    <div className="sticky bottom-0 z-20">
+    <div className="relative z-20 shrink-0">
       <PrototypeBottomNav />
     </div>
   );
@@ -23,17 +23,22 @@ export function AppShell({
   className?: string;
   viewportLocked?: boolean;
 }) {
+  const lockViewport = nav || viewportLocked;
+
   return (
     <div
       className={cn(
         "app-shell learning-shell flex flex-col",
-        viewportLocked && "h-dvh min-h-0 overflow-hidden",
+        lockViewport && "h-dvh min-h-0 overflow-hidden",
       )}
     >
       <main
         className={cn(
           "flex-1",
-          viewportLocked && "min-h-0 overflow-hidden",
+          lockViewport && "min-h-0",
+          viewportLocked
+            ? "overflow-hidden"
+            : nav && "overflow-y-auto overscroll-y-contain",
           className,
         )}
       >

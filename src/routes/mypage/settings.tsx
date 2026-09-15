@@ -85,10 +85,6 @@ export default function AccountSettings() {
         <ProfileAvatar src={profileImageUrl} size={60} />
         <div>
           <h1 className="text-xl font-bold">{nickname || "프로필"}</h1>
-          <p className="mt-1 flex items-center gap-1 text-[13px] text-[#8b95a1]">
-            프로필 수정하기
-            <ChevronRight className="size-3" />
-          </p>
         </div>
       </Link>
       <div className="px-5">
