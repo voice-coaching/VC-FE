@@ -103,7 +103,7 @@ export default function MyPage() {
   return (
     <AppShell>
       <header className="flex h-16 shrink-0 items-center justify-between px-5 py-3">
-        <h1 className="text-lg font-bold">마이</h1>
+        <h1 className="text-lg font-bold">마이페이지</h1>
         <Link
           href="/mypage/settings"
           aria-label="설정"

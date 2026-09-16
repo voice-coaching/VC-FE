@@ -14,14 +14,14 @@ const config: CapacitorConfig = {
   appId: "site.voicecoaching.speakai",
   appName: "SPEAK AI",
   webDir: "capacitor-web",
-  backgroundColor: "#2f6bff",
+  backgroundColor: "#f5f6f8",
   zoomEnabled: false,
   android: {
     allowMixedContent: false,
-    backgroundColor: "#2f6bff",
+    backgroundColor: "#f5f6f8",
   },
   ios: {
-    backgroundColor: "#2f6bff",
+    backgroundColor: "#f5f6f8",
     contentInset: "never",
   },
   server: {

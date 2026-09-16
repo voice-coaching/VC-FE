@@ -65,10 +65,10 @@
     transform: scale(1);
   }
 }
-/* The frame already accounts for the device's real safe-area inset. */
+/* AppShell paints the real bottom safe area with the app chrome colour. */
 @media (max-width: 767px), (pointer: coarse) and (max-width: 1023px) {
   .nav {
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    padding-bottom: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

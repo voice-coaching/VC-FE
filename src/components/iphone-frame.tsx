@@ -12,7 +12,7 @@ const designFont = localFont({
 
 export function IPhoneFrame({
   children,
-  backgroundColor = "#fafbfc",
+  backgroundColor = "#f5f6f8",
 }: {
   children: ReactNode;
   backgroundColor?: string;
