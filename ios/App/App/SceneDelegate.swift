@@ -21,6 +21,7 @@ final class AppBridgeViewController: CAPBridgeViewController {
         // controller pop gesture to provide. Handle the screen-edge gesture
         // ourselves and let WebKit move through the Next.js history stack.
         webView.allowsBackForwardNavigationGestures = false
+        webView.allowsLinkPreview = false
         webView.addGestureRecognizer(backSwipeGesture)
         webView.scrollView.panGestureRecognizer.require(toFail: backSwipeGesture)
     }

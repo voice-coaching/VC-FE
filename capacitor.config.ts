@@ -23,6 +23,7 @@ const config: CapacitorConfig = {
   ios: {
     backgroundColor: "#f5f6f8",
     contentInset: "never",
+    allowsLinkPreview: false,
   },
   server: {
     url: parsedServerUrl.toString(),

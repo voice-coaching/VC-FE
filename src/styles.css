@@ -163,13 +163,25 @@
   a[href]:not([aria-disabled="true"]),
   [role="button"]:not([aria-disabled="true"])
 ) {
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
   touch-action: manipulation;
   transition-property: color, background-color, border-color,
     text-decoration-color, fill, stroke, opacity, box-shadow, transform,
     translate, scale, rotate, filter, backdrop-filter;
   transition-duration: 140ms;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:where(
+  button:not(:disabled),
+  a[href]:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"])
+) :where(img, svg) {
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 :where(
