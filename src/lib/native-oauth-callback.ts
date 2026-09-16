@@ -39,7 +39,12 @@ export function createNativeOAuthCallbackUrlFromResponse(
 }
 
 export function parseNativeOAuthCallback(urlValue: string) {
-  const url = new URL(urlValue);
+  let url: URL;
+  try {
+    url = new URL(urlValue);
+  } catch {
+    return null;
+  }
   if (url.protocol !== `${NATIVE_OAUTH_SCHEME}:` || url.hostname !== "oauth") {
     return null;
   }

@@ -122,7 +122,19 @@ await api.auth.socialLogin({
   provider: "GOOGLE",
   authorizationCode: "code",
   redirectUri: "http://localhost:3000/oauth/google/callback",
+  state: "native.test-state",
 });
+assert.deepEqual(JSON.parse(String(requestOptions.at(-1)?.body)), {
+  provider: "GOOGLE",
+  authorizationCode: "code",
+  redirectUri: "http://localhost:3000/oauth/google/callback",
+  state: "native.test-state",
+});
+assert.equal(
+  new Headers(requestOptions.at(-1)?.headers).has("authorization"),
+  false,
+  "OAuth code exchange must not send an existing access token",
+);
 await api.auth.refresh();
 await api.auth.signOut();
 await api.users.getMe();

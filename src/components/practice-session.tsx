@@ -32,6 +32,7 @@ import {
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { courseResultProgress } from "@/lib/course-result-progress";
+import { AnalysisFailed, pollAnalysis } from "@/lib/analysis-polling";
 import { cn } from "@/lib/utils";
 
 type Phase =
@@ -89,7 +90,8 @@ export function PracticeSession({
   const [deletingRecordingId, setDeletingRecordingId] = useState<string | null>(
     null,
   );
-  const resumeStarted = useRef(false);
+  const [canCheckAnalysis, setCanCheckAnalysis] = useState(false);
+  const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
@@ -162,6 +164,7 @@ export function PracticeSession({
       if (
         activeSessionId &&
         !completedRef.current &&
+        !analysisPendingRef.current &&
         phaseRef.current !== "analyzing"
       ) {
         void api.training.cancel(activeSessionId).catch(() => undefined);
@@ -172,13 +175,11 @@ export function PracticeSession({
 
   useEffect(() => {
     if (
-      resumeStarted.current ||
       !resumedSessionId ||
       !["ANALYSIS_STATUS", "ANALYSIS_RESULT"].includes(resumeType ?? "")
     )
       return;
 
-    resumeStarted.current = true;
     let active = true;
     setPhase("analyzing");
 
@@ -201,38 +202,18 @@ export function PracticeSession({
           analysisId = (await api.training.getSessionAnalysis(resumedSessionId))
             .analysisId;
         } else {
-          for (let attempt = 0; attempt < 120; attempt += 1) {
-            const status =
-              await api.training.getAnalysisStatus(resumedSessionId);
-            if (!active) return;
-            setAnalysisProgress(status.progressPercent);
-            if (status.status === "FAILED") {
-              setCanRetryAnalysis(true);
-              throw new Error(
-                status.failureReason || "음성 분석에 실패했습니다.",
-              );
-            }
-            if (status.status === "COMPLETED") {
-              analysisId = status.analysisId;
-              const [result, segmentPage] = await Promise.all([
-                api.analyses.get(analysisId),
-                api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-              ]);
-              if (!active) return;
-              setAnalysis(result);
-              setSegments(segmentPage.items);
-              await api.training.complete(resumedSessionId, 1);
-              completedRef.current = true;
-              if (active) setPhase("result");
-              return;
-            }
-            await wait(1_000);
-          }
-          throw new Error(
-            "분석 대기 시간이 초과되었습니다. 학습 기록에서 다시 확인해 주세요.",
-          );
+          analysisId = await pollAnalysis({
+            getStatus: () => {
+              if (!active) throw new Error("Analysis polling stopped");
+              return api.training.getAnalysisStatus(resumedSessionId);
+            },
+            onProgress: (progress) => {
+              if (active) setAnalysisProgress(progress);
+            },
+          });
         }
 
+        if (!active) return;
         const [result, segmentPage] = await Promise.all([
           api.analyses.get(analysisId),
           api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
@@ -240,9 +221,15 @@ export function PracticeSession({
         if (!active) return;
         setAnalysis(result);
         setSegments(segmentPage.items);
-        setPhase("result");
+        if (resumeType === "ANALYSIS_STATUS") {
+          await api.training.complete(resumedSessionId, 1);
+          completedRef.current = true;
+        }
+        if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
+        setCanRetryAnalysis(reason instanceof AnalysisFailed);
+        setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
         setRequestError(
           reason instanceof Error
             ? reason.message
@@ -349,19 +336,36 @@ export function PracticeSession({
   }
 
   async function waitForAnalysis(activeSessionId: Id) {
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      const status = await api.training.getAnalysisStatus(activeSessionId);
-      setAnalysisProgress(status.progressPercent);
-      if (status.status === "COMPLETED") return status.analysisId;
-      if (status.status === "FAILED") {
-        setCanRetryAnalysis(true);
-        throw new Error(status.failureReason || "음성 분석에 실패했습니다.");
-      }
-      await wait(1_000);
+    analysisPendingRef.current = true;
+    setCanCheckAnalysis(false);
+    try {
+      return await pollAnalysis({
+        getStatus: () => api.training.getAnalysisStatus(activeSessionId),
+        onProgress: setAnalysisProgress,
+      });
+    } catch (reason) {
+      setCanRetryAnalysis(reason instanceof AnalysisFailed);
+      setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
+      throw reason;
     }
-    throw new Error(
-      "분석 대기 시간이 초과되었습니다. 잠시 후 학습 기록에서 확인해 주세요.",
-    );
+  }
+
+  async function checkExistingAnalysis() {
+    if (!sessionId) return;
+    setRequestError(null);
+    setCanCheckAnalysis(false);
+    setPhase("analyzing");
+    try {
+      const analysisId = await waitForAnalysis(sessionId);
+      await loadResult(sessionId, analysisId);
+    } catch (reason) {
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "분석 상태를 확인하지 못했습니다.",
+      );
+      setPhase("error");
+    }
   }
 
   async function waitForRecordingQuality(activeSessionId: Id, recordingId: Id) {
@@ -979,6 +983,15 @@ export function PracticeSession({
               >
                 {requestError}
               </p>
+              {canCheckAnalysis && (
+                <button
+                  type="button"
+                  onClick={() => void checkExistingAnalysis()}
+                  className="mt-3 rounded-full bg-primary px-5 py-2.5 text-xs font-semibold text-white"
+                >
+                  분석 상태 다시 확인
+                </button>
+              )}
               {canRetryAnalysis && (
                 <button
                   type="button"

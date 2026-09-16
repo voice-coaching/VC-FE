@@ -6,15 +6,12 @@ import {
   isNativeOAuthState,
 } from "./native-oauth-callback";
 
-const OAUTH_ATTEMPT_TTL_MS = 10 * 60 * 1_000;
-
-export interface OAuthAttempt {
-  state: string;
-  redirectUri: string;
-  returnTo: string;
-  createdAt: number;
-  native: boolean;
-}
+import {
+  readOAuthAttempt,
+  takeOAuthAttempt,
+  type OAuthAttempt,
+} from "./oauth-attempt";
+export type { OAuthAttempt } from "./oauth-attempt";
 
 function storageKey(provider: SocialProvider) {
   return `ttobak.oauth.${provider.toLowerCase()}`;
@@ -192,24 +189,24 @@ export async function redirectToOAuthProvider(
 }
 
 export function consumeOAuthAttempt(provider: SocialProvider, state: string) {
-  const key = storageKey(provider);
-  const storage = attemptStorage(isNativeOAuthState(state));
-  const raw = storage.getItem(key);
-  storage.removeItem(key);
-  if (!raw) return null;
+  return takeOAuthAttempt(
+    attemptStorage(isNativeOAuthState(state)),
+    storageKey(provider),
+    state,
+  );
+}
 
-  try {
-    const attempt = JSON.parse(raw) as OAuthAttempt;
-    if (
-      attempt.state !== state ||
-      Date.now() - attempt.createdAt > OAUTH_ATTEMPT_TTL_MS
-    ) {
-      return null;
-    }
-    return attempt;
-  } catch {
-    return null;
-  }
+export function getPendingNativeOAuthAttempt(
+  provider: SocialProvider,
+  state: string,
+) {
+  if (!isNativeOAuthState(state)) return null;
+  const attempt = readOAuthAttempt(
+    window.localStorage,
+    storageKey(provider),
+    state,
+  );
+  return attempt?.native ? attempt : null;
 }
 
 export function clearOAuthAttempt(provider: SocialProvider) {

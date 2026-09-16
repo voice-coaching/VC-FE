@@ -2,6 +2,7 @@ import {
   ApiError,
   clearAccessToken,
   createHttpClient,
+  getAuthSessionVersion,
   saveAccessToken,
 } from "./client";
 import {
@@ -47,7 +48,7 @@ function profileImageForm(input: { file: Blob; fileName: string }) {
 }
 
 export function createRemoteApi(baseUrl: string): ApiContract {
-  const { request, upload } = createHttpClient(baseUrl);
+  const { request, upload, refreshAccessToken } = createHttpClient(baseUrl);
 
   async function persistSession(
     session: AuthSession,
@@ -141,24 +142,16 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         });
         return persistSession(data, { reconcileOnboarding: true });
       },
-      async refresh() {
-        const data = await request<{
-          accessToken: string;
-          tokenType: string;
-          expiresIn: number;
-        }>("/api/auth/token/refresh", {
-          method: "POST",
-          skipAuth: true,
-          skipRefresh: true,
-        });
-        return { ...data, accessToken: saveAccessToken(data.accessToken) };
-      },
+      refresh: refreshAccessToken,
       async signOut() {
+        const version = getAuthSessionVersion();
         try {
           await request<null>("/api/auth/logout", { method: "POST" });
         } finally {
-          clearAccessToken();
-          markAnonymousSession();
+          if (version === getAuthSessionVersion()) {
+            clearAccessToken();
+            markAnonymousSession();
+          }
         }
       },
     },

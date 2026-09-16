@@ -155,6 +155,7 @@ export interface SocialLoginInput {
   provider: SocialProvider;
   authorizationCode: string;
   redirectUri: string;
+  state: string;
 }
 
 export interface OnboardingSurveyAnswers {

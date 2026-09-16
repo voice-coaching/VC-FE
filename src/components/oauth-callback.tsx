@@ -90,6 +90,7 @@ export function OAuthCallback({
         provider,
         authorizationCode: code,
         redirectUri: attempt.redirectUri,
+        state: attempt.state,
       })
       .then((session) => {
         router.replace(

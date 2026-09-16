@@ -15,6 +15,21 @@ export class ApiError extends Error {
 
 const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
 let accessToken: string | null = null;
+let sessionVersion = 0;
+
+export function getAuthSessionVersion() {
+  return sessionVersion;
+}
+
+function assertCurrentSession(version: number) {
+  if (version !== sessionVersion) {
+    throw new ApiError(
+      "로그인 상태가 변경되었습니다. 다시 시도해 주세요.",
+      409,
+      "AUTH_SESSION_CHANGED",
+    );
+  }
+}
 
 function readStoredAccessToken() {
   if (typeof window === "undefined") return null;
@@ -42,6 +57,13 @@ function persistAccessToken(value: string | null) {
 }
 
 export function saveAccessToken(value: string) {
+  const token = storeAccessToken(value);
+  sessionVersion += 1;
+  return token;
+}
+
+// Renewing a token keeps the same session; login/logout starts a new one.
+function storeAccessToken(value: string) {
   const normalized = value
     .trim()
     .replace(/^Bearer\s+/i, "")
@@ -59,6 +81,7 @@ export function saveAccessToken(value: string) {
 }
 
 export function clearAccessToken() {
+  sessionVersion += 1;
   accessToken = null;
   persistAccessToken(null);
 }
@@ -81,26 +104,34 @@ function joinUrl(baseUrl: string, path: string) {
 }
 
 export function createHttpClient(baseUrl: string) {
-  let refreshPromise: Promise<string> | null = null;
+  type RefreshResult = {
+    accessToken: string;
+    tokenType: string;
+    expiresIn: number;
+  };
+  let refreshFlight: {
+    version: number;
+    promise: Promise<RefreshResult>;
+  } | null = null;
 
   async function refreshAccessToken() {
-    if (!refreshPromise) {
-      refreshPromise = request<{ accessToken: string }>(
-        "/api/auth/token/refresh",
-        {
-          method: "POST",
-          skipAuth: true,
-          skipRefresh: true,
-        },
-      )
-        .then(({ accessToken }) => {
-          return saveAccessToken(accessToken);
+    const version = sessionVersion;
+    if (!refreshFlight || refreshFlight.version !== version) {
+      const promise = request<RefreshResult>("/api/auth/token/refresh", {
+        method: "POST",
+        skipAuth: true,
+        skipRefresh: true,
+      })
+        .then((data) => {
+          assertCurrentSession(version);
+          return { ...data, accessToken: storeAccessToken(data.accessToken) };
         })
         .finally(() => {
-          refreshPromise = null;
+          if (refreshFlight?.promise === promise) refreshFlight = null;
         });
+      refreshFlight = { version, promise };
     }
-    return refreshPromise;
+    return refreshFlight.promise;
   }
 
   async function request<T>(
@@ -119,6 +150,7 @@ export function createHttpClient(baseUrl: string) {
     const headers = new Headers(fetchOptions.headers);
     headers.set("Accept", "application/json");
     const token = getAccessToken();
+    const version = sessionVersion;
     if (token && !skipAuth) headers.set("Authorization", `Bearer ${token}`);
 
     let body: BodyInit | undefined;
@@ -137,10 +169,14 @@ export function createHttpClient(baseUrl: string) {
         signal: controller.signal,
         credentials: "include",
       });
+      assertCurrentSession(version);
 
       if (response.status === 401 && !skipAuth && !skipRefresh) {
         clearTimeout(timeout);
-        await refreshAccessToken();
+        // Another request may already have renewed the expired token while
+        // this response was in flight. Reuse it instead of rotating again.
+        if (getAccessToken() === token) await refreshAccessToken();
+        assertCurrentSession(version);
         return request<T>(path, { ...options, skipRefresh: true });
       }
 
@@ -150,9 +186,14 @@ export function createHttpClient(baseUrl: string) {
       const payload = contentType.includes("application/json")
         ? ((await response.json()) as ApiEnvelope<T>)
         : null;
+      assertCurrentSession(version);
 
       if (!response.ok || !payload?.result) {
-        if (response.status === 401) {
+        if (
+          response.status === 401 &&
+          (!skipAuth || path === "/api/auth/token/refresh") &&
+          getAccessToken() === token
+        ) {
           clearAccessToken();
           markAnonymousSession();
         }
@@ -169,7 +210,7 @@ export function createHttpClient(baseUrl: string) {
         const newAccessToken = (data as { newAccessToken?: unknown })
           .newAccessToken;
         if (typeof newAccessToken === "string" && newAccessToken) {
-          saveAccessToken(newAccessToken);
+          if (getAccessToken() === token) storeAccessToken(newAccessToken);
           const keys = Object.keys(data);
           if (keys.length === 1 && !skipRefresh) {
             clearTimeout(timeout);
@@ -179,7 +220,8 @@ export function createHttpClient(baseUrl: string) {
       }
 
       const headerToken = response.headers.get("x-new-access-token");
-      if (headerToken) saveAccessToken(headerToken);
+      if (headerToken && getAccessToken() === token)
+        storeAccessToken(headerToken);
       return data;
     } catch (error) {
       if (error instanceof ApiError) throw error;
@@ -244,5 +286,5 @@ export function createHttpClient(baseUrl: string) {
     });
   }
 
-  return { request, upload };
+  return { request, upload, refreshAccessToken };
 }
