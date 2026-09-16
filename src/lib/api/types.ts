@@ -22,6 +22,12 @@ export type RecordingQualityStatus =
   | "NO_SPEECH"
   | "FAILED";
 export type AnalysisStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type AnalysisOutcome =
+  | "COACHING_READY"
+  | "COMPLETED_NO_ISSUE"
+  | "RERECORD_REQUIRED"
+  | "UNCERTAIN"
+  | "FAILED_CLOSED";
 export type SegmentMatchType =
   "MATCH" | "SUBSTITUTION" | "OMISSION" | "ADDITION";
 export type SegmentResultStatus = "NORMAL" | "CAUTION" | "NEEDS_IMPROVEMENT";
@@ -337,6 +343,28 @@ export interface VoiceRecording {
   createdAt?: string;
 }
 
+export interface AnalysisCapabilities {
+  recordingUpload: "CONFIGURED" | "NOT_CONFIGURED";
+  analysisRequests: "CONFIGURED" | "NOT_CONFIGURED";
+  supportedLearningFocuses: LearningFocus[];
+  acceptedAudioMimeTypes: string[];
+  acceptedVideoMimeTypes: string[];
+  maximumAudioUploadBytes: number;
+  maximumVideoUploadBytes: number;
+  minimumDurationMs: number;
+  maximumDurationMs: number;
+  videoRequiresAudioTrack: boolean;
+  voiceProcessingConsentRequired: boolean;
+  videoProcessingConsentRequired: boolean;
+  consentPolicyRevision: string | null;
+  videoProcessingConsentPolicyRevision: string;
+}
+
+export interface AnalysisConsentInput {
+  accepted: true;
+  policyRevision: string;
+}
+
 export interface AnalysisRequest {
   analysisId: Id;
   status: AnalysisStatus | TrainingSessionStatus;
@@ -357,43 +385,70 @@ export interface SessionAnalysis {
   sessionId: Id;
   analysisId: Id;
   status: AnalysisStatus;
-  overallScore: number;
-  pronunciationScore: number;
-  intonationScore: number;
+  outcome: AnalysisOutcome | null;
+  overallScore: number | null;
+  pronunciationScore: number | null;
+  intonationScore: number | null;
+}
+
+export interface PronunciationEvidence {
+  schemaVersion: "voice-coaching.pronunciation-evidence.v1" | string;
+  selectedPhone: string;
+  selectedExpectedIndex: number;
+  selectedStartMs: number | null;
+  selectedEndMs: number | null;
+  detectorScore: number;
+  operatingThreshold: number;
+  scoreSemantics: string;
+  evidenceState: string;
+}
+
+export interface VisualSupplement {
+  schemaVersion: "voice-coaching.visual-supplement.v1" | string;
+  selectedExpectedIndex: number;
+  evidenceRelation: string;
+  approvedClaimId: string;
+  rendererKey: string;
+  upstreamPhoneAnchorRef: string;
+  supplementSha256: string;
+  closedBetaLipObservation: object | null;
 }
 
 export interface AnalysisResult {
   id: Id;
   status: AnalysisStatus;
-  transcript: string;
-  sttConfidence: number;
-  overallScore: number;
-  pronunciationScore: number;
-  intonationScore: number;
-  speedWpm: number;
-  speedStatus: SpeedStatus;
-  stressScore: number;
-  pauseScore: number;
+  outcome: AnalysisOutcome | null;
+  transcript: string | null;
+  sttConfidence: number | null;
+  overallScore: number | null;
+  pronunciationScore: number | null;
+  intonationScore: number | null;
+  speedWpm: number | null;
+  speedStatus: SpeedStatus | null;
+  stressScore: number | null;
+  pauseScore: number | null;
   strengths: string[];
   weaknesses: string[];
-  summaryFeedback: string;
-  analyzedAt: string;
+  summaryFeedback: string | null;
+  pronunciationEvidence: PronunciationEvidence | null;
+  visualSupplement: VisualSupplement | null;
+  analyzedAt: string | null;
 }
 
 export interface AnalysisSegment {
   id: Id;
   sequenceNo: number;
-  expectedText: string;
-  recognizedText: string;
-  startMs: number;
-  endMs: number;
+  expectedText: string | null;
+  recognizedText: string | null;
+  startMs: number | null;
+  endMs: number | null;
   matchType: SegmentMatchType;
   resultStatus: SegmentResultStatus;
-  targetUnit: string;
-  errorType: string;
-  pronunciationScore: number;
-  intonationScore: number;
-  feedback: string;
+  targetUnit: string | null;
+  errorType: string | null;
+  pronunciationScore: number | null;
+  intonationScore: number | null;
+  feedback: string | null;
 }
 
 export interface Statistics {
@@ -436,7 +491,7 @@ export interface TrainingHistoryItem {
   contentType: ContentType;
   title: string;
   status: TrainingSessionStatus;
-  overallScore: number;
+  overallScore: number | null;
   completedAt: string;
 }
 
@@ -454,13 +509,17 @@ export interface TrainingHistoryDetail {
     durationMs: number;
     qualityStatus: RecordingQualityStatus;
   };
-  analysis: { id: Id; transcript: string; overallScore: number };
+  analysis: {
+    id: Id;
+    transcript: string | null;
+    overallScore: number | null;
+  };
   segments: Array<{
     sequenceNo: number;
-    expectedText: string;
-    recognizedText: string;
-    startMs: number;
-    endMs: number;
+    expectedText: string | null;
+    recognizedText: string | null;
+    startMs: number | null;
+    endMs: number | null;
     resultStatus: SegmentResultStatus;
   }>;
 }
@@ -568,6 +627,7 @@ export interface ApiContract {
     getMyProgress(status?: CourseProgressStatus): Promise<UserCourseProgress[]>;
   };
   training: {
+    getAnalysisCapabilities(): Promise<AnalysisCapabilities>;
     create(input: {
       contentId: Id;
       courseStepId?: Id | null;
@@ -604,9 +664,15 @@ export interface ApiContract {
       sessionId: Id,
       recordingId: Id,
     ): Promise<{ sessionId: Id; selectedRecordingId: Id; selectedAt: string }>;
-    analyze(sessionId: Id): Promise<AnalysisRequest>;
+    analyze(
+      sessionId: Id,
+      consent: AnalysisConsentInput,
+    ): Promise<AnalysisRequest>;
     getAnalysisStatus(sessionId: Id): Promise<AnalysisProgress>;
-    retryAnalysis(sessionId: Id): Promise<AnalysisRequest>;
+    retryAnalysis(
+      sessionId: Id,
+      consent: AnalysisConsentInput,
+    ): Promise<AnalysisRequest>;
     getSessionAnalysis(sessionId: Id): Promise<SessionAnalysis>;
     getRecordingPlaybackUrl(recordingId: Id): Promise<PlaybackUrl>;
     complete(
@@ -626,12 +692,12 @@ export interface ApiContract {
     ): Promise<PageResult<AnalysisSegment>>;
     regenerateFeedback(
       analysisId: Id,
-      feedbackStyle: string,
+      feedbackStyle: "COACHING",
     ): Promise<{
       analysisId: Id;
       strengths: string[];
       weaknesses: string[];
-      summaryFeedback: string;
+      summaryFeedback: string | null;
       regeneratedAt: string;
     }>;
   };

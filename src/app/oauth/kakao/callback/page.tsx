@@ -17,6 +17,7 @@ export default async function KakaoOAuthCallbackPage({
       state={first(params.state)}
       oauthError={first(params.error ?? params.error_reason)}
       errorDescription={first(params.error_description)}
+      nativeReturn={first(params.native_return) === "1"}
     />
   );
 }

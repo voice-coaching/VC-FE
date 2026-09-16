@@ -40,6 +40,7 @@ const expected = [
   "POST /api/courses/1/complete",
   "GET /api/courses/1/steps",
   "GET /api/users/me/course-progress?status=IN_PROGRESS",
+  "GET /api/analysis-capabilities",
   "POST /api/training-sessions",
   "GET /api/training-sessions/1",
   "POST /api/training-sessions/1/cancel",
@@ -170,6 +171,7 @@ await api.courses.updateProgress(1, { lastStepId: 1, progressPercent: 50 });
 await api.courses.complete(1);
 await api.courses.getSteps(1);
 await api.courses.getMyProgress("IN_PROGRESS");
+await api.training.getAnalysisCapabilities();
 await api.training.create({ contentId: 1, learningFocus: "PRONUNCIATION" });
 await api.training.get(1);
 await api.training.cancel(1);
@@ -187,9 +189,13 @@ await api.training.registerRecording(1, {
 await api.training.listRecordings(1);
 await api.training.deleteRecording(1, 1);
 await api.training.selectRecording(1, 1);
-await api.training.analyze(1);
+const analysisConsent = {
+  accepted: true as const,
+  policyRevision: "voice-processing-consent-v1",
+};
+await api.training.analyze(1, analysisConsent);
 await api.training.getAnalysisStatus(1);
-await api.training.retryAnalysis(1);
+await api.training.retryAnalysis(1, analysisConsent);
 await api.training.getSessionAnalysis(1);
 await api.training.getRecordingPlaybackUrl(1);
 await api.training.complete(1, 60);
@@ -214,10 +220,27 @@ await api.myPage.getWeaknessRecommendations({
 
 assert.equal(
   expected.length,
-  61,
-  "Frontend adapter endpoint count must include 53 existing and 8 new profile/title contracts.",
+  62,
+  "Frontend adapter endpoint count must include the AI capability contract.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
+for (const path of [
+  "POST /api/training-sessions/1/analyze",
+  "POST /api/training-sessions/1/analysis/retry",
+]) {
+  const callIndex = calls.indexOf(path);
+  assert.notEqual(callIndex, -1);
+  assert.deepEqual(
+    JSON.parse(String(requestOptions[callIndex]?.body)),
+    analysisConsent,
+  );
+}
+const regenerateIndex = calls.indexOf(
+  "POST /api/analyses/1/feedback/regenerate",
+);
+assert.deepEqual(JSON.parse(String(requestOptions[regenerateIndex]?.body)), {
+  feedbackStyle: "COACHING",
+});
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
 assert.ok(
   requestOptions.every(

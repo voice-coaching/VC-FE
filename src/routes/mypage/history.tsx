@@ -129,7 +129,9 @@ export default function LearningHistory() {
                   </p>
                 </div>
                 <b className="shrink-0 text-sm text-primary">
-                  {Math.round(item.overallScore)}점
+                  {item.overallScore == null
+                    ? "점수 없음"
+                    : `${Math.round(item.overallScore)}점`}
                 </b>
               </Link>
             ))}

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import "../styles.css";
 import { Providers } from "./providers";
+import { NativeOAuthBridge } from "@/components/native-oauth-bridge";
 
 const designFont = localFont({
   src: "../assets/fonts/NotoSansKR.woff",
@@ -55,7 +56,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko">
       <body className={designFont.className}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <NativeOAuthBridge />
+          {children}
+        </Providers>
       </body>
     </html>
   );

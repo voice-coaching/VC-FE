@@ -6,7 +6,12 @@ import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
-import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
+import {
+  clearOAuthAttempt,
+  consumeOAuthAttempt,
+  createNativeOAuthCallbackUrl,
+  isNativeOAuthState,
+} from "@/lib/oauth";
 import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
@@ -22,12 +27,14 @@ export function OAuthCallback({
   state,
   oauthError,
   errorDescription,
+  nativeReturn = false,
 }: {
   provider: SocialProvider;
   code?: string;
   state?: string;
   oauthError?: string;
   errorDescription?: string;
+  nativeReturn?: boolean;
 }) {
   const router = useRouter();
   const started = useRef(false);
@@ -37,6 +44,18 @@ export function OAuthCallback({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+
+    if (isNativeOAuthState(state) && !nativeReturn) {
+      const params = new URLSearchParams();
+      if (code) params.set("code", code);
+      if (state) params.set("state", state);
+      if (oauthError) params.set("error", oauthError);
+      if (errorDescription) {
+        params.set("error_description", errorDescription);
+      }
+      window.location.replace(createNativeOAuthCallbackUrl(provider, params));
+      return;
+    }
 
     if (oauthError) {
       clearOAuthAttempt(provider);
@@ -87,6 +106,7 @@ export function OAuthCallback({
     code,
     errorDescription,
     oauthError,
+    nativeReturn,
     provider,
     providerLabel,
     router,

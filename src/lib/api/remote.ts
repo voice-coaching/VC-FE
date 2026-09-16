@@ -282,6 +282,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
     },
     training: {
+      getAnalysisCapabilities: () => request("/api/analysis-capabilities"),
       create: (input) =>
         request("/api/training-sessions", { method: "POST", body: input }),
       get: (sessionId) => request(`/api/training-sessions/${id(sessionId)}`),
@@ -327,15 +328,17 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           `/api/training-sessions/${id(sessionId)}/recordings/${id(recordingId)}/select`,
           { method: "PATCH" },
         ),
-      analyze: (sessionId) =>
+      analyze: (sessionId, consent) =>
         request(`/api/training-sessions/${id(sessionId)}/analyze`, {
           method: "POST",
+          body: consent,
         }),
       getAnalysisStatus: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis/status`),
-      retryAnalysis: (sessionId) =>
+      retryAnalysis: (sessionId, consent) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis/retry`, {
           method: "POST",
+          body: consent,
         }),
       getSessionAnalysis: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis`),

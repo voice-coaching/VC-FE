@@ -12,9 +12,13 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAudioRecorder } from "@/hooks/use-audio-recorder";
+import {
+  prepareAudioForAnalysis,
+  useAudioRecorder,
+} from "@/hooks/use-audio-recorder";
 import {
   api,
+  type AnalysisCapabilities,
   type AnalysisResult,
   type AnalysisSegment,
   type Id,
@@ -27,7 +31,6 @@ import {
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { courseResultProgress } from "@/lib/course-result-progress";
-import { sampleAnalysis } from "@/lib/design-samples";
 import { cn } from "@/lib/utils";
 
 type Phase =
@@ -89,10 +92,13 @@ export function PracticeSession({
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
+  const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
   const recorder = useAudioRecorder();
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
+  const analysisLearningFocus =
+    content.learningFocus === "BOTH" ? "PRONUNCIATION" : content.learningFocus;
   useEffect(() => {
     if (!courseId) return;
     let active = true;
@@ -283,7 +289,7 @@ export function PracticeSession({
       contentId: content.id,
       courseStepId: courseStepId || null,
       titleExamId: titleExamId || null,
-      learningFocus: content.learningFocus,
+      learningFocus: analysisLearningFocus,
     });
     const createdId = session.sessionId ?? session.id;
     if (createdId == null) throw new Error("학습 세션 ID가 응답에 없습니다.");
@@ -292,10 +298,46 @@ export function PracticeSession({
     return createdId;
   }
 
+  async function getAnalysisCapabilities() {
+    if (capabilitiesRef.current) return capabilitiesRef.current;
+    const capabilities = await api.training.getAnalysisCapabilities();
+    if (
+      capabilities.recordingUpload !== "CONFIGURED" ||
+      capabilities.analysisRequests !== "CONFIGURED"
+    ) {
+      throw new Error("현재 서버의 음성 분석 기능을 사용할 수 없습니다.");
+    }
+    if (
+      !capabilities.supportedLearningFocuses.includes(analysisLearningFocus)
+    ) {
+      throw new Error(
+        analysisLearningFocus === "INTONATION"
+          ? "현재 AI 분석은 발음 연습만 지원합니다. 억양 분석은 준비 중입니다."
+          : "이 연습 유형은 현재 AI 분석에서 지원하지 않습니다.",
+      );
+    }
+    capabilitiesRef.current = capabilities;
+    return capabilities;
+  }
+
+  async function getConsentInput() {
+    const capabilities = await getAnalysisCapabilities();
+    if (!capabilities.consentPolicyRevision) {
+      throw new Error("음성 처리 동의 정책 정보를 불러오지 못했습니다.");
+    }
+    return {
+      accepted: true as const,
+      policyRevision: capabilities.consentPolicyRevision,
+    };
+  }
+
   async function startRecording() {
     setRequestError(null);
     try {
-      if (!localOnly) await ensureSession();
+      if (!localOnly) {
+        await getAnalysisCapabilities();
+        await ensureSession();
+      }
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
@@ -390,49 +432,49 @@ export function PracticeSession({
   async function analyze() {
     if (!recorder.blob) return;
     if (localOnly) {
-      setRequestError(null);
-      setPhase("analyzing");
-      setAnalysisProgress(35);
-      await wait(400);
-      setAnalysisProgress(75);
-      await wait(400);
-      const example = sampleAnalysis(content.scriptText);
-      setAnalysis(example.analysis);
-      setSegments(example.segments);
-      setAnalysisProgress(100);
-      setPhase("result");
-      return;
-    }
-    if (recorder.durationMs < 1_000) {
-      setRequestError("분석하려면 1초 이상 녹음해 주세요.");
+      setRequestError(
+        "내 문장은 서버 콘텐츠 ID가 없어 AI 분석을 요청할 수 없습니다.",
+      );
       return;
     }
     setRequestError(null);
     setCanRetryAnalysis(false);
     setUploadProgress(0);
     try {
+      const capabilities = await getAnalysisCapabilities();
+      if (recorder.durationMs < capabilities.minimumDurationMs) {
+        throw new Error(
+          `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 녹음해 주세요.`,
+        );
+      }
+      if (recorder.durationMs > capabilities.maximumDurationMs) {
+        throw new Error(
+          `녹음은 ${Math.floor(capabilities.maximumDurationMs / 1_000)}초 이내여야 합니다.`,
+        );
+      }
+      const prepared = await prepareAudioForAnalysis(
+        recorder.blob,
+        capabilities.acceptedAudioMimeTypes,
+      );
+      if (prepared.blob.size > capabilities.maximumAudioUploadBytes) {
+        throw new Error("녹음 파일이 서버의 업로드 제한을 초과했습니다.");
+      }
       const activeSessionId = await ensureSession();
       setPhase("uploading");
-      const mimeType = recorder.blob.type || "audio/webm";
-      const extension = mimeType.includes("mp4")
-        ? "m4a"
-        : mimeType.includes("ogg")
-          ? "ogg"
-          : "webm";
       const uploadInfo = await api.training.getUploadUrl(activeSessionId, {
-        fileName: `recording-${Date.now()}.${extension}`,
-        mimeType,
-        fileSizeBytes: recorder.blob.size,
+        fileName: `recording-${Date.now()}.${prepared.extension}`,
+        mimeType: prepared.mimeType,
+        fileSizeBytes: prepared.blob.size,
       });
       await api.training.uploadRecording(
         uploadInfo,
-        recorder.blob,
+        prepared.blob,
         setUploadProgress,
       );
       const recording = await api.training.registerRecording(activeSessionId, {
         objectKey: uploadInfo.objectKey,
-        mimeType,
-        fileSizeBytes: recorder.blob.size,
+        mimeType: prepared.mimeType,
+        fileSizeBytes: prepared.blob.size,
         durationMs: recorder.durationMs,
       });
       const recordingId = recording.recordingId ?? recording.id;
@@ -445,7 +487,10 @@ export function PracticeSession({
           selected: String(item.recordingId ?? item.id) === String(recordingId),
         })),
       );
-      const requested = await api.training.analyze(activeSessionId);
+      const requested = await api.training.analyze(
+        activeSessionId,
+        await getConsentInput(),
+      );
       setPhase("analyzing");
       const completedAnalysisId = await waitForAnalysis(activeSessionId);
       await loadResult(
@@ -469,7 +514,10 @@ export function PracticeSession({
     setAnalysisProgress(0);
     setPhase("analyzing");
     try {
-      const requested = await api.training.retryAnalysis(sessionId);
+      const requested = await api.training.retryAnalysis(
+        sessionId,
+        await getConsentInput(),
+      );
       const completedAnalysisId = await waitForAnalysis(sessionId);
       await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
     } catch (reason) {
@@ -485,7 +533,9 @@ export function PracticeSession({
   async function regenerateFeedback() {
     if (!analysis) return;
     if (localOnly) {
-      setAnalysis(sampleAnalysis(content.scriptText).analysis);
+      setRequestError(
+        "내 문장은 서버 분석 결과가 없어 코칭을 다시 불러올 수 없습니다.",
+      );
       return;
     }
     setRegenerating(true);
@@ -509,7 +559,7 @@ export function PracticeSession({
       setRequestError(
         reason instanceof Error
           ? reason.message
-          : "AI 코칭을 다시 생성하지 못했습니다.",
+          : "코칭을 다시 불러오지 못했습니다.",
       );
     } finally {
       setRegenerating(false);
@@ -683,7 +733,9 @@ export function PracticeSession({
           <section className="design-card mt-8 grid grid-cols-3 divide-x divide-border !px-2">
             <div>
               <b className="text-xl text-primary">
-                {Math.round(analysis?.overallScore ?? 0)}점
+                {analysis?.overallScore == null
+                  ? "—"
+                  : `${Math.round(analysis.overallScore)}점`}
               </b>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 마지막 점수
@@ -728,8 +780,8 @@ export function PracticeSession({
     <div className="flex min-h-[calc(100dvh-80px)] flex-col gap-5 px-5 pb-6">
       {localOnly && (
         <p className="rounded-xl bg-primary/5 px-4 py-3 text-xs leading-5 text-primary">
-          내 문장 체험 · 녹음은 이 기기에서만 재생되며 분석 결과는 예시로
-          제공됩니다.
+          내 문장 체험 · 녹음은 이 기기에서만 재생됩니다. AI 분석은 서버에
+          등록된 연습 콘텐츠에서 이용할 수 있습니다.
         </p>
       )}
       {!["result", "uploading", "analyzing"].includes(phase) && (
@@ -807,6 +859,11 @@ export function PracticeSession({
                   분석 요청
                 </button>
               </div>
+              {!localOnly && (
+                <p className="mt-3 text-center text-[11px] leading-5 text-muted-foreground">
+                  분석 요청 시 녹음이 AI 발음 분석을 위해 서버로 전송됩니다.
+                </p>
+              )}
             </div>
           )}
 
@@ -866,16 +923,14 @@ export function PracticeSession({
               <p className="text-xl font-bold">
                 {phase === "uploading"
                   ? "음성을 보내고 있어요"
-                  : localOnly
-                    ? "예시 결과를 준비하고 있어요"
-                    : "발음을 분석하고 있어요"}
+                  : "발음을 분석하고 있어요"}
               </p>
               <p className="mt-3 text-sm text-muted-foreground">
                 잠시만 기다려 주세요
               </p>
               {phase === "analyzing" && (
                 <ol className="mx-auto mt-10 max-w-56 space-y-6 text-left">
-                  {["음성 품질 확인", "텍스트로 변환", "발음과 억양 분석"].map(
+                  {["분석 요청 접수", "발음 근거 분석", "결과 정리"].map(
                     (label, index) => (
                       <li
                         key={label}
@@ -978,7 +1033,7 @@ export function PracticeSession({
             content={content}
             recordingUrl={recorder.previewUrl ?? resultAudioUrl}
           />
-          {!courseId && (
+          {!courseId && analysis.outcome === "COACHING_READY" && (
             <details className="design-card">
               <summary className="cursor-pointer text-sm font-semibold">
                 AI 코칭
@@ -990,14 +1045,16 @@ export function PracticeSession({
                 {analysis.weaknesses.map((item) => (
                   <p key={item}>{item}</p>
                 ))}
-                <p>{analysis.summaryFeedback}</p>
+                <p>
+                  {analysis.summaryFeedback ?? "제공된 코칭 문구가 없습니다."}
+                </p>
                 <button
                   type="button"
                   disabled={regenerating}
                   onClick={() => void regenerateFeedback()}
                   className="text-primary"
                 >
-                  {regenerating ? "코칭 생성 중…" : "AI 코칭 다시 생성"}
+                  {regenerating ? "코칭 불러오는 중…" : "피드백 다시 불러오기"}
                 </button>
               </div>
             </details>

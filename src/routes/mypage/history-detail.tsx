@@ -106,7 +106,9 @@ export default function LearningHistoryDetail({
                   내 녹음 듣기
                 </button>
                 <strong className="text-4xl text-primary">
-                  {Math.round(detail.analysis.overallScore)}
+                  {detail.analysis.overallScore == null
+                    ? "—"
+                    : Math.round(detail.analysis.overallScore)}
                 </strong>
               </div>
             </section>
@@ -117,7 +119,8 @@ export default function LearningHistoryDetail({
             <section className="design-card">
               <h2 className="text-sm font-semibold">분석 결과</h2>
               <p className="mt-3 text-sm text-muted-foreground">
-                {detail.analysis.transcript}
+                {detail.analysis.transcript ??
+                  "음성 인식 결과가 제공되지 않았어요."}
               </p>
               <div className="mt-4 space-y-2">
                 {detail.segments.map((segment) => (
@@ -126,13 +129,14 @@ export default function LearningHistoryDetail({
                     className="rounded-2xl bg-surface px-4 py-3 text-xs"
                   >
                     <span className="font-semibold">
-                      {segment.expectedText}
+                      {segment.expectedText ?? `구간 ${segment.sequenceNo}`}
                     </span>
-                    {segment.expectedText !== segment.recognizedText && (
-                      <span className="ml-2 text-destructive">
-                        → {segment.recognizedText}
-                      </span>
-                    )}
+                    {segment.recognizedText != null &&
+                      segment.expectedText !== segment.recognizedText && (
+                        <span className="ml-2 text-destructive">
+                          → {segment.recognizedText}
+                        </span>
+                      )}
                     <span className="float-right text-muted-foreground">
                       {segment.resultStatus === "NORMAL" ? "정확" : "개선 필요"}
                     </span>

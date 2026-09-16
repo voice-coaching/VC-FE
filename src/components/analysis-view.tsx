@@ -16,6 +16,14 @@ import type {
   PracticeContent,
 } from "@/lib/api";
 
+function scoreText(score: number | null) {
+  return score == null ? "—" : `${Math.round(score)}점`;
+}
+
+function displayText(value: string | null, fallback: string) {
+  return value?.trim() || fallback;
+}
+
 export function AnalysisView({
   analysis,
   segments,
@@ -37,11 +45,23 @@ export function AnalysisView({
   const problems = segments.filter(
     (segment) => segment.resultStatus !== "NORMAL",
   );
-  const speed = ["TOO_SLOW", "SLOW"].includes(analysis.speedStatus)
-    ? "느림"
-    : ["TOO_FAST", "FAST"].includes(analysis.speedStatus)
-      ? "빠름"
-      : "보통";
+  const focusScore =
+    courseMode && content.learningFocus === "INTONATION"
+      ? analysis.intonationScore
+      : analysis.pronunciationScore;
+  const speed =
+    analysis.speedStatus == null
+      ? null
+      : ["TOO_SLOW", "SLOW"].includes(analysis.speedStatus)
+        ? "느림"
+        : ["TOO_FAST", "FAST"].includes(analysis.speedStatus)
+          ? "빠름"
+          : "보통";
+  const summaryFeedback =
+    analysis.summaryFeedback?.trim() ||
+    (analysis.outcome === "COMPLETED_NO_ISSUE"
+      ? "이번 분석에서는 교정할 발음 근거가 선택되지 않았어요."
+      : "제공된 코칭 문구가 없습니다.");
   return (
     <>
       <section className="rounded-[20px] bg-gradient-to-br from-[#285df5] to-[#5c86ff] p-5 text-white shadow-[0_8px_16px_#3468ff20]">
@@ -52,22 +72,22 @@ export function AnalysisView({
               : "발음 정확도"}
           </p>
           <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
-            {analysis.pronunciationScore >= 80
-              ? "좋음"
-              : analysis.pronunciationScore >= 60
-                ? "보통"
-                : "연습 필요"}
+            {focusScore == null
+              ? "점수 미제공"
+              : focusScore >= 80
+                ? "좋음"
+                : focusScore >= 60
+                  ? "보통"
+                  : "연습 필요"}
           </span>
         </div>
         <p className="mt-2 text-[42px] leading-tight font-bold">
-          {Math.round(
-            courseMode && content.learningFocus === "INTONATION"
-              ? analysis.intonationScore
-              : analysis.pronunciationScore,
+          {focusScore == null ? "—" : Math.round(focusScore)}
+          {focusScore != null && (
+            <span className="text-sm font-normal">점</span>
           )}
-          <span className="text-sm font-normal">점</span>
         </p>
-        <p className="mt-3 text-sm leading-6">{analysis.summaryFeedback}</p>
+        <p className="mt-3 text-sm leading-6">{summaryFeedback}</p>
         {recordingUrl && (
           <div className="mt-4">
             <ReferencePlayer
@@ -78,6 +98,29 @@ export function AnalysisView({
           </div>
         )}
       </section>
+      {analysis.pronunciationEvidence && (
+        <section className="design-card">
+          <h2 className="text-sm font-bold">교정 근거</h2>
+          <p className="mt-3 text-sm leading-6">
+            선택된 발음 단위:{" "}
+            <b>{analysis.pronunciationEvidence.selectedPhone}</b>
+          </p>
+          {analysis.pronunciationEvidence.selectedStartMs != null &&
+            analysis.pronunciationEvidence.selectedEndMs != null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                녹음 구간{" "}
+                {(
+                  analysis.pronunciationEvidence.selectedStartMs / 1_000
+                ).toFixed(1)}
+                초–
+                {(analysis.pronunciationEvidence.selectedEndMs / 1_000).toFixed(
+                  1,
+                )}
+                초
+              </p>
+            )}
+        </section>
+      )}
       {courseMode ? (
         <>
           <section className="design-card">
@@ -119,7 +162,7 @@ export function AnalysisView({
               </p>
             ))}
             <p className="text-sm leading-6 text-muted-foreground">
-              {analysis.summaryFeedback}
+              {summaryFeedback}
             </p>
           </section>
           <section className="design-card">
@@ -144,25 +187,19 @@ export function AnalysisView({
         <>
           <section className="design-card grid grid-cols-3 divide-x divide-border !px-2 text-center">
             <div>
-              <b className="text-lg">
-                {Math.round(analysis.overallScore)}
-                <small className="text-xs">점</small>
-              </b>
+              <b className="text-lg">{scoreText(analysis.overallScore)}</b>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 종합 점수
               </p>
             </div>
             <div>
-              <b className="text-lg">{speed}</b>
+              <b className="text-lg">{speed ?? "분석 없음"}</b>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 말하기 속도
               </p>
             </div>
             <div>
-              <b className="text-lg">
-                {Math.round(analysis.intonationScore)}
-                <small className="text-xs">점</small>
-              </b>
+              <b className="text-lg">{scoreText(analysis.intonationScore)}</b>
               <p className="mt-1 text-[10px] text-muted-foreground">억양</p>
             </div>
           </section>
@@ -228,7 +265,10 @@ export function AnalysisView({
                     >
                       <div className="flex-1">
                         <p className="text-sm font-semibold leading-6">
-                          {segment.expectedText}
+                          {displayText(
+                            segment.expectedText,
+                            "구간 " + segment.sequenceNo,
+                          )}
                         </p>
                         {segment.resultStatus !== "NORMAL" && (
                           <p className="mt-2 text-xs text-muted-foreground">
@@ -242,14 +282,17 @@ export function AnalysisView({
                       <span
                         className={`shrink-0 text-xs ${segment.resultStatus === "NORMAL" ? "text-muted-foreground" : "text-[#ff684c]"}`}
                       >
-                        {Math.round(segment.pronunciationScore)}점
+                        {scoreText(segment.pronunciationScore)}
                       </span>
                       <ChevronRight className="size-4 shrink-0" />
                     </button>
                   ))
                 ) : (
                   <section className="design-card text-sm leading-6">
-                    {analysis.transcript}
+                    {displayText(
+                      analysis.transcript,
+                      "음성 인식 결과가 제공되지 않았어요.",
+                    )}
                   </section>
                 )}
               </div>
@@ -271,11 +314,19 @@ export function AnalysisView({
                         }}
                         className={`min-h-10 min-w-9 rounded-lg px-2 py-2 text-base font-medium ${segment.resultStatus === "NORMAL" ? "bg-muted" : "bg-rose-50 text-rose-500"}`}
                       >
-                        {segment.expectedText}
+                        {displayText(
+                          segment.expectedText,
+                          "구간 " + segment.sequenceNo,
+                        )}
                       </button>
                     ))}
                     {segments.length === 0 && (
-                      <p className="text-sm leading-6">{analysis.transcript}</p>
+                      <p className="text-sm leading-6">
+                        {displayText(
+                          analysis.transcript,
+                          "음성 인식 결과가 제공되지 않았어요.",
+                        )}
+                      </p>
                     )}
                   </div>
                   <p className="mt-5 text-[10px] text-muted-foreground">
@@ -301,7 +352,10 @@ export function AnalysisView({
                         className="flex w-full items-center gap-3 py-4 text-left"
                       >
                         <span className="rounded-lg bg-muted px-3 py-2 font-bold">
-                          {segment.expectedText}
+                          {displayText(
+                            segment.expectedText,
+                            "구간 " + segment.sequenceNo,
+                          )}
                         </span>
                         <span className="flex-1 text-xs">
                           <span className="text-muted-foreground">
@@ -333,7 +387,9 @@ export function AnalysisView({
                     <span className="text-muted-foreground">
                       분당{" "}
                       <b className="text-foreground">
-                        {Math.round(analysis.speedWpm)}
+                        {analysis.speedWpm == null
+                          ? "—"
+                          : Math.round(analysis.speedWpm)}
                       </b>
                       단어
                     </span>
@@ -391,14 +447,17 @@ export function AnalysisView({
                         <div className="mb-2 flex justify-between text-xs">
                           <span>{label}</span>
                           <span className="text-primary">
-                            {Math.round(score)}점
+                            {scoreText(score)}
                           </span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-primary"
                             style={{
-                              width: `${Math.min(100, Math.max(0, score))}%`,
+                              width:
+                                (score == null
+                                  ? 0
+                                  : Math.min(100, Math.max(0, score))) + "%",
                             }}
                           />
                         </div>
@@ -406,7 +465,7 @@ export function AnalysisView({
                     ))}
                   </div>
                   <p className="mt-5 text-xs leading-5 text-muted-foreground">
-                    {analysis.summaryFeedback}
+                    {summaryFeedback}
                   </p>
                 </section>
               </>
@@ -435,11 +494,16 @@ export function AnalysisView({
                 <div className="mb-5 flex justify-between text-xs text-muted-foreground">
                   <span>음절을 눌러 확인해 보세요</span>
                   <b className="text-primary">
-                    {Math.round(selected.pronunciationScore)}점
+                    {scoreText(selected.pronunciationScore)}
                   </b>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {Array.from(selected.expectedText).map((char, index) => (
+                  {Array.from(
+                    displayText(
+                      selected.expectedText,
+                      "구간 " + selected.sequenceNo,
+                    ),
+                  ).map((char, index) => (
                     <button
                       type="button"
                       aria-pressed={selectedSyllable === index}
@@ -462,7 +526,12 @@ export function AnalysisView({
                 />
               )}
               <section className="design-card">
-                <h2 className="text-2xl font-bold">{selected.expectedText}</h2>
+                <h2 className="text-2xl font-bold">
+                  {displayText(
+                    selected.expectedText,
+                    "구간 " + selected.sequenceNo,
+                  )}
+                </h2>
                 <p className="mt-4 text-xs text-muted-foreground">
                   이렇게 들렸어요
                 </p>

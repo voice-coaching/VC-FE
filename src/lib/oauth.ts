@@ -1,16 +1,29 @@
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
 import type { SocialProvider } from "./api";
 
 const OAUTH_ATTEMPT_TTL_MS = 10 * 60 * 1_000;
+const NATIVE_STATE_PREFIX = "native.";
+export const NATIVE_OAUTH_SCHEME = "speakai";
 
 export interface OAuthAttempt {
   state: string;
   redirectUri: string;
   returnTo: string;
   createdAt: number;
+  native: boolean;
 }
 
 function storageKey(provider: SocialProvider) {
   return `ttobak.oauth.${provider.toLowerCase()}`;
+}
+
+function attemptStorage(native: boolean) {
+  return native ? window.localStorage : window.sessionStorage;
+}
+
+export function isNativeOAuthState(state?: string) {
+  return Boolean(state?.startsWith(NATIVE_STATE_PREFIX));
 }
 
 function randomState() {
@@ -105,13 +118,15 @@ export function createOAuthAttempt(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
+  const native = Capacitor.isNativePlatform();
   const attempt: OAuthAttempt = {
-    state: randomState(),
+    state: native ? `${NATIVE_STATE_PREFIX}${randomState()}` : randomState(),
     redirectUri: redirectUri(provider),
     returnTo,
     createdAt: Date.now(),
+    native,
   };
-  window.sessionStorage.setItem(storageKey(provider), JSON.stringify(attempt));
+  attemptStorage(native).setItem(storageKey(provider), JSON.stringify(attempt));
   return attempt;
 }
 
@@ -145,13 +160,21 @@ export function isOAuthProviderConfigured(provider: SocialProvider) {
   return Boolean(providerConfiguration(provider).clientId);
 }
 
-export function redirectToOAuthProvider(
+export async function redirectToOAuthProvider(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
   const attempt = createOAuthAttempt(provider, returnTo);
   try {
-    window.location.assign(getOAuthAuthorizationUrl(provider, attempt));
+    const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
+    if (attempt.native) {
+      await Browser.open({
+        url: authorizationUrl,
+        presentationStyle: "popover",
+      });
+    } else {
+      window.location.assign(authorizationUrl);
+    }
   } catch (reason) {
     clearOAuthAttempt(provider);
     throw reason;
@@ -160,8 +183,9 @@ export function redirectToOAuthProvider(
 
 export function consumeOAuthAttempt(provider: SocialProvider, state: string) {
   const key = storageKey(provider);
-  const raw = window.sessionStorage.getItem(key);
-  window.sessionStorage.removeItem(key);
+  const storage = attemptStorage(isNativeOAuthState(state));
+  const raw = storage.getItem(key);
+  storage.removeItem(key);
   if (!raw) return null;
 
   try {
@@ -180,4 +204,26 @@ export function consumeOAuthAttempt(provider: SocialProvider, state: string) {
 
 export function clearOAuthAttempt(provider: SocialProvider) {
   window.sessionStorage.removeItem(storageKey(provider));
+  window.localStorage.removeItem(storageKey(provider));
+}
+
+export function createNativeOAuthCallbackUrl(
+  provider: SocialProvider,
+  params: URLSearchParams,
+) {
+  const query = params.toString();
+  return `${NATIVE_OAUTH_SCHEME}://oauth/${provider.toLowerCase()}/callback${query ? `?${query}` : ""}`;
+}
+
+export function parseNativeOAuthCallback(urlValue: string) {
+  const url = new URL(urlValue);
+  if (url.protocol !== `${NATIVE_OAUTH_SCHEME}:` || url.hostname !== "oauth") {
+    return null;
+  }
+  const match = url.pathname.match(/^\/(google|kakao|naver|apple)\/callback$/);
+  if (!match) return null;
+  return {
+    provider: match[1]!.toUpperCase() as SocialProvider,
+    searchParams: url.searchParams,
+  };
 }

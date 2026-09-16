@@ -384,6 +384,7 @@ let titleExamSequence = 901;
 const analysisResult = (analysisId: Id): AnalysisResult => ({
   id: analysisId,
   status: "COMPLETED",
+  outcome: "COACHING_READY",
   transcript: "발표 첫 문장을 자신감 있게 시작하겠습니다.",
   sttConfidence: 0.94,
   overallScore: 84,
@@ -396,6 +397,19 @@ const analysisResult = (analysisId: Id): AnalysisResult => ({
   strengths: ["말하기 속도가 안정적입니다.", "문장 끝맺음이 자연스럽습니다."],
   weaknesses: ["첫 음절을 조금 더 또렷하게 발음해 보세요."],
   summaryFeedback: "안정적인 발화입니다. 첫 음절에 힘을 주면 더 명확해집니다.",
+  pronunciationEvidence: {
+    schemaVersion: "voice-coaching.pronunciation-evidence.v1",
+    selectedPhone: "ㅅ",
+    selectedExpectedIndex: 2,
+    selectedStartMs: 700,
+    selectedEndMs: 1_100,
+    detectorScore: 0.82,
+    operatingThreshold: 0.7,
+    scoreSemantics:
+      "detector_ranking_score_not_calibrated_correctness_confidence",
+    evidenceState: "frozen_detector_threshold_passed",
+  },
+  visualSupplement: null,
   analyzedAt: NOW,
 });
 
@@ -616,7 +630,7 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         if (!exam) throw new ApiError("승급 시험을 찾지 못했습니다.", 404);
         if (["PASSED", "FAILED"].includes(exam.status))
           throw new ApiError("이미 채점된 승급 시험입니다.", 409);
-        const score = Math.round(analysisResult(analysisId).overallScore);
+        const score = Math.round(analysisResult(analysisId).overallScore ?? 0);
         const passed = score >= exam.passingScore;
         const progress = getUserTitleProgress(
           currentTitleCode,
@@ -824,6 +838,23 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
       },
     },
     training: {
+      getAnalysisCapabilities: async () => ({
+        recordingUpload: "CONFIGURED",
+        analysisRequests: "CONFIGURED",
+        supportedLearningFocuses: ["PRONUNCIATION"],
+        acceptedAudioMimeTypes: ["audio/webm", "audio/mpeg", "audio/wav"],
+        acceptedVideoMimeTypes: ["video/mp4", "video/quicktime", "video/webm"],
+        maximumAudioUploadBytes: 20 * 1024 * 1024,
+        maximumVideoUploadBytes: 100 * 1024 * 1024,
+        minimumDurationMs: 1_000,
+        maximumDurationMs: 60_000,
+        videoRequiresAudioTrack: true,
+        voiceProcessingConsentRequired: true,
+        videoProcessingConsentRequired: true,
+        consentPolicyRevision: "voice-processing-consent-v1",
+        videoProcessingConsentPolicyRevision:
+          "voice-video-processing-consent-v1",
+      }),
       create: async (input) => {
         const id = sessionSequence++;
         const content = findContent(input.contentId);
@@ -897,22 +928,22 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         getSession(sessionId).selectedRecordingId = recordingId;
         return { sessionId, selectedRecordingId: recordingId, selectedAt: NOW };
       },
-      analyze: async (sessionId) => {
+      analyze: async (sessionId, _consent) => {
         const session = getSession(sessionId);
         session.status = "ANALYZING";
-        return { analysisId: 601, status: "PROCESSING", requestedAt: NOW };
+        return { analysisId: 601, status: "PENDING", requestedAt: NOW };
       },
       getAnalysisStatus: async () => ({
         analysisId: 601,
         status: "COMPLETED",
-        stage: "DONE",
+        stage: "COMPLETED",
         progressPercent: 100,
         failureReason: null,
         updatedAt: NOW,
       }),
-      retryAnalysis: async () => ({
+      retryAnalysis: async (_sessionId, _consent) => ({
         analysisId: 601,
-        status: "PROCESSING",
+        status: "PENDING",
         requestedAt: NOW,
         retryCount: 1,
       }),
@@ -920,6 +951,7 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         sessionId,
         analysisId: 601,
         status: "COMPLETED",
+        outcome: "COACHING_READY",
         overallScore: 84,
         pronunciationScore: 82,
         intonationScore: 86,

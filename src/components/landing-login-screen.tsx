@@ -111,12 +111,12 @@ export function LandingLoginScreen() {
     };
   }, []);
 
-  const startOAuth = useCallback((provider: SocialProvider) => {
+  const startOAuth = useCallback(async (provider: SocialProvider) => {
     setOAuthProvider(provider);
     setError(null);
 
     try {
-      redirectToOAuthProvider(provider, "/home");
+      await redirectToOAuthProvider(provider, "/home");
     } catch (reason) {
       setOAuthProvider(null);
       setError(

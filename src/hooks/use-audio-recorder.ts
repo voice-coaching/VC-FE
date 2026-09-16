@@ -19,6 +19,101 @@ const SUPPORTED_MIME_TYPES = [
   "audio/ogg;codecs=opus",
 ] as const;
 
+export function normalizeAudioMimeType(mimeType: string) {
+  return mimeType.split(";", 1)[0]?.trim().toLowerCase() || "audio/webm";
+}
+
+function writeAscii(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+async function convertToMonoWav(source: Blob) {
+  const AudioContextClass = window.AudioContext;
+  if (!AudioContextClass) {
+    throw new Error("이 기기에서는 녹음 형식을 변환할 수 없습니다.");
+  }
+
+  const context = new AudioContextClass();
+  try {
+    const decoded = await context.decodeAudioData(await source.arrayBuffer());
+    const samples = decoded.length;
+    const dataLength = samples * 2;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+
+    writeAscii(view, 0, "RIFF");
+    view.setUint32(4, 36 + dataLength, true);
+    writeAscii(view, 8, "WAVE");
+    writeAscii(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, decoded.sampleRate, true);
+    view.setUint32(28, decoded.sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(view, 36, "data");
+    view.setUint32(40, dataLength, true);
+
+    const channels = Array.from(
+      { length: decoded.numberOfChannels },
+      (_, index) => decoded.getChannelData(index),
+    );
+    for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+      let sample = 0;
+      for (const channel of channels) sample += channel[sampleIndex] ?? 0;
+      sample = Math.max(-1, Math.min(1, sample / channels.length));
+      view.setInt16(
+        44 + sampleIndex * 2,
+        sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+        true,
+      );
+    }
+
+    return new Blob([buffer], { type: "audio/wav" });
+  } catch {
+    throw new Error("녹음 파일을 AI 분석용 형식으로 변환하지 못했습니다.");
+  } finally {
+    void context.close();
+  }
+}
+
+export async function prepareAudioForAnalysis(
+  source: Blob,
+  acceptedMimeTypes: string[],
+) {
+  const accepted = acceptedMimeTypes.map((value) =>
+    normalizeAudioMimeType(value),
+  );
+  const sourceMimeType = normalizeAudioMimeType(source.type);
+
+  if (accepted.includes(sourceMimeType)) {
+    const extensions: Record<string, string> = {
+      "audio/mpeg": "mp3",
+      "audio/wav": "wav",
+      "audio/mp4": "m4a",
+      "audio/ogg": "ogg",
+      "audio/webm": "webm",
+    };
+    const extension = extensions[sourceMimeType] ?? "audio";
+    return { blob: source, mimeType: sourceMimeType, extension };
+  }
+
+  if (accepted.includes("audio/wav")) {
+    return {
+      blob: await convertToMonoWav(source),
+      mimeType: "audio/wav",
+      extension: "wav",
+    };
+  }
+
+  throw new Error(
+    `이 기기의 녹음 형식(${sourceMimeType})을 서버가 지원하지 않습니다.`,
+  );
+}
+
 export function useAudioRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [blob, setBlob] = useState<Blob | null>(null);

@@ -231,7 +231,9 @@ export default function MyPage() {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-primary">
-                      {Math.round(item.overallScore)}점
+                      {item.overallScore == null
+                        ? "점수 없음"
+                        : `${Math.round(item.overallScore)}점`}
                     </p>
                     <p className="mt-1 text-[10px] text-[#8b95a1]">
                       {new Date(item.completedAt).toLocaleDateString("ko-KR")}

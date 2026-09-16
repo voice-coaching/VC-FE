@@ -61,11 +61,11 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
   }, []);
 
   const startOAuth = useCallback(
-    (provider: SocialProvider) => {
+    async (provider: SocialProvider) => {
       setOAuthProvider(provider);
       setError(null);
       try {
-        redirectToOAuthProvider(provider, destination);
+        await redirectToOAuthProvider(provider, destination);
       } catch (reason) {
         setOAuthProvider(null);
         setError(

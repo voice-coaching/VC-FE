@@ -17,6 +17,7 @@ export default async function NaverOAuthCallbackPage({
       state={first(params.state)}
       oauthError={first(params.error)}
       errorDescription={first(params.error_description)}
+      nativeReturn={first(params.native_return) === "1"}
     />
   );
 }
