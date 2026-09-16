@@ -11,9 +11,18 @@
     "preview": "next start",
     "lint": "eslint .",
     "verify:api": "tsx scripts/verify-api-contract.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "native:sync": "cap sync",
+    "native:assets": "npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor '#2f6bff' --iconBackgroundColorDark '#2f6bff' --splashBackgroundColor '#2f6bff' --splashBackgroundColorDark '#2f6bff'",
+    "native:doctor": "cap doctor",
+    "native:android": "cap open android",
+    "native:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/splash-screen": "^8.0.2",
     "@google-cloud/text-to-speech": "^7.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -51,7 +60,7 @@
     "input-otp": "^1.4.2",
     "lottie-react": "^3.1.2",
     "lucide-react": "^0.575.0",
-    "next": "^16.3.0",
+    "next": "^16.3.5",
     "pretendard": "^1.3.9",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
@@ -67,6 +76,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^9.32.0",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",

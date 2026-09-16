@@ -58,6 +58,7 @@ export function AppShell({
     <div
       className={cn(
         "app-shell learning-shell flex flex-col",
+        styles.safeAreaShell,
         lockViewport && "h-dvh min-h-0 overflow-hidden",
         animateTabFlow && styles.tabFlow,
       )}

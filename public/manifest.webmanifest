@@ -1,0 +1,30 @@
+{
+  "name": "SPEAK AI",
+  "short_name": "SPEAK AI",
+  "description": "AI 발음 · 억양 트레이닝",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2f6bff",
+  "theme_color": "#2f6bff",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}

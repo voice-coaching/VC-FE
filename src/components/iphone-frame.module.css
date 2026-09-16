@@ -1,14 +1,17 @@
 .stage {
+  height: 100dvh;
   min-height: 100dvh;
-  background: #fafbfc;
+  overflow: hidden;
+  background: var(--iphone-frame-background, #fafbfc);
   color: #191f28;
 }
 
 .screen {
+  box-sizing: border-box;
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  background: #fafbfc;
+  background: var(--iphone-frame-background, #fafbfc);
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }

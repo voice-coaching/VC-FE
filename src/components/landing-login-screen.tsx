@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
-import type { SocialProvider } from "@/lib/api";
+import { api, type SocialProvider } from "@/lib/api";
+import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { requestDeveloperSession } from "@/lib/developer-login";
 import { redirectToOAuthProvider } from "@/lib/oauth";
 import { getPostLoginDestination } from "@/lib/terms-flow";
+import appShellStyles from "./app-shell.module.css";
 
 const SOCIAL_METHODS = [
   {
@@ -37,9 +39,26 @@ const SOCIAL_METHODS = [
 }>;
 
 const DEVELOPER_UNLOCK_COUNT = 5;
+const SPLASH_DURATION_MS = 1_000;
+
+type EntryPhase = "splash" | "login";
+
+async function hasAuthenticatedSession() {
+  const session = getAuthSessionSnapshot();
+  if (session.status === "authenticated") return true;
+  if (session.status === "anonymous") return false;
+
+  try {
+    await api.users.getMe();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function LandingLoginScreen() {
   const router = useRouter();
+  const [entryPhase, setEntryPhase] = useState<EntryPhase>("splash");
   const [oauthProvider, setOAuthProvider] = useState<SocialProvider | null>(
     null,
   );
@@ -47,6 +66,33 @@ export function LandingLoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const developerUnlockClicks = useRef(0);
   const submitting = oauthProvider !== null || developerSubmitting;
+
+  useEffect(() => {
+    let active = true;
+    let splashTimer: number | undefined;
+
+    const minimumSplash = new Promise<void>((resolve) => {
+      splashTimer = window.setTimeout(resolve, SPLASH_DURATION_MS);
+    });
+
+    void Promise.all([minimumSplash, hasAuthenticatedSession()]).then(
+      ([, authenticated]) => {
+        if (!active) return;
+
+        if (authenticated) {
+          router.prefetch("/home");
+          router.replace("/home");
+          return;
+        }
+        setEntryPhase("login");
+      },
+    );
+
+    return () => {
+      active = false;
+      if (splashTimer !== undefined) window.clearTimeout(splashTimer);
+    };
+  }, [router]);
 
   useEffect(() => {
     const resetPendingOAuth = () => setOAuthProvider(null);
@@ -103,9 +149,39 @@ export function LandingLoginScreen() {
     void signInAsDeveloper();
   }
 
+  if (entryPhase !== "login") {
+    return (
+      <IPhoneFrame backgroundColor="#2f6bff">
+        <div
+          role="status"
+          aria-label="SPEAK AI 워드마크 시작 화면"
+          className="relative h-full w-full overflow-hidden bg-[#2f6bff]"
+        >
+          <Image
+            src="/figma/auth/01-splash.svg"
+            alt="SPEAK AI"
+            fill
+            priority
+            sizes="100vw"
+            className="object-contain"
+          />
+          <div className="absolute top-[61%] left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-white/25 bg-white/15 px-4 text-[12px] leading-4 font-semibold whitespace-nowrap text-white backdrop-blur-sm">
+            <span
+              aria-hidden="true"
+              className="size-3 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none"
+            />
+            로딩 중…
+          </div>
+        </div>
+      </IPhoneFrame>
+    );
+  }
+
   return (
-    <IPhoneFrame>
-      <div className="flex h-full flex-col bg-white px-6">
+    <IPhoneFrame backgroundColor="#ffffff">
+      <div
+        className={`${appShellStyles.tabContent} ${appShellStyles.fromRight} flex h-full flex-col bg-white px-6`}
+      >
         <section className="flex flex-col items-center pt-[172px] text-center">
           <Image
             src="/figma/auth/brand-symbol.svg"

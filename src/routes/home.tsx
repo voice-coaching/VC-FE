@@ -266,9 +266,8 @@ export default function Home() {
           <Image
             src="/figma/home/logo.svg"
             alt="SpeakAI"
-            width={36}
-            height={30.31584}
-            className="h-auto w-[36px]"
+            width={30}
+            height={25}
             priority
           />
         </header>
