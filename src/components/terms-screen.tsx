@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
-import { api } from "@/lib/api";
+import { api, disableDeveloperApi } from "@/lib/api";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { markTermsAccepted, type SignupDraft } from "@/lib/terms-flow";
 
@@ -85,6 +85,7 @@ export function TermsScreen({
         authSession.status === "authenticated" ? authSession.userId : undefined;
 
       if (signupFlow) {
+        disableDeveloperApi();
         const session = await api.auth.signUp({
           ...signupDraft,
           termsAgreed: terms.service,

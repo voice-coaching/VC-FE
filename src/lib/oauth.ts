@@ -1,6 +1,6 @@
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
-import type { SocialProvider } from "./api";
+import { disableDeveloperApi, type SocialProvider } from "./api";
 import {
   createNativeOAuthState,
   isNativeOAuthState,
@@ -162,6 +162,10 @@ export async function redirectToOAuthProvider(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
+  // A hidden developer session uses a local mock API. Always leave that mode
+  // before starting a real OAuth flow so the callback exchanges the code with
+  // the backend rather than returning fixed local data.
+  disableDeveloperApi();
   const attempt = createOAuthAttempt(provider, returnTo);
   try {
     const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);

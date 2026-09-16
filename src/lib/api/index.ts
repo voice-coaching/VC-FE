@@ -17,9 +17,11 @@ function hasStoredDeveloperMode() {
 }
 
 function activeApi() {
-  return developerModeEnabled || hasStoredDeveloperMode()
-    ? developerApi
-    : remoteApi;
+  return isDeveloperApiEnabled() ? developerApi : remoteApi;
+}
+
+export function isDeveloperApiEnabled() {
+  return developerModeEnabled || hasStoredDeveloperMode();
 }
 
 export function enableDeveloperApi() {

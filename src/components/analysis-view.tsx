@@ -130,31 +130,9 @@ export function AnalysisView({
                 : "발음 소리 확인"}
             </h2>
             {content.learningFocus === "INTONATION" && (
-              <>
-                <svg
-                  viewBox="0 0 320 100"
-                  role="img"
-                  aria-label="문장 끝 억양 비교 예시"
-                  className="mb-3 w-full"
-                >
-                  <path
-                    d="M10 36 Q90 15 150 34 T240 38 L305 80"
-                    fill="none"
-                    stroke="#9eb7ff"
-                    strokeWidth="2"
-                    strokeDasharray="4 3"
-                  />
-                  <path
-                    d="M10 40 Q90 20 150 38 T240 45 L305 72"
-                    fill="none"
-                    stroke="#3468ff"
-                    strokeWidth="3"
-                  />
-                </svg>
-                <p className="mb-4 text-xs text-muted-foreground">
-                  내 억양 · 기준 억양 비교 예시
-                </p>
-              </>
+              <p className="mb-4 rounded-xl bg-muted px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
+                현재 분석 API는 억양 곡선 데이터를 제공하지 않습니다.
+              </p>
             )}
             {analysis.strengths.map((item) => (
               <p key={item} className="mb-2 text-sm leading-6">
@@ -411,32 +389,9 @@ export function AnalysisView({
                 </section>
                 <section className="design-card">
                   <h2 className="mb-5 text-sm font-bold">억양 변화</h2>
-                  <figure className="mb-5">
-                    <svg
-                      viewBox="0 0 320 100"
-                      role="img"
-                      aria-label="내 억양과 기준 억양 비교 예시"
-                      className="w-full rounded-xl bg-muted p-2"
-                    >
-                      <path
-                        d="M5 63C35 8 48 14 77 47S122 35 148 34S189 77 221 61S262 23 285 43S305 52 315 62"
-                        fill="none"
-                        stroke="#b7c2d9"
-                        strokeWidth="2"
-                        strokeDasharray="5 5"
-                      />
-                      <path
-                        d="M5 69C33 24 47 21 77 54S126 27 151 40S193 85 220 68S264 23 285 48S306 56 315 68"
-                        fill="none"
-                        stroke="#3468ff"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    <figcaption className="mt-2 text-[10px] text-muted-foreground">
-                      <span className="text-primary">━ 내 억양</span>　┄ 기준
-                      억양　· 비교 예시
-                    </figcaption>
-                  </figure>
+                  <p className="mb-5 rounded-xl bg-muted px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
+                    현재 분석 API는 억양 곡선 데이터를 제공하지 않습니다.
+                  </p>
                   <div className="space-y-4">
                     {[
                       { label: "억양", score: analysis.intonationScore },

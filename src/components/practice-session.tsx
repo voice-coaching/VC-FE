@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-audio-recorder";
 import {
   api,
+  isDeveloperApiEnabled,
   type AnalysisCapabilities,
   type AnalysisResult,
   type AnalysisSegment,
@@ -334,10 +335,6 @@ export function PracticeSession({
   async function startRecording() {
     setRequestError(null);
     try {
-      if (!localOnly) {
-        await getAnalysisCapabilities();
-        await ensureSession();
-      }
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
@@ -345,7 +342,7 @@ export function PracticeSession({
       setRequestError(
         reason instanceof Error
           ? reason.message
-          : "학습 세션을 시작하지 못했습니다.",
+          : "녹음을 시작하지 못했습니다.",
       );
       setPhase("error");
     }
@@ -434,6 +431,12 @@ export function PracticeSession({
     if (localOnly) {
       setRequestError(
         "내 문장은 서버 콘텐츠 ID가 없어 AI 분석을 요청할 수 없습니다.",
+      );
+      return;
+    }
+    if (isDeveloperApiEnabled()) {
+      setRequestError(
+        "개발자 로그인에서는 고정된 예시 결과를 제공하지 않습니다. 실제 AI 분석은 카카오·네이버·구글 로그인 후 이용해 주세요.",
       );
       return;
     }

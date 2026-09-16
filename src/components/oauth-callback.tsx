@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { api, type SocialProvider } from "@/lib/api";
+import { api, disableDeveloperApi, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
 import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
 import {
@@ -82,6 +82,9 @@ export function OAuthCallback({
       return;
     }
 
+    // The callback can reopen the native app in a fresh WebView. Clear a
+    // previously persisted developer session again before resolving `api`.
+    disableDeveloperApi();
     api.auth
       .socialLogin({
         provider,
