@@ -157,12 +157,10 @@ export default function Home() {
   const previousScrollTop = useRef(0);
   const scrollDirection = useRef<"up" | "down" | null>(null);
   const directionalDistance = useRef(0);
-  const suppressScrollUntil = useRef(0);
 
   function updateHeaderVisibility(visible: boolean) {
     if (headerVisibleRef.current === visible) return;
     headerVisibleRef.current = visible;
-    suppressScrollUntil.current = Date.now() + 240;
     setHeaderVisible(visible);
   }
 
@@ -178,11 +176,6 @@ export default function Home() {
       return;
     }
     if (Math.abs(delta) < 1) return;
-    if (Date.now() < suppressScrollUntil.current) {
-      scrollDirection.current = null;
-      directionalDistance.current = 0;
-      return;
-    }
 
     const nextDirection = delta > 0 ? "down" : "up";
     if (scrollDirection.current !== nextDirection) {
@@ -260,14 +253,14 @@ export default function Home() {
 
   return (
     <AppShell viewportLocked>
-      <div className="flex h-full min-h-0 flex-col bg-[#f5f6f8] text-[#191f28]">
+      <div className="relative flex h-full min-h-0 flex-col bg-[#f5f6f8] text-[#191f28]">
         <header
           data-state={headerVisible ? "visible" : "hidden"}
           aria-hidden={!headerVisible}
-          className={`flex shrink-0 items-center overflow-hidden px-5 transition-[height,opacity,transform] duration-200 ease-out motion-reduce:transition-none ${
+          className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center bg-[#f5f6f8] px-5 py-3 transition-[opacity,transform] duration-200 ease-out will-change-transform motion-reduce:transition-none ${
             headerVisible
-              ? "h-16 translate-y-0 py-3 opacity-100"
-              : "h-0 -translate-y-3 py-0 opacity-0"
+              ? "translate-y-0 opacity-100"
+              : "-translate-y-full opacity-0"
           }`}
         >
           <Image
@@ -283,7 +276,7 @@ export default function Home() {
         <div
           data-scroll-container="home"
           onScroll={handleHomeScroll}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[26px]"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-16 pb-[26px] [-webkit-overflow-scrolling:touch]"
         >
           {error ? (
             <p

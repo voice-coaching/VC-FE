@@ -108,11 +108,10 @@ export function LandingLoginScreen() {
       <div className="flex h-full flex-col bg-white px-6">
         <section className="flex flex-col items-center pt-[172px] text-center">
           <Image
-            src="/app-icon-512.png"
+            src="/figma/auth/brand-symbol.svg"
             alt=""
             width={52}
-            height={52}
-            className="rounded-[14px]"
+            height={44}
             priority
             aria-hidden="true"
           />

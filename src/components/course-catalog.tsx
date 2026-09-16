@@ -41,12 +41,10 @@ export function CourseCatalog({
   type,
   title,
   description,
-  showBack = true,
 }: {
   type?: CourseType;
   title: string;
   description: string;
-  showBack?: boolean;
 }) {
   const router = useRouter();
   const [lesson, setLesson] = useState<{
@@ -348,7 +346,7 @@ export function CourseCatalog({
     );
 
   return (
-    <AppShell nav={!selectedCourse && !showBack}>
+    <AppShell nav={!selectedCourse}>
       <TopBar
         to="/home"
         onBack={selectedCourse ? () => setExpandedId(null) : undefined}
