@@ -526,6 +526,7 @@ export function CourseCatalog({
                         alt=""
                         width={28}
                         height={28}
+                        className="size-7"
                       />
                     </span>
                     <div className="min-w-0 flex-1">

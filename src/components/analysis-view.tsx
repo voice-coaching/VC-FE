@@ -267,9 +267,19 @@ export function AnalysisView({
                   ))
                 ) : (
                   <section className="design-card text-sm leading-6">
-                    {displayText(
-                      analysis.transcript,
-                      "음성 인식 결과가 제공되지 않았어요.",
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {analysis.transcript
+                        ? "음성 인식 문장"
+                        : "분석한 연습 문장"}
+                    </p>
+                    <p className="mt-2">
+                      {displayText(analysis.transcript, content.scriptText)}
+                    </p>
+                    {!analysis.transcript && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        이번 분석은 받아쓰기 텍스트 대신 발음 근거와 AI 코칭을
+                        제공했어요.
+                      </p>
                     )}
                   </section>
                 )}
@@ -299,12 +309,22 @@ export function AnalysisView({
                       </button>
                     ))}
                     {segments.length === 0 && (
-                      <p className="text-sm leading-6">
-                        {displayText(
-                          analysis.transcript,
-                          "음성 인식 결과가 제공되지 않았어요.",
+                      <div className="text-sm leading-6">
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          {analysis.transcript
+                            ? "음성 인식 문장"
+                            : "분석한 연습 문장"}
+                        </p>
+                        <p className="mt-2">
+                          {displayText(analysis.transcript, content.scriptText)}
+                        </p>
+                        {!analysis.transcript && (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            이번 분석은 구간별 받아쓰기 대신 발음 근거와 AI
+                            코칭을 제공했어요.
+                          </p>
                         )}
-                      </p>
+                      </div>
                     )}
                   </div>
                   <p className="mt-5 text-[10px] text-muted-foreground">

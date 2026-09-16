@@ -13,9 +13,8 @@
 ## 환경 설정
 
 ```env
-# 백엔드 origin만 입력합니다. 경로의 /api는 클라이언트가 붙입니다.
-# 비워두면 프론트엔드와 동일한 origin을 사용합니다.
-NEXT_PUBLIC_API_BASE_URL=https://backend.example.com
+# 서버 프록시가 요청을 전달할 백엔드 origin입니다. 경로의 /api는 클라이언트가 붙입니다.
+API_BASE_URL=https://backend.example.com
 NEXT_PUBLIC_SITE_URL=https://frontend.example.com
 
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=
@@ -34,13 +33,17 @@ OAuth 공급자 콘솔에는 위 리다이렉트 URI를 정확히 등록해야 �
 경로, 마지막 슬래시가 하나라도 다르면 카카오는 `KOE006`, Google은
 `redirect_uri_mismatch` 오류를 반환합니다.
 
-백엔드는 credential 요청을 허용해야 합니다. 프론트엔드는 모든 요청에 `credentials: include`를 사용하며, Access Token은 `Authorization: Bearer ...`, Refresh Token은 서버가 설정한 HttpOnly Cookie로 전송합니다.
+브라우저와 네이티브 앱은 동일 오리진 `/api/backend` 프록시로 요청합니다. 프록시는
+`API_BASE_URL`의 백엔드로 요청을 전달하며, Access Token은
+`Authorization: Bearer ...`, Refresh Token은 프론트 도메인의 HttpOnly Cookie로
+전송합니다. 기존 배포 환경에서는 `NEXT_PUBLIC_API_BASE_URL`도 서버 fallback으로
+지원합니다.
 
 ## 인증 및 재시도
 
 - 이메일 회원가입 비밀번호는 운영 DTO와 동일하게 영문·숫자·특수문자를 모두 포함한 8~72자로 검사하며, 닉네임은 30자로 제한합니다.
-- Access Token은 JavaScript 메모리에만 보관합니다. 새로고침 시 HttpOnly Refresh
-  Cookie로 Access Token을 다시 발급받습니다.
+- Access Token은 앱 재실행 후에도 복구할 수 있도록 localStorage에 보관하며, 만료 시
+  동일 오리진 HttpOnly Refresh Cookie로 새 Access Token을 자동 발급받습니다.
 - Refresh Token은 JavaScript에서 읽거나 저장하지 않습니다.
 - 인증 API가 401을 반환하면 `POST /api/auth/token/refresh`를 한 번 호출하고 원 요청을 한 번 재시도합니다.
 - 여러 요청의 토큰 갱신이 겹치면 하나의 refresh 요청을 공유합니다.

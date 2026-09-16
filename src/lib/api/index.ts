@@ -2,8 +2,10 @@ import { createDevApi } from "./dev";
 import { createRemoteApi } from "./remote";
 import type { ApiContract } from "./types";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-const remoteApi = createRemoteApi(baseUrl);
+// Keep browser and native requests on the frontend origin. The server route
+// forwards them to the configured backend and turns the HttpOnly refresh
+// cookie into a first-party cookie, which is reliable inside iOS WKWebView.
+const remoteApi = createRemoteApi("/api/backend");
 const DEVELOPER_MODE_KEY = "ttobak.developer-mode";
 let developerModeEnabled = false;
 
