@@ -21,47 +21,71 @@ function randomState() {
   );
 }
 
+function normalizeProviderConfiguration({
+  clientId,
+  legacyValue,
+  endpoint,
+  scope,
+}: {
+  clientId?: string;
+  legacyValue?: string;
+  endpoint: string;
+  scope?: string;
+}) {
+  const value = clientId?.trim() || legacyValue?.trim();
+  if (!value) return { clientId: undefined, endpoint, scope };
+  if (!/^https?:\/\//i.test(value)) return { clientId: value, endpoint, scope };
+
+  const legacyUrl = new URL(value);
+  return {
+    clientId: legacyUrl.searchParams.get("client_id")?.trim() || undefined,
+    endpoint: legacyUrl.toString(),
+    scope,
+  };
+}
+
 function providerConfiguration(provider: SocialProvider) {
   switch (provider) {
     case "GOOGLE":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
-          process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        legacyValue: process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
         endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
         scope: "openid email profile",
-      };
+      });
     case "KAKAO":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY?.trim() ||
-          process.env.NEXT_PUBLIC_KAKAO_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY,
+        legacyValue: process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,
         endpoint: "https://kauth.kakao.com/oauth/authorize",
-      };
+      });
     case "NAVER":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_NAVER_CLIENT_ID?.trim() ||
-          process.env.NEXT_PUBLIC_NAVER_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_NAVER_CLIENT_ID,
+        legacyValue: process.env.NEXT_PUBLIC_NAVER_AUTH_URL,
         endpoint: "https://nid.naver.com/oauth2.0/authorize",
-      };
+      });
     case "APPLE":
-      return {
-        clientId: process.env.NEXT_PUBLIC_APPLE_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        legacyValue: process.env.NEXT_PUBLIC_APPLE_AUTH_URL,
         endpoint: "https://appleid.apple.com/auth/authorize",
-      };
+      });
   }
 }
 
-function configuredRedirectUri(provider: SocialProvider) {
+function redirectUri(provider: SocialProvider) {
   const redirectUris: Record<SocialProvider, string | undefined> = {
     GOOGLE: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
     KAKAO: process.env.NEXT_PUBLIC_KAKAO_REDIRECT_URI,
     NAVER: process.env.NEXT_PUBLIC_NAVER_REDIRECT_URI,
     APPLE: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI,
   };
+  const sameOriginFallback = new URL(
+    `/oauth/${provider.toLowerCase()}/callback`,
+    window.location.origin,
+  ).toString();
   const value = redirectUris[provider]?.trim();
-  if (!value) return null;
+  if (!value) return sameOriginFallback;
 
   const url = new URL(value);
   if (!/^https?:$/.test(url.protocol)) {
@@ -69,7 +93,12 @@ function configuredRedirectUri(provider: SocialProvider) {
       `${provider} OAuth 리다이렉트 URI 형식이 올바르지 않습니다.`,
     );
   }
-  return url.toString();
+  // OAuth state는 현재 origin의 storage에 보관되므로 콜백도 반드시 같은
+  // origin으로 돌아와야 한다. 운영 앱에서 localhost 개발 설정이 섞여 있어도
+  // 현재 배포 origin의 콜백으로 자동 보정한다.
+  return url.origin === window.location.origin
+    ? url.toString()
+    : sameOriginFallback;
 }
 
 export function createOAuthAttempt(
@@ -78,9 +107,7 @@ export function createOAuthAttempt(
 ) {
   const attempt: OAuthAttempt = {
     state: randomState(),
-    redirectUri:
-      configuredRedirectUri(provider) ??
-      `${window.location.origin}/oauth/${provider.toLowerCase()}/callback`,
+    redirectUri: redirectUri(provider),
     returnTo,
     createdAt: Date.now(),
   };
@@ -96,11 +123,6 @@ export function getOAuthAuthorizationUrl(
   const clientId = configuration.clientId;
   if (!clientId) {
     throw new Error(`${provider} OAuth 설정이 없습니다.`);
-  }
-  if (/^https?:\/\//i.test(clientId)) {
-    throw new Error(
-      `${provider} OAuth에는 인증 URL이 아닌 클라이언트 ID를 설정해 주세요.`,
-    );
   }
 
   const url = new URL(configuration.endpoint);

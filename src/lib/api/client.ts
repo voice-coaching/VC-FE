@@ -13,7 +13,33 @@ export class ApiError extends Error {
   }
 }
 
+const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
 let accessToken: string | null = null;
+
+function readStoredAccessToken() {
+  if (typeof window === "undefined") return null;
+  try {
+    const storedToken = window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    const normalized = storedToken
+      ?.trim()
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+    return normalized || null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAccessToken(value: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) {
+      window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, value);
+    } else {
+      window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    }
+  } catch {}
+}
 
 export function saveAccessToken(value: string) {
   const normalized = value
@@ -28,14 +54,17 @@ export function saveAccessToken(value: string) {
     );
   }
   accessToken = normalized;
+  persistAccessToken(normalized);
   return normalized;
 }
 
 export function clearAccessToken() {
   accessToken = null;
+  persistAccessToken(null);
 }
 
 export function getAccessToken() {
+  if (!accessToken) accessToken = readStoredAccessToken();
   return accessToken;
 }
 

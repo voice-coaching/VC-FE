@@ -178,7 +178,7 @@ export function LandingLoginScreen() {
   }
 
   return (
-    <IPhoneFrame backgroundColor="#f5f6f8">
+    <IPhoneFrame backgroundColor="#ffffff">
       <div
         className={`${appShellStyles.tabContent} ${appShellStyles.fromRight} flex h-full flex-col bg-white px-6`}
       >

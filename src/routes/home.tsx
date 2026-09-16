@@ -11,6 +11,7 @@ import {
   type Recommendation,
   type CourseDetail,
 } from "@/lib/api";
+import styles from "./home.module.css";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -157,6 +158,8 @@ export default function Home() {
   const previousScrollTop = useRef(0);
   const scrollDirection = useRef<"up" | "down" | null>(null);
   const directionalDistance = useRef(0);
+  const pendingScrollTop = useRef(0);
+  const scrollFrame = useRef<number | null>(null);
 
   function updateHeaderVisibility(visible: boolean) {
     if (headerVisibleRef.current === visible) return;
@@ -164,8 +167,7 @@ export default function Home() {
     setHeaderVisible(visible);
   }
 
-  function handleHomeScroll(event: UIEvent<HTMLDivElement>) {
-    const scrollTop = Math.max(0, event.currentTarget.scrollTop);
+  function updateHeaderForScroll(scrollTop: number) {
     const delta = scrollTop - previousScrollTop.current;
     previousScrollTop.current = scrollTop;
 
@@ -190,6 +192,24 @@ export default function Home() {
     updateHeaderVisibility(nextDirection === "up");
     directionalDistance.current = 0;
   }
+
+  function handleHomeScroll(event: UIEvent<HTMLDivElement>) {
+    pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
+    if (scrollFrame.current !== null) return;
+
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      scrollFrame.current = null;
+      updateHeaderForScroll(pendingScrollTop.current);
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrame.current !== null) {
+        window.cancelAnimationFrame(scrollFrame.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -257,11 +277,7 @@ export default function Home() {
         <header
           data-state={headerVisible ? "visible" : "hidden"}
           aria-hidden={!headerVisible}
-          className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center bg-[#f5f6f8] px-5 py-3 transition-[opacity,transform] duration-200 ease-out will-change-transform motion-reduce:transition-none ${
-            headerVisible
-              ? "translate-y-0 opacity-100"
-              : "-translate-y-full opacity-0"
-          }`}
+          className={`${styles.header} pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center bg-[#f5f6f8] px-5 py-3`}
         >
           <Image
             src="/figma/home/logo.svg"

@@ -10,7 +10,7 @@ let developerModeEnabled = false;
 function hasStoredDeveloperMode() {
   if (typeof window === "undefined") return false;
   try {
-    return window.sessionStorage.getItem(DEVELOPER_MODE_KEY) === "true";
+    return window.localStorage.getItem(DEVELOPER_MODE_KEY) === "true";
   } catch {
     return false;
   }
@@ -25,14 +25,14 @@ function activeApi() {
 export function enableDeveloperApi() {
   developerModeEnabled = true;
   try {
-    window.sessionStorage.setItem(DEVELOPER_MODE_KEY, "true");
+    window.localStorage.setItem(DEVELOPER_MODE_KEY, "true");
   } catch {}
 }
 
 export function disableDeveloperApi() {
   developerModeEnabled = false;
   try {
-    window.sessionStorage.removeItem(DEVELOPER_MODE_KEY);
+    window.localStorage.removeItem(DEVELOPER_MODE_KEY);
   } catch {}
 }
 
