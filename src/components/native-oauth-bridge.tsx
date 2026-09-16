@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { App, type URLOpenListenerEvent } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
-import { parseNativeOAuthCallback } from "@/lib/oauth";
+import { parseNativeOAuthCallback } from "@/lib/native-oauth-callback";
 
 const HANDLED_URL_KEY = "speakai.native-oauth.handled-url";
 

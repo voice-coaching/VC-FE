@@ -1,10 +1,12 @@
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 import type { SocialProvider } from "./api";
+import {
+  createNativeOAuthState,
+  isNativeOAuthState,
+} from "./native-oauth-callback";
 
 const OAUTH_ATTEMPT_TTL_MS = 10 * 60 * 1_000;
-const NATIVE_STATE_PREFIX = "native.";
-export const NATIVE_OAUTH_SCHEME = "speakai";
 
 export interface OAuthAttempt {
   state: string;
@@ -20,10 +22,6 @@ function storageKey(provider: SocialProvider) {
 
 function attemptStorage(native: boolean) {
   return native ? window.localStorage : window.sessionStorage;
-}
-
-export function isNativeOAuthState(state?: string) {
-  return Boolean(state?.startsWith(NATIVE_STATE_PREFIX));
 }
 
 function randomState() {
@@ -120,7 +118,7 @@ export function createOAuthAttempt(
 ) {
   const native = Capacitor.isNativePlatform();
   const attempt: OAuthAttempt = {
-    state: native ? `${NATIVE_STATE_PREFIX}${randomState()}` : randomState(),
+    state: native ? createNativeOAuthState(randomState()) : randomState(),
     redirectUri: redirectUri(provider),
     returnTo,
     createdAt: Date.now(),
@@ -168,6 +166,14 @@ export async function redirectToOAuthProvider(
   try {
     const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
     if (attempt.native) {
+      if (
+        !Capacitor.isPluginAvailable("App") ||
+        !Capacitor.isPluginAvailable("Browser")
+      ) {
+        throw new Error(
+          "네이티브 로그인 모듈이 포함된 최신 앱 빌드가 필요합니다. Xcode에서 앱을 다시 설치해 주세요.",
+        );
+      }
       await Browser.open({
         url: authorizationUrl,
         presentationStyle: "popover",
@@ -205,25 +211,4 @@ export function consumeOAuthAttempt(provider: SocialProvider, state: string) {
 export function clearOAuthAttempt(provider: SocialProvider) {
   window.sessionStorage.removeItem(storageKey(provider));
   window.localStorage.removeItem(storageKey(provider));
-}
-
-export function createNativeOAuthCallbackUrl(
-  provider: SocialProvider,
-  params: URLSearchParams,
-) {
-  const query = params.toString();
-  return `${NATIVE_OAUTH_SCHEME}://oauth/${provider.toLowerCase()}/callback${query ? `?${query}` : ""}`;
-}
-
-export function parseNativeOAuthCallback(urlValue: string) {
-  const url = new URL(urlValue);
-  if (url.protocol !== `${NATIVE_OAUTH_SCHEME}:` || url.hostname !== "oauth") {
-    return null;
-  }
-  const match = url.pathname.match(/^\/(google|kakao|naver|apple)\/callback$/);
-  if (!match) return null;
-  return {
-    provider: match[1]!.toUpperCase() as SocialProvider,
-    searchParams: url.searchParams,
-  };
 }

@@ -6,12 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { api, type SocialProvider } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
+import { clearOAuthAttempt, consumeOAuthAttempt } from "@/lib/oauth";
 import {
-  clearOAuthAttempt,
-  consumeOAuthAttempt,
-  createNativeOAuthCallbackUrl,
+  createNativeOAuthCallbackUrlFromResponse,
   isNativeOAuthState,
-} from "@/lib/oauth";
+} from "@/lib/native-oauth-callback";
 import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
@@ -40,20 +39,22 @@ export function OAuthCallback({
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const providerLabel = PROVIDER_LABELS[provider];
+  const nativeHandoffUrl =
+    isNativeOAuthState(state) && !nativeReturn
+      ? createNativeOAuthCallbackUrlFromResponse(provider, {
+          code,
+          state,
+          error: oauthError,
+          errorDescription,
+        })
+      : null;
 
   useEffect(() => {
     if (started.current) return;
     started.current = true;
 
-    if (isNativeOAuthState(state) && !nativeReturn) {
-      const params = new URLSearchParams();
-      if (code) params.set("code", code);
-      if (state) params.set("state", state);
-      if (oauthError) params.set("error", oauthError);
-      if (errorDescription) {
-        params.set("error_description", errorDescription);
-      }
-      window.location.replace(createNativeOAuthCallbackUrl(provider, params));
+    if (nativeHandoffUrl) {
+      window.location.replace(nativeHandoffUrl);
       return;
     }
 
@@ -107,6 +108,7 @@ export function OAuthCallback({
     errorDescription,
     oauthError,
     nativeReturn,
+    nativeHandoffUrl,
     provider,
     providerLabel,
     router,
@@ -116,7 +118,23 @@ export function OAuthCallback({
   return (
     <AppShell nav={false}>
       <div className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
-        {error ? (
+        {nativeHandoffUrl ? (
+          <>
+            <span className="size-10 animate-spin rounded-full border-4 border-border border-t-foreground" />
+            <h1 className="mt-5 text-xl font-bold">
+              SpeakAI 앱으로 돌아가는 중
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              자동으로 이동하지 않으면 아래 버튼을 눌러 주세요.
+            </p>
+            <a
+              href={nativeHandoffUrl}
+              className="mt-6 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background"
+            >
+              앱으로 돌아가기
+            </a>
+          </>
+        ) : error ? (
           <>
             <h1 className="text-xl font-bold">로그인을 완료하지 못했어요</h1>
             <p
