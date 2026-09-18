@@ -390,6 +390,7 @@ export interface SessionAnalysis {
   overallScore: number | null;
   pronunciationScore: number | null;
   intonationScore: number | null;
+  scoreBreakdown?: AnalysisScoreBreakdown | null;
 }
 
 export interface PronunciationEvidence {
@@ -415,6 +416,24 @@ export interface VisualSupplement {
   closedBetaLipObservation: object | null;
 }
 
+export interface AnalysisCriterionScore {
+  criterionId: string;
+  label: string;
+  description: string;
+  expectedPhones: string[];
+  maxScore: number;
+  applicable: boolean;
+  sampleCount: number;
+  level: number | null;
+  score: number | null;
+}
+
+export interface AnalysisScoreBreakdown {
+  rubricRevision: string;
+  applicableMaxScore: number;
+  items: AnalysisCriterionScore[];
+}
+
 export interface AnalysisResult {
   id: Id;
   status: AnalysisStatus;
@@ -434,6 +453,7 @@ export interface AnalysisResult {
   pronunciationEvidence: PronunciationEvidence | null;
   visualSupplement: VisualSupplement | null;
   analyzedAt: string | null;
+  scoreBreakdown?: AnalysisScoreBreakdown | null;
 }
 
 export interface AnalysisSegment {

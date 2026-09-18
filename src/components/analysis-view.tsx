@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { AnalysisScoreBreakdownView } from "@/components/analysis-score-breakdown";
 import { ReferencePlayer } from "@/components/reference-player";
 import type {
   AnalysisResult,
@@ -98,6 +99,7 @@ export function AnalysisView({
           </div>
         )}
       </section>
+      <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
       {analysis.pronunciationEvidence && (
         <section className="design-card">
           <h2 className="text-sm font-bold">교정 근거</h2>
