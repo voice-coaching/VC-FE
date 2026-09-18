@@ -71,15 +71,15 @@ export function AnalysisView({
               ? "억양 정확도"
               : "발음 정확도"}
           </p>
-          <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
-            {focusScore == null
-              ? "점수 미제공"
-              : focusScore >= 80
+          {focusScore != null && (
+            <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
+              {focusScore >= 80
                 ? "좋음"
                 : focusScore >= 60
                   ? "보통"
                   : "연습 필요"}
-          </span>
+            </span>
+          )}
         </div>
         <p className="mt-2 text-[42px] leading-tight font-bold">
           {focusScore == null ? "—" : Math.round(focusScore)}
