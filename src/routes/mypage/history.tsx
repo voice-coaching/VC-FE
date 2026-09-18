@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { TopBar } from "@/components/top-bar";
-import { scoreColor } from "@/lib/app-data";
+
 import { api, type ContentType, type TrainingHistoryItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +85,7 @@ export default function LearningHistory() {
   }
   return (
     <AppShell nav={false}>
-      <TopBar to="/mypage" title="학습 기록" />
+      <TopBar to="/mypage" title="연습 기록" />
       <div className="px-5 pb-10">
         <div className="flex gap-2 overflow-x-auto pb-2">
           {FILTERS.map((filter) => (
@@ -95,8 +95,8 @@ export default function LearningHistory() {
               className={cn(
                 "shrink-0 rounded-full px-4 py-2 text-xs font-semibold",
                 kind === filter.value
-                  ? "bg-foreground text-background"
-                  : "bg-surface",
+                  ? "bg-primary text-white"
+                  : "bg-[#f2f4f6] text-[#6b7684]",
               )}
             >
               {filter.label}
@@ -120,7 +120,7 @@ export default function LearningHistory() {
               <Link
                 key={String(item.sessionId)}
                 href={`/mypage/history/${item.sessionId}`}
-                className="flex items-center justify-between rounded-2xl bg-surface px-4 py-3.5"
+                className="design-card flex items-center justify-between gap-4 !p-4"
               >
                 <div>
                   <p className="text-sm font-semibold">{item.title}</p>
@@ -128,8 +128,10 @@ export default function LearningHistory() {
                     {new Date(item.completedAt).toLocaleDateString("ko-KR")}
                   </p>
                 </div>
-                <b className={scoreColor(item.overallScore)}>
-                  {Math.round(item.overallScore)}
+                <b className="shrink-0 text-sm text-primary">
+                  {item.overallScore == null
+                    ? "점수 없음"
+                    : `${Math.round(item.overallScore)}점`}
                 </b>
               </Link>
             ))}

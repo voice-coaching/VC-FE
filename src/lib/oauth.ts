@@ -1,16 +1,24 @@
-import type { SocialProvider } from "./api";
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
+import { disableDeveloperApi, type SocialProvider } from "./api";
+import {
+  createNativeOAuthState,
+  isNativeOAuthState,
+} from "./native-oauth-callback";
 
-const OAUTH_ATTEMPT_TTL_MS = 10 * 60 * 1_000;
-
-export interface OAuthAttempt {
-  state: string;
-  redirectUri: string;
-  returnTo: string;
-  createdAt: number;
-}
+import {
+  readOAuthAttempt,
+  takeOAuthAttempt,
+  type OAuthAttempt,
+} from "./oauth-attempt";
+export type { OAuthAttempt } from "./oauth-attempt";
 
 function storageKey(provider: SocialProvider) {
   return `ttobak.oauth.${provider.toLowerCase()}`;
+}
+
+function attemptStorage(native: boolean) {
+  return native ? window.localStorage : window.sessionStorage;
 }
 
 function randomState() {
@@ -21,47 +29,71 @@ function randomState() {
   );
 }
 
+function normalizeProviderConfiguration({
+  clientId,
+  legacyValue,
+  endpoint,
+  scope,
+}: {
+  clientId?: string;
+  legacyValue?: string;
+  endpoint: string;
+  scope?: string;
+}) {
+  const value = clientId?.trim() || legacyValue?.trim();
+  if (!value) return { clientId: undefined, endpoint, scope };
+  if (!/^https?:\/\//i.test(value)) return { clientId: value, endpoint, scope };
+
+  const legacyUrl = new URL(value);
+  return {
+    clientId: legacyUrl.searchParams.get("client_id")?.trim() || undefined,
+    endpoint: legacyUrl.toString(),
+    scope,
+  };
+}
+
 function providerConfiguration(provider: SocialProvider) {
   switch (provider) {
     case "GOOGLE":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ||
-          process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        legacyValue: process.env.NEXT_PUBLIC_GOOGLE_AUTH_URL,
         endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
         scope: "openid email profile",
-      };
+      });
     case "KAKAO":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY?.trim() ||
-          process.env.NEXT_PUBLIC_KAKAO_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY,
+        legacyValue: process.env.NEXT_PUBLIC_KAKAO_AUTH_URL,
         endpoint: "https://kauth.kakao.com/oauth/authorize",
-      };
+      });
     case "NAVER":
-      return {
-        clientId:
-          process.env.NEXT_PUBLIC_NAVER_CLIENT_ID?.trim() ||
-          process.env.NEXT_PUBLIC_NAVER_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        clientId: process.env.NEXT_PUBLIC_NAVER_CLIENT_ID,
+        legacyValue: process.env.NEXT_PUBLIC_NAVER_AUTH_URL,
         endpoint: "https://nid.naver.com/oauth2.0/authorize",
-      };
+      });
     case "APPLE":
-      return {
-        clientId: process.env.NEXT_PUBLIC_APPLE_AUTH_URL?.trim(),
+      return normalizeProviderConfiguration({
+        legacyValue: process.env.NEXT_PUBLIC_APPLE_AUTH_URL,
         endpoint: "https://appleid.apple.com/auth/authorize",
-      };
+      });
   }
 }
 
-function configuredRedirectUri(provider: SocialProvider) {
+function redirectUri(provider: SocialProvider) {
   const redirectUris: Record<SocialProvider, string | undefined> = {
     GOOGLE: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
     KAKAO: process.env.NEXT_PUBLIC_KAKAO_REDIRECT_URI,
     NAVER: process.env.NEXT_PUBLIC_NAVER_REDIRECT_URI,
     APPLE: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI,
   };
+  const sameOriginFallback = new URL(
+    `/oauth/${provider.toLowerCase()}/callback`,
+    window.location.origin,
+  ).toString();
   const value = redirectUris[provider]?.trim();
-  if (!value) return null;
+  if (!value) return sameOriginFallback;
 
   const url = new URL(value);
   if (!/^https?:$/.test(url.protocol)) {
@@ -69,22 +101,27 @@ function configuredRedirectUri(provider: SocialProvider) {
       `${provider} OAuth 리다이렉트 URI 형식이 올바르지 않습니다.`,
     );
   }
-  return url.toString();
+  // OAuth state는 현재 origin의 storage에 보관되므로 콜백도 반드시 같은
+  // origin으로 돌아와야 한다. 운영 앱에서 localhost 개발 설정이 섞여 있어도
+  // 현재 배포 origin의 콜백으로 자동 보정한다.
+  return url.origin === window.location.origin
+    ? url.toString()
+    : sameOriginFallback;
 }
 
 export function createOAuthAttempt(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
+  const native = Capacitor.isNativePlatform();
   const attempt: OAuthAttempt = {
-    state: randomState(),
-    redirectUri:
-      configuredRedirectUri(provider) ??
-      `${window.location.origin}/oauth/${provider.toLowerCase()}/callback`,
+    state: native ? createNativeOAuthState(randomState()) : randomState(),
+    redirectUri: redirectUri(provider),
     returnTo,
     createdAt: Date.now(),
+    native,
   };
-  window.sessionStorage.setItem(storageKey(provider), JSON.stringify(attempt));
+  attemptStorage(native).setItem(storageKey(provider), JSON.stringify(attempt));
   return attempt;
 }
 
@@ -96,11 +133,6 @@ export function getOAuthAuthorizationUrl(
   const clientId = configuration.clientId;
   if (!clientId) {
     throw new Error(`${provider} OAuth 설정이 없습니다.`);
-  }
-  if (/^https?:\/\//i.test(clientId)) {
-    throw new Error(
-      `${provider} OAuth에는 인증 URL이 아닌 클라이언트 ID를 설정해 주세요.`,
-    );
   }
 
   const url = new URL(configuration.endpoint);
@@ -123,13 +155,33 @@ export function isOAuthProviderConfigured(provider: SocialProvider) {
   return Boolean(providerConfiguration(provider).clientId);
 }
 
-export function redirectToOAuthProvider(
+export async function redirectToOAuthProvider(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
+  // A hidden developer session uses a local mock API. Always leave that mode
+  // before starting a real OAuth flow so the callback exchanges the code with
+  // the backend rather than returning fixed local data.
+  disableDeveloperApi();
   const attempt = createOAuthAttempt(provider, returnTo);
   try {
-    window.location.assign(getOAuthAuthorizationUrl(provider, attempt));
+    const authorizationUrl = getOAuthAuthorizationUrl(provider, attempt);
+    if (attempt.native) {
+      if (
+        !Capacitor.isPluginAvailable("App") ||
+        !Capacitor.isPluginAvailable("Browser")
+      ) {
+        throw new Error(
+          "네이티브 로그인 모듈이 포함된 최신 앱 빌드가 필요합니다. Xcode에서 앱을 다시 설치해 주세요.",
+        );
+      }
+      await Browser.open({
+        url: authorizationUrl,
+        presentationStyle: "popover",
+      });
+    } else {
+      window.location.assign(authorizationUrl);
+    }
   } catch (reason) {
     clearOAuthAttempt(provider);
     throw reason;
@@ -137,25 +189,27 @@ export function redirectToOAuthProvider(
 }
 
 export function consumeOAuthAttempt(provider: SocialProvider, state: string) {
-  const key = storageKey(provider);
-  const raw = window.sessionStorage.getItem(key);
-  window.sessionStorage.removeItem(key);
-  if (!raw) return null;
+  return takeOAuthAttempt(
+    attemptStorage(isNativeOAuthState(state)),
+    storageKey(provider),
+    state,
+  );
+}
 
-  try {
-    const attempt = JSON.parse(raw) as OAuthAttempt;
-    if (
-      attempt.state !== state ||
-      Date.now() - attempt.createdAt > OAUTH_ATTEMPT_TTL_MS
-    ) {
-      return null;
-    }
-    return attempt;
-  } catch {
-    return null;
-  }
+export function getPendingNativeOAuthAttempt(
+  provider: SocialProvider,
+  state: string,
+) {
+  if (!isNativeOAuthState(state)) return null;
+  const attempt = readOAuthAttempt(
+    window.localStorage,
+    storageKey(provider),
+    state,
+  );
+  return attempt?.native ? attempt : null;
 }
 
 export function clearOAuthAttempt(provider: SocialProvider) {
   window.sessionStorage.removeItem(storageKey(provider));
+  window.localStorage.removeItem(storageKey(provider));
 }

@@ -1,43 +1,31 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { House, Search, User } from "lucide-react";
-import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import {
+  getTabTransitionDirection,
+  setTabTransitionDirection,
+} from "@/lib/tab-transition";
+import { PrototypeBottomNav } from "@/components/prototype-bottom-nav";
+import styles from "./app-shell.module.css";
 
-const TABS = [
-  { to: "/home", icon: House, label: "홈" },
-  { to: "/class", icon: Search, label: "클래스" },
-  { to: "/mypage", icon: User, label: "마이" },
-] as const;
+const tabFlowPrefixes = [
+  "/home",
+  "/class",
+  "/mypage",
+  "/news",
+  "/sentences",
+  "/my-script",
+  "/announcer",
+  "/practice",
+];
 
 export function BottomNav() {
-  const pathname = usePathname();
-
   return (
-    <nav className="sticky bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur">
-      <ul className="flex items-center justify-around px-6 py-3">
-        {TABS.map(({ to, icon: Icon, label }) => {
-          const active = pathname === to || pathname.startsWith(`${to}/`);
-          return (
-            <li key={to}>
-              <Link
-                href={to}
-                aria-label={label}
-                className={cn(
-                  "flex flex-col items-center gap-1 text-[10px] transition-colors",
-                  active ? "text-brand" : "text-muted-foreground",
-                )}
-              >
-                <Icon className="size-6" strokeWidth={active ? 2.2 : 1.6} />
-                <span>{label}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <div className="relative z-20 shrink-0">
+      <PrototypeBottomNav />
+    </div>
   );
 }
 
@@ -45,14 +33,58 @@ export function AppShell({
   children,
   nav = true,
   className,
+  viewportLocked = false,
 }: {
   children: ReactNode;
   nav?: boolean;
   className?: string;
+  viewportLocked?: boolean;
 }) {
+  const pathname = usePathname();
+  const lockViewport = nav || viewportLocked;
+  const animateTabFlow = tabFlowPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  const transitionDirection = useMemo(() => {
+    void pathname;
+    return getTabTransitionDirection();
+  }, [pathname]);
+
+  useEffect(() => {
+    setTabTransitionDirection("right");
+  }, [pathname]);
+
   return (
-    <div className="app-shell flex flex-col">
-      <main className={cn("flex-1", className)}>{children}</main>
+    <div
+      className={cn(
+        "app-shell learning-shell flex flex-col",
+        styles.safeAreaShell,
+        !nav && styles.standaloneSafeArea,
+        lockViewport && "h-dvh min-h-0 overflow-hidden",
+        animateTabFlow && styles.tabFlow,
+      )}
+    >
+      <main
+        key={animateTabFlow ? pathname : undefined}
+        onClickCapture={
+          animateTabFlow ? () => setTabTransitionDirection("right") : undefined
+        }
+        className={cn(
+          "flex-1",
+          lockViewport && "min-h-0",
+          animateTabFlow && styles.tabContent,
+          animateTabFlow &&
+            (transitionDirection === "left"
+              ? styles.fromLeft
+              : styles.fromRight),
+          viewportLocked
+            ? "overflow-hidden"
+            : nav && "overflow-y-auto overscroll-y-contain",
+          className,
+        )}
+      >
+        {children}
+      </main>
       {nav ? <BottomNav /> : null}
     </div>
   );

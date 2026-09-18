@@ -2,7 +2,7 @@
   flex-shrink: 0;
   background: #fff;
   border-top: 1px solid #e6eaee;
-  padding-bottom: 34px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .list {
   display: flex;
@@ -34,6 +34,9 @@
   color: #2f6bff;
   font-weight: 700;
 }
+.link[aria-current="page"] .icon {
+  animation: tab-icon-select 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 .link:active {
   opacity: 0.7;
 }
@@ -51,14 +54,22 @@
   mask-position: center;
   mask-repeat: no-repeat;
 }
-/* The frame already accounts for the device's real safe-area inset. */
-@media (max-width: 767px), (pointer: coarse) and (max-width: 1023px) {
-  .nav {
-    padding-bottom: 16px;
+@keyframes tab-icon-select {
+  0% {
+    transform: scale(0.88);
+  }
+  68% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .link {
     transition: none;
+  }
+  .link[aria-current="page"] .icon {
+    animation: none;
   }
 }

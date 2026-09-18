@@ -2,6 +2,7 @@ import {
   ApiError,
   clearAccessToken,
   createHttpClient,
+  getAuthSessionVersion,
   saveAccessToken,
 } from "./client";
 import {
@@ -40,8 +41,14 @@ function query(params: Record<string, QueryValue>) {
 
 const id = (value: Id) => encodeURIComponent(String(value));
 
+function profileImageForm(input: { file: Blob; fileName: string }) {
+  const form = new FormData();
+  form.set("file", input.file, input.fileName);
+  return form;
+}
+
 export function createRemoteApi(baseUrl: string): ApiContract {
-  const { request, upload } = createHttpClient(baseUrl);
+  const { request, upload, refreshAccessToken } = createHttpClient(baseUrl);
 
   async function persistSession(
     session: AuthSession,
@@ -135,22 +142,17 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         });
         return persistSession(data, { reconcileOnboarding: true });
       },
-      async refresh() {
-        const data = await request<{
-          accessToken: string;
-          tokenType: string;
-          expiresIn: number;
-        }>("/api/auth/token/refresh", {
-          method: "POST",
-          skipAuth: true,
-          skipRefresh: true,
-        });
-        return { ...data, accessToken: saveAccessToken(data.accessToken) };
-      },
+      refresh: refreshAccessToken,
       async signOut() {
-        await request<null>("/api/auth/logout", { method: "POST" });
-        clearAccessToken();
-        markAnonymousSession();
+        const version = getAuthSessionVersion();
+        try {
+          await request<null>("/api/auth/logout", { method: "POST" });
+        } finally {
+          if (version === getAuthSessionVersion()) {
+            clearAccessToken();
+            markAnonymousSession();
+          }
+        }
       },
     },
     users: {
@@ -164,6 +166,29 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
       updateProfile: (input) =>
         request("/api/users/me", { method: "PATCH", body: input }),
+      getProfileImage: () => request("/api/users/me/profile-image"),
+      createProfileImage: (input) =>
+        request("/api/users/me/profile-image", {
+          method: "POST",
+          body: profileImageForm(input),
+        }),
+      updateProfileImage: (input) =>
+        request("/api/users/me/profile-image", {
+          method: "PUT",
+          body: profileImageForm(input),
+        }),
+      deleteProfileImage: () =>
+        request("/api/users/me/profile-image", { method: "DELETE" }),
+      getTitle: () => request("/api/users/me/title"),
+      createTitleExam: () =>
+        request("/api/users/me/title-exams", { method: "POST" }),
+      getTitleExam: (examId) =>
+        request(`/api/users/me/title-exams/${id(examId)}`),
+      submitTitleExam: (examId, analysisId) =>
+        request(`/api/users/me/title-exams/${id(examId)}/submit`, {
+          method: "POST",
+          body: { analysisId },
+        }),
       async withdraw() {
         const result = await request<{ withdrawnAt: string }>("/api/users/me", {
           method: "DELETE",
@@ -250,6 +275,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
     },
     training: {
+      getAnalysisCapabilities: () => request("/api/analysis-capabilities"),
       create: (input) =>
         request("/api/training-sessions", { method: "POST", body: input }),
       get: (sessionId) => request(`/api/training-sessions/${id(sessionId)}`),
@@ -295,15 +321,17 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           `/api/training-sessions/${id(sessionId)}/recordings/${id(recordingId)}/select`,
           { method: "PATCH" },
         ),
-      analyze: (sessionId) =>
+      analyze: (sessionId, consent) =>
         request(`/api/training-sessions/${id(sessionId)}/analyze`, {
           method: "POST",
+          body: consent,
         }),
       getAnalysisStatus: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis/status`),
-      retryAnalysis: (sessionId) =>
+      retryAnalysis: (sessionId, consent) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis/retry`, {
           method: "POST",
+          body: consent,
         }),
       getSessionAnalysis: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}/analysis`),

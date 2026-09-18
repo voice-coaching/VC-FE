@@ -18,7 +18,7 @@ export function TopBar({
   onBack?: () => void;
 }) {
   return (
-    <header className="flex items-center gap-3 px-5 pt-6 pb-4">
+    <header className="relative flex h-16 shrink-0 items-center gap-3 px-5 py-3">
       {onBack ? (
         <button
           onClick={onBack}
@@ -39,14 +39,16 @@ export function TopBar({
       {typeof progress === "number" ? (
         <div className="h-1.5 flex-1 rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-foreground transition-[width] duration-500"
+            className="h-full rounded-full bg-primary transition-[width] duration-500"
             style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
           />
         </div>
       ) : (
-        <span className="flex-1 text-sm font-semibold">{title}</span>
+        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[18px] font-bold">
+          {title}
+        </h1>
       )}
-      {right}
+      <div className="ml-auto">{right}</div>
     </header>
   );
 }

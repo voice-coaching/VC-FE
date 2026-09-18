@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
-import { api } from "@/lib/api";
+import { api, disableDeveloperApi } from "@/lib/api";
 import { getPostLoginDestination } from "@/lib/terms-flow";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,6 +39,7 @@ export function EmailLoginScreen() {
     setError(null);
 
     try {
+      disableDeveloperApi();
       const session = await api.auth.signIn({
         email: normalizedEmail,
         password,

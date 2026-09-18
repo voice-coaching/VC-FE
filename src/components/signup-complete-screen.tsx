@@ -40,7 +40,7 @@ export function SignupCompleteScreen() {
         <footer className="flex shrink-0 flex-col items-center overflow-hidden px-6 pb-6">
           <button
             type="button"
-            onClick={() => router.replace("/onboarding")}
+            onClick={() => router.replace("/home")}
             className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] focus-visible:ring-offset-2"
           >
             시작하기

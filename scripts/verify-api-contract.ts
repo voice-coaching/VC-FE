@@ -11,6 +11,14 @@ const expected = [
   "POST /api/auth/logout",
   "GET /api/users/me",
   "PATCH /api/users/me",
+  "GET /api/users/me/profile-image",
+  "POST /api/users/me/profile-image",
+  "PUT /api/users/me/profile-image",
+  "DELETE /api/users/me/profile-image",
+  "GET /api/users/me/title",
+  "POST /api/users/me/title-exams",
+  "GET /api/users/me/title-exams/1",
+  "POST /api/users/me/title-exams/1/submit",
   "DELETE /api/users/me",
   "GET /api/onboarding/me",
   "PUT /api/onboarding/me",
@@ -32,6 +40,7 @@ const expected = [
   "POST /api/courses/1/complete",
   "GET /api/courses/1/steps",
   "GET /api/users/me/course-progress?status=IN_PROGRESS",
+  "GET /api/analysis-capabilities",
   "POST /api/training-sessions",
   "GET /api/training-sessions/1",
   "POST /api/training-sessions/1/cancel",
@@ -113,11 +122,35 @@ await api.auth.socialLogin({
   provider: "GOOGLE",
   authorizationCode: "code",
   redirectUri: "http://localhost:3000/oauth/google/callback",
+  state: "native.test-state",
 });
+assert.deepEqual(JSON.parse(String(requestOptions.at(-1)?.body)), {
+  provider: "GOOGLE",
+  authorizationCode: "code",
+  redirectUri: "http://localhost:3000/oauth/google/callback",
+  state: "native.test-state",
+});
+assert.equal(
+  new Headers(requestOptions.at(-1)?.headers).has("authorization"),
+  false,
+  "OAuth code exchange must not send an existing access token",
+);
 await api.auth.refresh();
 await api.auth.signOut();
 await api.users.getMe();
 await api.users.updateProfile({ nickname: "tester" });
+await api.users.getProfileImage();
+const profileImage = {
+  file: new Blob(["profile"], { type: "image/png" }),
+  fileName: "profile.png",
+};
+await api.users.createProfileImage(profileImage);
+await api.users.updateProfileImage(profileImage);
+await api.users.deleteProfileImage();
+await api.users.getTitle();
+await api.users.createTitleExam();
+await api.users.getTitleExam(1);
+await api.users.submitTitleExam(1, 1);
 await api.users.withdraw();
 await api.onboarding.get();
 await api.onboarding.save({
@@ -150,6 +183,7 @@ await api.courses.updateProgress(1, { lastStepId: 1, progressPercent: 50 });
 await api.courses.complete(1);
 await api.courses.getSteps(1);
 await api.courses.getMyProgress("IN_PROGRESS");
+await api.training.getAnalysisCapabilities();
 await api.training.create({ contentId: 1, learningFocus: "PRONUNCIATION" });
 await api.training.get(1);
 await api.training.cancel(1);
@@ -167,9 +201,13 @@ await api.training.registerRecording(1, {
 await api.training.listRecordings(1);
 await api.training.deleteRecording(1, 1);
 await api.training.selectRecording(1, 1);
-await api.training.analyze(1);
+const analysisConsent = {
+  accepted: true as const,
+  policyRevision: "voice-processing-consent-v1",
+};
+await api.training.analyze(1, analysisConsent);
 await api.training.getAnalysisStatus(1);
-await api.training.retryAnalysis(1);
+await api.training.retryAnalysis(1, analysisConsent);
 await api.training.getSessionAnalysis(1);
 await api.training.getRecordingPlaybackUrl(1);
 await api.training.complete(1, 60);
@@ -194,10 +232,27 @@ await api.myPage.getWeaknessRecommendations({
 
 assert.equal(
   expected.length,
-  53,
-  "Frontend adapter endpoint count must be 53 (not backend implementation coverage).",
+  62,
+  "Frontend adapter endpoint count must include the AI capability contract.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
+for (const path of [
+  "POST /api/training-sessions/1/analyze",
+  "POST /api/training-sessions/1/analysis/retry",
+]) {
+  const callIndex = calls.indexOf(path);
+  assert.notEqual(callIndex, -1);
+  assert.deepEqual(
+    JSON.parse(String(requestOptions[callIndex]?.body)),
+    analysisConsent,
+  );
+}
+const regenerateIndex = calls.indexOf(
+  "POST /api/analyses/1/feedback/regenerate",
+);
+assert.deepEqual(JSON.parse(String(requestOptions[regenerateIndex]?.body)), {
+  feedbackStyle: "COACHING",
+});
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
 assert.ok(
   requestOptions.every(

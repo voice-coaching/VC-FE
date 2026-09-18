@@ -1,15 +1,9 @@
 "use client";
 
-import { LogIn, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
-import { api, type SocialProvider } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { SocialProvider } from "@/lib/api";
+import { requestDeveloperSession } from "@/lib/developer-login";
 import { safeInternalPath } from "@/lib/navigation";
 import { redirectToOAuthProvider } from "@/lib/oauth";
 import { getPostLoginDestination } from "@/lib/terms-flow";
@@ -43,26 +37,35 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
   const [oauthProvider, setOAuthProvider] = useState<SocialProvider | null>(
     null,
   );
-  const [developerUnlocked, setDeveloperUnlocked] = useState(false);
   const [developerSubmitting, setDeveloperSubmitting] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const unlockClicks = useRef(0);
-  const emailInput = useRef<HTMLInputElement>(null);
   const destination = safeInternalPath(returnTo, "/home");
   const submitting = oauthProvider !== null || developerSubmitting;
 
   useEffect(() => {
-    if (developerUnlocked) emailInput.current?.focus();
-  }, [developerUnlocked]);
+    const resetPendingOAuth = () => setOAuthProvider(null);
+    const resetPendingOAuthWhenVisible = () => {
+      if (document.visibilityState === "visible") resetPendingOAuth();
+    };
+
+    window.addEventListener("pageshow", resetPendingOAuth);
+    document.addEventListener("visibilitychange", resetPendingOAuthWhenVisible);
+    return () => {
+      window.removeEventListener("pageshow", resetPendingOAuth);
+      document.removeEventListener(
+        "visibilitychange",
+        resetPendingOAuthWhenVisible,
+      );
+    };
+  }, []);
 
   const startOAuth = useCallback(
-    (provider: SocialProvider) => {
+    async (provider: SocialProvider) => {
       setOAuthProvider(provider);
       setError(null);
       try {
-        redirectToOAuthProvider(provider, destination);
+        await redirectToOAuthProvider(provider, destination);
       } catch (reason) {
         setOAuthProvider(null);
         setError(
@@ -75,23 +78,11 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
     [destination],
   );
 
-  function handleUnlockClick() {
-    unlockClicks.current += 1;
-    if (unlockClicks.current < DEVELOPER_UNLOCK_COUNT) return;
-    unlockClicks.current = 0;
-    setDeveloperUnlocked(true);
-    setError(null);
-  }
-
-  async function signInAsDeveloper(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function signInAsDeveloper() {
     setDeveloperSubmitting(true);
     setError(null);
     try {
-      const session = await api.auth.signIn({
-        email: email.trim(),
-        password,
-      });
+      const session = await requestDeveloperSession();
       router.replace(getPostLoginDestination(session, destination));
     } catch (reason) {
       setError(
@@ -104,6 +95,13 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
     }
   }
 
+  function handleUnlockClick() {
+    unlockClicks.current += 1;
+    if (unlockClicks.current < DEVELOPER_UNLOCK_COUNT) return;
+    unlockClicks.current = 0;
+    void signInAsDeveloper();
+  }
+
   return (
     <section aria-labelledby="login-methods-heading">
       <h2
@@ -112,12 +110,12 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
       >
         <button
           type="button"
-          aria-expanded={developerUnlocked}
-          aria-controls="developer-login"
+          disabled={submitting}
+          aria-busy={developerSubmitting}
           onClick={handleUnlockClick}
-          className="cursor-default select-none rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-default select-none rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
         >
-          로그인 방법
+          {developerSubmitting ? "개발자 로그인 중…" : "로그인 옵션"}
         </button>
       </h2>
 
@@ -136,74 +134,6 @@ export function LoginMethods({ returnTo = "/home" }: { returnTo?: string }) {
           </button>
         ))}
       </div>
-
-      {developerUnlocked && (
-        <form
-          id="developer-login"
-          className="mt-6 border-t border-border pt-5"
-          onSubmit={signInAsDeveloper}
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">개발자 로그인</h3>
-            <button
-              type="button"
-              aria-label="개발자 로그인 닫기"
-              onClick={() => {
-                setDeveloperUnlocked(false);
-                setEmail("");
-                setPassword("");
-                setError(null);
-              }}
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-          <div className="mt-3 flex flex-col gap-2.5">
-            <label className="sr-only" htmlFor="developer-email">
-              개발자 이메일
-            </label>
-            <input
-              ref={emailInput}
-              id="developer-email"
-              type="email"
-              required
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setError(null);
-              }}
-              placeholder="개발자 이메일"
-              autoComplete="username"
-              className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-            />
-            <label className="sr-only" htmlFor="developer-password">
-              개발자 비밀번호
-            </label>
-            <input
-              id="developer-password"
-              type="password"
-              required
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                setError(null);
-              }}
-              placeholder="개발자 비밀번호"
-              autoComplete="current-password"
-              className="rounded-2xl bg-surface px-4 py-3.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-            />
-            <button
-              type="submit"
-              disabled={submitting || !email.trim() || !password}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-4 text-sm font-semibold text-background disabled:opacity-40"
-            >
-              <LogIn className="size-4" />
-              {developerSubmitting ? "로그인 중…" : "개발자 로그인"}
-            </button>
-          </div>
-        </form>
-      )}
 
       {error && (
         <p
