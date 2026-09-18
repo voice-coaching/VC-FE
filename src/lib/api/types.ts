@@ -416,6 +416,7 @@ export interface VisualSupplement {
 }
 
 export interface AnalysisResult {
+  coaching?: import("@/lib/coaching").AnalysisCoaching | null;
   id: Id;
   status: AnalysisStatus;
   outcome: AnalysisOutcome | null;
