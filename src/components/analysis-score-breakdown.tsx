@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import React, { useId, useState } from "react";
 import { Info } from "lucide-react";
 import type { AnalysisCriterionScore, AnalysisScoreBreakdown } from "@/lib/api";
 
@@ -27,7 +27,11 @@ function CriterionRow({ item }: { item: AnalysisCriterionScore }) {
           aria-expanded={expanded}
           aria-controls={descriptionId}
           aria-describedby={expanded ? descriptionId : undefined}
-          onClick={() => setPinned(!pinned)}
+          onClick={() => {
+            setPinned(!pinned);
+            setHovered(false);
+            setFocused(false);
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={(event) => {
