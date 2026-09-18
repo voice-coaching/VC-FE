@@ -68,3 +68,63 @@ test("server failure remains distinct from delayed analysis", async () => {
       error instanceof AnalysisFailed && error.message === "분석 서버 오류",
   );
 });
+
+test("default wait continues beyond two minutes and accepts completion", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  let calls = 0;
+  Date.now = () => now;
+  try {
+    const id = await pollAnalysis({
+      getStatus: async () => {
+        calls += 1;
+        now = calls === 1 ? 121_000 : 599_999;
+        return calls === 1 ? pending : { ...pending, status: "COMPLETED" };
+      },
+      onProgress: () => {},
+      intervalMs: 0,
+    });
+    assert.equal(id, 12);
+    assert.equal(calls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("a received completion wins over the elapsed-time check", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    const id = await pollAnalysis({
+      getStatus: async () => {
+        now = 600_001;
+        return { ...pending, status: "COMPLETED" };
+      },
+      onProgress: () => {},
+    });
+    assert.equal(id, 12);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("default wait stops after ten minutes if analysis is still processing", async () => {
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  try {
+    await assert.rejects(
+      pollAnalysis({
+        getStatus: async () => {
+          now = 600_001;
+          return pending;
+        },
+        onProgress: () => {},
+      }),
+      AnalysisWaitTimeout,
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+});

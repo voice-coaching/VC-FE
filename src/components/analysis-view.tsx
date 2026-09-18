@@ -1,5 +1,7 @@
 "use client";
 
+import { AnalysisScoreHierarchyView } from "@/components/analysis-score-hierarchy";
+
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
@@ -9,6 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { AnalysisScoreBreakdownView } from "@/components/analysis-score-breakdown";
 import { ReferencePlayer } from "@/components/reference-player";
 import type {
   AnalysisResult,
@@ -71,15 +74,15 @@ export function AnalysisView({
               ? "억양 정확도"
               : "발음 정확도"}
           </p>
-          <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
-            {focusScore == null
-              ? "점수 미제공"
-              : focusScore >= 80
+          {focusScore != null && (
+            <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
+              {focusScore >= 80
                 ? "좋음"
                 : focusScore >= 60
                   ? "보통"
                   : "연습 필요"}
-          </span>
+            </span>
+          )}
         </div>
         <p className="mt-2 text-[42px] leading-tight font-bold">
           {focusScore == null ? "—" : Math.round(focusScore)}
@@ -98,6 +101,11 @@ export function AnalysisView({
           </div>
         )}
       </section>
+      {analysis.scoreHierarchy ? (
+        <AnalysisScoreHierarchyView hierarchy={analysis.scoreHierarchy} />
+      ) : (
+        <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
+      )}
       {analysis.pronunciationEvidence && (
         <section className="design-card">
           <h2 className="text-sm font-bold">교정 근거</h2>
