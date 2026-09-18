@@ -33,6 +33,10 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { courseResultProgress } from "@/lib/course-result-progress";
 import { AnalysisFailed, pollAnalysis } from "@/lib/analysis-polling";
+import {
+  describePracticeError,
+  PracticeInputError,
+} from "@/lib/practice-error";
 import { cn } from "@/lib/utils";
 
 type Phase =
@@ -70,6 +74,7 @@ export function PracticeSession({
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [requestFailure, setRequestFailure] = useState<unknown>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [titleExamResult, setTitleExamResult] =
     useState<UserTitleExamResult | null>(null);
@@ -228,6 +233,7 @@ export function PracticeSession({
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
+        setRequestFailure(reason);
         setCanRetryAnalysis(reason instanceof AnalysisFailed);
         setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
         setRequestError(
@@ -293,12 +299,16 @@ export function PracticeSession({
       capabilities.recordingUpload !== "CONFIGURED" ||
       capabilities.analysisRequests !== "CONFIGURED"
     ) {
-      throw new Error("현재 서버의 음성 분석 기능을 사용할 수 없습니다.");
+      throw new PracticeInputError(
+        "unsupported",
+        "현재 서버의 음성 분석 기능을 사용할 수 없습니다.",
+      );
     }
     if (
       !capabilities.supportedLearningFocuses.includes(analysisLearningFocus)
     ) {
-      throw new Error(
+      throw new PracticeInputError(
+        "unsupported",
         analysisLearningFocus === "INTONATION"
           ? "현재 AI 분석은 발음 연습만 지원합니다. 억양 분석은 준비 중입니다."
           : "이 연습 유형은 현재 AI 분석에서 지원하지 않습니다.",
@@ -321,11 +331,13 @@ export function PracticeSession({
 
   async function startRecording() {
     setRequestError(null);
+    setRequestFailure(null);
     try {
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -344,6 +356,7 @@ export function PracticeSession({
         onProgress: setAnalysisProgress,
       });
     } catch (reason) {
+      setRequestFailure(reason);
       setCanRetryAnalysis(reason instanceof AnalysisFailed);
       setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
       throw reason;
@@ -353,12 +366,14 @@ export function PracticeSession({
   async function checkExistingAnalysis() {
     if (!sessionId) return;
     setRequestError(null);
+    setRequestFailure(null);
     setCanCheckAnalysis(false);
     setPhase("analyzing");
     try {
       const analysisId = await waitForAnalysis(sessionId);
       await loadResult(sessionId, analysisId);
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -377,14 +392,16 @@ export function PracticeSession({
       );
       if (recording?.qualityStatus === "PASS") return recording;
       if (recording && recording.qualityStatus !== "PENDING") {
-        throw new Error(
+        throw new PracticeInputError(
+          "quality",
           `음질 검사를 통과하지 못했습니다: ${recording.qualityStatus}`,
         );
       }
       await wait(1_000);
     }
-    throw new Error(
-      "음질 검사 대기 시간이 초과되었습니다. 다시 녹음해 주세요.",
+    throw new PracticeInputError(
+      "preparation",
+      "음질 검사 처리가 지연되고 있습니다. 소리가 작다는 의미는 아닙니다.",
     );
   }
 
@@ -445,26 +462,39 @@ export function PracticeSession({
       return;
     }
     setRequestError(null);
+    setRequestFailure(null);
     setCanRetryAnalysis(false);
     setUploadProgress(0);
     try {
       const capabilities = await getAnalysisCapabilities();
       if (recorder.durationMs < capabilities.minimumDurationMs) {
-        throw new Error(
+        throw new PracticeInputError(
+          "input",
           `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 녹음해 주세요.`,
         );
       }
       if (recorder.durationMs > capabilities.maximumDurationMs) {
-        throw new Error(
+        throw new PracticeInputError(
+          "input",
           `녹음은 ${Math.floor(capabilities.maximumDurationMs / 1_000)}초 이내여야 합니다.`,
         );
       }
       const prepared = await prepareAudioForAnalysis(
         recorder.blob,
         capabilities.acceptedAudioMimeTypes,
-      );
+      ).catch((reason: unknown) => {
+        throw new PracticeInputError(
+          "preparation",
+          reason instanceof Error
+            ? reason.message
+            : "오디오 변환에 실패했습니다.",
+        );
+      });
       if (prepared.blob.size > capabilities.maximumAudioUploadBytes) {
-        throw new Error("녹음 파일이 서버의 업로드 제한을 초과했습니다.");
+        throw new PracticeInputError(
+          "input",
+          "녹음 파일이 서버의 업로드 제한을 초과했습니다.",
+        );
       }
       const activeSessionId = await ensureSession();
       setPhase("uploading");
@@ -505,6 +535,7 @@ export function PracticeSession({
         completedAnalysisId ?? requested.analysisId,
       );
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -517,6 +548,7 @@ export function PracticeSession({
   async function retryFailedAnalysis() {
     if (!sessionId) return;
     setRequestError(null);
+    setRequestFailure(null);
     setCanRetryAnalysis(false);
     setAnalysisProgress(0);
     setPhase("analyzing");
@@ -528,6 +560,7 @@ export function PracticeSession({
       const completedAnalysisId = await waitForAnalysis(sessionId);
       await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -547,6 +580,7 @@ export function PracticeSession({
     }
     setRegenerating(true);
     setRequestError(null);
+    setRequestFailure(null);
     try {
       const feedback = await api.analyses.regenerateFeedback(
         analysis.id,
@@ -563,6 +597,7 @@ export function PracticeSession({
           : current,
       );
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -583,6 +618,7 @@ export function PracticeSession({
     const key = String(recordingId);
     setDeletingRecordingId(key);
     setRequestError(null);
+    setRequestFailure(null);
     try {
       await api.training.deleteRecording(sessionId, recordingId);
       setRecordingAttempts((current) =>
@@ -591,6 +627,7 @@ export function PracticeSession({
         ),
       );
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -627,6 +664,7 @@ export function PracticeSession({
     }
     setLoadingNext(true);
     setRequestError(null);
+    setRequestFailure(null);
     try {
       const next = await api.content.getNext({
         type: content.contentType,
@@ -639,6 +677,7 @@ export function PracticeSession({
         `/practice/${next.id}?returnTo=${encodeURIComponent(returnTo)}`,
       );
     } catch (reason) {
+      setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
           ? reason.message
@@ -649,22 +688,19 @@ export function PracticeSession({
   }
 
   if (phase === "error") {
-    const quality = /음질|소리|마이크|녹음/.test(
-      requestError ?? recorder.error ?? "",
-    );
+    const errorView = describePracticeError(requestFailure, recorder.status);
+    const quality = errorView.kind === "quality";
+    const rerecord =
+      quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
       <div className="flex min-h-[calc(100dvh-92px)] flex-col px-5 pb-8">
         <div className="my-auto py-10 text-center">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
             <CircleAlert className="size-9" />
           </span>
-          <h2 className="mt-6 text-2xl font-bold">
-            {quality ? "소리가 잘 들리지 않았어요" : "분석에 실패했어요"}
-          </h2>
+          <h2 className="mt-6 text-2xl font-bold">{errorView.title}</h2>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            {quality
-              ? "아래 내용을 확인하고 다시 녹음해 주세요"
-              : "네트워크 상태를 확인하고 다시 시도해 주세요"}
+            {errorView.hint}
           </p>
           {quality ? (
             <ul className="design-card mt-6 space-y-4 text-left text-sm">
@@ -696,20 +732,31 @@ export function PracticeSession({
         <button
           className="design-action"
           onClick={() => {
+            if (canCheckAnalysis && sessionId) {
+              void checkExistingAnalysis();
+              return;
+            }
             if (canRetryAnalysis) {
               void retryFailedAnalysis();
               return;
             }
-            if (!quality && recorder.blob) {
+            if (!rerecord && recorder.blob) {
               void analyze();
               return;
             }
             recorder.reset();
             setRequestError(null);
+            setRequestFailure(null);
             setPhase("idle");
           }}
         >
-          {quality ? "다시 녹음하기" : "다시 시도하기"}
+          {canCheckAnalysis && sessionId
+            ? "분석 상태 다시 확인"
+            : canRetryAnalysis
+              ? "분석 다시 시도"
+              : rerecord
+                ? "다시 녹음하기"
+                : "다시 시도하기"}
         </button>
         <button
           className="mt-4 py-3 text-sm text-muted-foreground"
@@ -851,6 +898,7 @@ export function PracticeSession({
                   onClick={() => {
                     recorder.reset();
                     setRequestError(null);
+                    setRequestFailure(null);
                     setPhase("idle");
                   }}
                   className="inline-flex items-center justify-center gap-2 rounded-full border border-border py-3 text-xs font-semibold"

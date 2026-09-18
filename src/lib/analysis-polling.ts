@@ -14,7 +14,7 @@ export class AnalysisFailed extends Error {}
 export async function pollAnalysis({
   getStatus,
   onProgress,
-  timeoutMs = 120_000,
+  timeoutMs = 600_000,
   intervalMs = 1_000,
 }: {
   getStatus: () => Promise<AnalysisProgress>;
@@ -39,7 +39,6 @@ export async function pollAnalysis({
     } finally {
       clearTimeout(timer);
     }
-    if (Date.now() >= deadline) throw new AnalysisWaitTimeout();
     onProgress(status.progressPercent);
     if (status.status === "COMPLETED") return status.analysisId;
     if (status.status === "FAILED") {
@@ -47,6 +46,7 @@ export async function pollAnalysis({
         status.failureReason || "음성 분석에 실패했습니다.",
       );
     }
+    if (Date.now() >= deadline) throw new AnalysisWaitTimeout();
     await new Promise((resolve) =>
       setTimeout(
         resolve,
