@@ -1,5 +1,7 @@
 "use client";
 
+import { AnalysisScoreHierarchyView } from "@/components/analysis-score-hierarchy";
+
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
@@ -99,7 +101,11 @@ export function AnalysisView({
           </div>
         )}
       </section>
-      <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
+      {analysis.scoreHierarchy ? (
+        <AnalysisScoreHierarchyView hierarchy={analysis.scoreHierarchy} />
+      ) : (
+        <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
+      )}
       {analysis.pronunciationEvidence && (
         <section className="design-card">
           <h2 className="text-sm font-bold">교정 근거</h2>
