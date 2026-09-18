@@ -390,6 +390,8 @@ export interface SessionAnalysis {
   overallScore: number | null;
   pronunciationScore: number | null;
   intonationScore: number | null;
+  scoreBreakdown?: AnalysisScoreBreakdown | null;
+  scoreHierarchy?: AnalysisScoreHierarchy | null;
 }
 
 export interface PronunciationEvidence {
@@ -415,6 +417,24 @@ export interface VisualSupplement {
   closedBetaLipObservation: object | null;
 }
 
+export interface AnalysisCriterionScore {
+  criterionId: string;
+  label: string;
+  description: string;
+  expectedPhones: string[];
+  maxScore: number;
+  applicable: boolean;
+  sampleCount: number;
+  level: number | null;
+  score: number | null;
+}
+
+export interface AnalysisScoreBreakdown {
+  rubricRevision: string;
+  applicableMaxScore: number;
+  items: AnalysisCriterionScore[];
+}
+
 export interface AnalysisResult {
   coaching?: import("@/lib/coaching").AnalysisCoaching | null;
   id: Id;
@@ -435,6 +455,8 @@ export interface AnalysisResult {
   pronunciationEvidence: PronunciationEvidence | null;
   visualSupplement: VisualSupplement | null;
   analyzedAt: string | null;
+  scoreBreakdown?: AnalysisScoreBreakdown | null;
+  scoreHierarchy?: AnalysisScoreHierarchy | null;
 }
 
 export interface AnalysisSegment {
@@ -729,4 +751,41 @@ export interface ApiContract {
       contentType?: ContentType;
     }): Promise<WeaknessRecommendations>;
   };
+}
+
+export interface AnalysisScoreHierarchy {
+  rubricRevision: string;
+  leafCount: number;
+  groups: AnalysisScoreGroup[];
+}
+export interface AnalysisScoreGroup {
+  id: string;
+  label: string;
+  description: string;
+  maxScore: number | null;
+  score: number | null;
+  items: AnalysisScoreLeaf[];
+}
+export interface AnalysisScoreLeaf {
+  id: string;
+  label: string;
+  description: string;
+  status:
+    | "SCORED"
+    | "NOT_APPLICABLE"
+    | "NOT_PROVIDED"
+    | "UNAVAILABLE"
+    | "NOT_VALIDATED"
+    | "LEGACY_UNAVAILABLE";
+  sampleCount: number | null;
+  level: number | null;
+  normalizedScore: number | null;
+  attention: boolean;
+  observation: {
+    value: number;
+    unit: string;
+    selectedExpectedIndex: number;
+    videoStartMs: number;
+    videoEndMs: number;
+  } | null;
 }
