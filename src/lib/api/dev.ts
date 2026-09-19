@@ -750,6 +750,9 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
       }),
     },
     content: {
+      createCustom: async () => {
+        throw new Error("실제 계정으로 로그인해 주세요.");
+      },
       list: async (filters = {}) => {
         const filtered = contents.filter(
           (item) =>
@@ -796,6 +799,14 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         playbackUrl: SILENT_WAV,
         expiresAt: NOW,
       }),
+    },
+    examples: {
+      list: async () => {
+        throw new Error("실제 계정으로 로그인해 주세요.");
+      },
+      getAudio: async () => {
+        throw new Error("실제 계정으로 로그인해 주세요.");
+      },
     },
     courses: {
       list: async (filters = {}) =>

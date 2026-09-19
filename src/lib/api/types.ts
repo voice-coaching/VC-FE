@@ -564,6 +564,23 @@ export interface WeaknessRecommendations {
   }>;
 }
 
+export interface PracticeExample {
+  id: string;
+  order: number;
+  text: string;
+  hint: string | null;
+  focus: LearningFocus | null;
+  locale: string;
+  practiceContentId: Id;
+}
+
+export interface PracticeExamples {
+  courseId: Id;
+  stepId: Id;
+  revision: number;
+  items: PracticeExample[];
+}
+
 export interface ApiContract {
   auth: {
     checkEmail(email: string): Promise<{ email: string; available: boolean }>;
@@ -621,6 +638,16 @@ export interface ApiContract {
       size?: number;
     }): Promise<PageResult<PracticeContentSummary>>;
     get(id: Id): Promise<PracticeContent>;
+    createCustom(
+      input: {
+        title: string;
+        scriptText: string;
+        learningFocus: LearningFocus;
+        retention: "SESSION_HISTORY";
+        locale: "ko-KR";
+      },
+      idempotencyKey: string,
+    ): Promise<PracticeContent>;
     getNext(filters: {
       type: ContentType;
       category?: string;
@@ -630,6 +657,10 @@ export interface ApiContract {
     getRecommendations(id: Id): Promise<PracticeContentRecommendation[]>;
     getReferenceAudios(id: Id): Promise<ReferenceAudio[]>;
     getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
+  };
+  examples: {
+    list(courseId: Id, stepId: Id, sessionId?: Id): Promise<PracticeExamples>;
+    getAudio(exampleId: string, signal?: AbortSignal): Promise<Blob>;
   };
   courses: {
     list(filters?: {

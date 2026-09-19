@@ -96,6 +96,7 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   timeoutMs?: number;
   skipAuth?: boolean;
   skipRefresh?: boolean;
+  responseType?: "json" | "audio";
 }
 
 function joinUrl(baseUrl: string, path: string) {
@@ -143,12 +144,20 @@ export function createHttpClient(baseUrl: string) {
       timeoutMs = 20_000,
       skipAuth = false,
       skipRefresh = false,
+      responseType = "json",
+      signal,
       ...fetchOptions
     } = options;
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (signal?.aborted) abort();
+    signal?.addEventListener("abort", abort, { once: true });
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const headers = new Headers(fetchOptions.headers);
-    headers.set("Accept", "application/json");
+    headers.set(
+      "Accept",
+      responseType === "audio" ? "audio/mpeg" : "application/json",
+    );
     const token = getAccessToken();
     const version = sessionVersion;
     if (token && !skipAuth) headers.set("Authorization", `Bearer ${token}`);
@@ -177,9 +186,61 @@ export function createHttpClient(baseUrl: string) {
         // this response was in flight. Reuse it instead of rotating again.
         if (getAccessToken() === token) await refreshAccessToken();
         assertCurrentSession(version);
+        if (signal?.aborted)
+          throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
         return request<T>(path, { ...options, skipRefresh: true });
       }
 
+      if (responseType === "audio" && response.ok) {
+        if (
+          response.status !== 200 ||
+          response.headers
+            .get("content-type")
+            ?.split(";")[0]
+            .trim()
+            .toLowerCase() !== "audio/mpeg" ||
+          !response.body
+        ) {
+          await response.body?.cancel();
+          throw new ApiError(
+            "올바른 예시 음성을 받지 못했습니다.",
+            502,
+            "INVALID_AUDIO",
+          );
+        }
+        const reader = response.body.getReader();
+        const chunks: Uint8Array<ArrayBuffer>[] = [];
+        let size = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > 2_000_000) {
+              await reader.cancel();
+              throw new ApiError(
+                "예시 음성 크기가 제한을 초과했습니다.",
+                502,
+                "INVALID_AUDIO",
+              );
+            }
+            chunks.push(new Uint8Array(value));
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        assertCurrentSession(version);
+        if (!size)
+          throw new ApiError(
+            "예시 음성이 비어 있습니다.",
+            502,
+            "INVALID_AUDIO",
+          );
+        const headerToken = response.headers.get("x-new-access-token");
+        if (headerToken && getAccessToken() === token)
+          storeAccessToken(headerToken);
+        return new Blob(chunks, { type: "audio/mpeg" }) as T;
+      }
       if (response.status === 204) return undefined as T;
 
       const contentType = response.headers.get("content-type") ?? "";
@@ -226,6 +287,8 @@ export function createHttpClient(baseUrl: string) {
     } catch (error) {
       if (error instanceof ApiError) throw error;
       if (error instanceof DOMException && error.name === "AbortError") {
+        if (signal?.aborted)
+          throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
         throw new ApiError("요청 시간이 초과되었습니다.", 408, "TIMEOUT");
       }
       throw new ApiError(
@@ -236,6 +299,7 @@ export function createHttpClient(baseUrl: string) {
       );
     } finally {
       clearTimeout(timeout);
+      signal?.removeEventListener("abort", abort);
     }
   }
 
@@ -286,5 +350,11 @@ export function createHttpClient(baseUrl: string) {
     });
   }
 
-  return { request, upload, refreshAccessToken };
+  function requestAudio(
+    path: string,
+    options: Omit<RequestOptions, "responseType"> = {},
+  ) {
+    return request<Blob>(path, { ...options, responseType: "audio" });
+  }
+  return { request, requestAudio, upload, refreshAccessToken };
 }

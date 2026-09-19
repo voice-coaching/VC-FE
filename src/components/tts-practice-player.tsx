@@ -2,86 +2,68 @@
 
 import { Pause, Play, Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { PracticeExample } from "@/lib/practice-examples";
+import { api, ApiError, type PracticeExample } from "@/lib/api";
 
 type PlaybackStatus = "idle" | "loading" | "playing";
 
 export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
   const audio = useRef<HTMLAudioElement>(null);
-  const urls = useRef(new Map<string, string>());
-  const requestSequence = useRef(0);
+  const pending = useRef<AbortController | null>(null);
+  const currentUrl = useRef<string | null>(null);
+  const sequence = useRef(0);
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    requestSequence.current += 1;
-    audio.current?.pause();
-    window.speechSynthesis?.cancel();
-    setStatus("idle");
-    setNotice(null);
-  }, [example.id]);
-
-  useEffect(
-    () => () => {
-      window.speechSynthesis?.cancel();
-      for (const url of urls.current.values()) URL.revokeObjectURL(url);
-    },
-    [],
-  );
-
-  function playWithDeviceVoice() {
-    if (!("speechSynthesis" in window)) {
-      setStatus("idle");
-      setNotice("이 브라우저에서는 음성 재생을 지원하지 않습니다.");
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(example.text);
-    utterance.lang = "ko-KR";
-    utterance.rate = 0.92;
-    utterance.voice =
-      window.speechSynthesis
-        .getVoices()
-        .find((voice) => voice.lang.toLowerCase().startsWith("ko")) ?? null;
-    utterance.onend = () => setStatus("idle");
-    utterance.onerror = () => {
-      setStatus("idle");
-      setNotice("기기 음성을 재생하지 못했습니다.");
+    const player = audio.current;
+    return () => {
+      sequence.current += 1;
+      pending.current?.abort();
+      player?.pause();
+      if (currentUrl.current) URL.revokeObjectURL(currentUrl.current);
+      currentUrl.current = null;
     };
-    setNotice("Chirp 음성을 사용할 수 없어 기기 음성으로 재생하고 있어요.");
-    setStatus("playing");
-    window.speechSynthesis.speak(utterance);
-  }
+  }, [example.id]);
 
   async function play() {
     const player = audio.current;
     if (!player) return;
     if (status === "playing") {
       player.pause();
-      window.speechSynthesis?.cancel();
       setStatus("idle");
       return;
     }
-
-    const sequence = ++requestSequence.current;
+    const attempt = ++sequence.current;
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
     setStatus("loading");
     setNotice(null);
     try {
-      let url = urls.current.get(example.id);
-      if (!url) {
-        const response = await fetch(
-          `/api/tts?exampleId=${encodeURIComponent(example.id)}`,
-        );
-        if (!response.ok) throw new Error("Google Chirp TTS unavailable");
-        url = URL.createObjectURL(await response.blob());
-        urls.current.set(example.id, url);
-      }
-      if (sequence !== requestSequence.current) return;
-      player.src = url;
+      // Re-authorize every replay. The backend owns the reusable audio cache.
+      const blob = await api.examples.getAudio(example.id, controller.signal);
+      if (attempt !== sequence.current) return;
+      if (currentUrl.current) URL.revokeObjectURL(currentUrl.current);
+      currentUrl.current = URL.createObjectURL(blob);
+      player.src = currentUrl.current;
       await player.play();
-      setStatus("playing");
-    } catch {
-      if (sequence === requestSequence.current) playWithDeviceVoice();
+      if (attempt === sequence.current) setStatus("playing");
+    } catch (reason) {
+      if (attempt !== sequence.current) return;
+      setStatus("idle");
+      const message =
+        reason instanceof ApiError
+          ? reason.status === 401
+            ? "로그인 후 예시 음성을 다시 들어 주세요."
+            : reason.status === 404
+              ? "등록된 예시 음성을 찾을 수 없습니다."
+              : reason.status === 429
+                ? "요청이 많습니다. 잠시 후 다시 시도해 주세요."
+                : reason.status === 503
+                  ? "예시 음성이 아직 준비되지 않았습니다."
+                  : reason.message
+          : "음성을 재생하지 못했습니다. 다시 눌러 재생해 주세요.";
+      setNotice(message);
     }
   }
 
@@ -90,7 +72,10 @@ export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
       <audio
         ref={audio}
         onEnded={() => setStatus("idle")}
-        onPause={() => status === "playing" && setStatus("idle")}
+        onError={() => {
+          setStatus("idle");
+          setNotice("음성을 재생하지 못했습니다. 다시 시도해 주세요.");
+        }}
       />
       <button
         type="button"
@@ -106,16 +91,13 @@ export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
           <Play className="size-4" fill="currentColor" />
         )}
         {status === "loading"
-          ? "Chirp 음성 만드는 중…"
+          ? "예시 음성 준비 중…"
           : status === "playing"
             ? "음성 멈추기"
-            : "Chirp 음성 듣기"}
+            : "예시 발음 듣기"}
       </button>
       {notice && (
-        <p
-          role="status"
-          className="mt-2 text-center text-[11px] text-[#4e5968]"
-        >
+        <p role="status" className="mt-2 text-center text-xs text-[#4e5968]">
           {notice}
         </p>
       )}

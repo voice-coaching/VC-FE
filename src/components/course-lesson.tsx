@@ -7,12 +7,10 @@ import {
   type CourseSummary,
   type CourseStep,
   type PracticeContent,
+  type PracticeExample,
+  type PracticeExamples,
 } from "@/lib/api";
 import { TtsPracticePlayer } from "@/components/tts-practice-player";
-import {
-  getPracticeExampleSet,
-  type PracticeExample,
-} from "@/lib/practice-examples";
 
 export function CourseLesson({
   course,
@@ -27,14 +25,41 @@ export function CourseLesson({
   stepCount: number;
   description?: string;
   onClose: () => void;
-  onPractice: (example: PracticeExample) => void;
+  onPractice: (example: PracticeExample, revision: number) => void;
 }) {
   const [example, setExample] = useState(false);
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
   const [content, setContent] = useState<PracticeContent | null>(null);
+  const [examples, setExamples] = useState<PracticeExamples | null>(null);
+  const [exampleError, setExampleError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setExamples(null);
+    setExampleError(null);
+    setSelectedExampleIndex(0);
+    api.examples
+      .list(course.id, step.id)
+      .then((value) => {
+        if (active) setExamples(value);
+      })
+      .catch((reason) => {
+        if (active)
+          setExampleError(
+            reason instanceof Error
+              ? reason.message
+              : "예문을 불러오지 못했습니다.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [course.id, step.id, reload]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
+    setContent(null);
+    setError(null);
     if (step.practiceContentId != null)
       api.content
         .get(step.practiceContentId)
@@ -68,12 +93,7 @@ export function CourseLesson({
           "끝까지 힘을 유지해요",
         ]
       : [];
-  const exampleSet = getPracticeExampleSet({
-    courseType: course.courseType,
-    courseTitle: course.title,
-    stepTitle: step.title,
-  });
-  const selectedExample = exampleSet.examples[selectedExampleIndex];
+  const selectedExample = examples?.items[selectedExampleIndex];
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-5 pt-8 pb-5">
@@ -119,17 +139,35 @@ export function CourseLesson({
           <>
             <div className="flex items-end justify-between gap-3 pt-1">
               <div>
-                <h3 className="text-base font-semibold">연습 문제 5개</h3>
+                <h3 className="text-base font-semibold">
+                  연습 문제 {examples?.items.length ?? 0}개
+                </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   한 문장을 골라 음성을 듣고 따라 읽어보세요.
                 </p>
               </div>
               <span className="shrink-0 text-xs font-semibold text-primary">
-                {selectedExampleIndex + 1}/5
+                {selectedExample ? selectedExampleIndex + 1 : 0}/
+                {examples?.items.length ?? 0}
               </span>
             </div>
+            {exampleError ? (
+              <div role="alert">
+                <p>{exampleError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReload((value) => value + 1)}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            ) : !examples ? (
+              <p role="status">예문을 불러오는 중…</p>
+            ) : examples.items.length === 0 ? (
+              <p>아직 등록된 예문이 없습니다.</p>
+            ) : null}
             <ol className="space-y-2.5">
-              {exampleSet.examples.map((practiceExample, index) => {
+              {examples?.items.map((practiceExample, index) => {
                 const selected = index === selectedExampleIndex;
                 return (
                   <li key={practiceExample.id}>
@@ -150,9 +188,6 @@ export function CourseLesson({
                         </strong>
                         <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                           {practiceExample.hint}
-                          {practiceExample.focus
-                            ? ` · 강조: ${practiceExample.focus}`
-                            : ""}
                         </span>
                       </span>
                     </button>
@@ -160,7 +195,12 @@ export function CourseLesson({
                 );
               })}
             </ol>
-            <TtsPracticePlayer example={selectedExample} />
+            {selectedExample && examples && (
+              <TtsPracticePlayer
+                key={`${selectedExample.id}:${examples.revision}`}
+                example={selectedExample}
+              />
+            )}
           </>
         ) : (
           <>
@@ -280,9 +320,13 @@ export function CourseLesson({
       <div className="design-dock">
         <button
           type="button"
-          disabled={!content && !example}
+          disabled={example && !selectedExample}
           onClick={() =>
-            example ? onPractice(selectedExample) : setExample(true)
+            example
+              ? selectedExample &&
+                examples &&
+                onPractice(selectedExample, examples.revision)
+              : setExample(true)
           }
           className="design-action"
         >
