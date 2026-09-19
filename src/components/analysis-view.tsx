@@ -1,5 +1,7 @@
 "use client";
 
+import { AnalysisScoreHierarchyView } from "@/components/analysis-score-hierarchy";
+
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import {
@@ -9,7 +11,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { AnalysisScoreBreakdownView } from "@/components/analysis-score-breakdown";
 import { ReferencePlayer } from "@/components/reference-player";
+import { CoachingView } from "@/components/coaching-view";
+import { supportedCoaching } from "@/lib/coaching";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -62,6 +67,9 @@ export function AnalysisView({
     (analysis.outcome === "COMPLETED_NO_ISSUE"
       ? "이번 분석에서는 교정할 발음 근거가 선택되지 않았어요."
       : "제공된 코칭 문구가 없습니다.");
+  const coaching = supportedCoaching(analysis.coaching);
+  if (coaching)
+    return <CoachingView coaching={coaching} recordingUrl={recordingUrl} />;
   return (
     <>
       <section className="rounded-[20px] bg-gradient-to-br from-[#285df5] to-[#5c86ff] p-5 text-white shadow-[0_8px_16px_#3468ff20]">
@@ -98,6 +106,11 @@ export function AnalysisView({
           </div>
         )}
       </section>
+      {analysis.scoreHierarchy ? (
+        <AnalysisScoreHierarchyView hierarchy={analysis.scoreHierarchy} />
+      ) : (
+        <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
+      )}
       {analysis.pronunciationEvidence && (
         <section className="design-card">
           <h2 className="text-sm font-bold">교정 근거</h2>
