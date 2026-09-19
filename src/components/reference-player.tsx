@@ -4,21 +4,33 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
 import { api, type Id } from "@/lib/api";
 
-export function ReferencePlayer({
-  contentId,
-  title = "기준 발음 듣기",
-  source,
-  durationSeconds,
-  compact = false,
-}: {
+type ReferencePlayerProps = {
   contentId?: Id;
   title?: string;
   source?: string;
   durationSeconds?: number;
   compact?: boolean;
-}) {
+};
+
+export function ReferencePlayer(props: ReferencePlayerProps) {
+  return (
+    <ReferencePlayerSession
+      key={JSON.stringify([props.contentId, props.source])}
+      {...props}
+    />
+  );
+}
+
+function ReferencePlayerSession({
+  contentId,
+  title = "기준 발음 듣기",
+  source,
+  durationSeconds,
+  compact = false,
+}: ReferencePlayerProps) {
   const audio = useRef<HTMLAudioElement>(null);
-  const [url, setUrl] = useState(source);
+  const sequence = useRef(0);
+  const busy = useRef(false);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [repeat, setRepeat] = useState(false);
@@ -29,41 +41,61 @@ export function ReferencePlayer({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setUrl(source);
-    setPlaying(false);
-    setElapsed(0);
-    setDuration(fallbackDuration);
-    setError(null);
-  }, [contentId, fallbackDuration, source]);
+    const player = audio.current;
+    return () => {
+      sequence.current += 1;
+      player?.pause();
+      player?.removeAttribute("src");
+      player?.load();
+    };
+  }, []);
+
   async function toggle() {
-    if (!audio.current) return;
-    if (playing) {
-      audio.current.pause();
+    const player = audio.current;
+    if (!player || busy.current) return;
+    if (!player.paused) {
+      player.pause();
       return;
     }
+    busy.current = true;
+    const attempt = ++sequence.current;
     setLoading(true);
     setError(null);
     try {
-      let nextUrl = url;
-      if (!nextUrl && contentId != null) {
-        const items = await api.content.getReferenceAudios(contentId);
-        const selected = items.find((item) => item.primary) ?? items[0];
-        if (!selected) throw new Error("등록된 기준 음성이 없습니다.");
-        nextUrl = (await api.content.getReferenceAudioPlaybackUrl(selected.id))
-          .playbackUrl;
-        setUrl(nextUrl);
+      let nextUrl = source;
+      // Preserve an in-progress pause/resume, but refresh signed URLs on replay.
+      if (!player.getAttribute("src") || player.ended || player.error) {
+        if (!nextUrl && contentId != null) {
+          const items = await api.content.getReferenceAudios(contentId);
+          if (attempt !== sequence.current) return;
+          const selected = items.find((item) => item.primary) ?? items[0];
+          if (!selected) throw new Error("등록된 기준 음성이 없습니다.");
+          nextUrl = (
+            await api.content.getReferenceAudioPlaybackUrl(selected.id)
+          ).playbackUrl;
+        }
+        if (attempt !== sequence.current) return;
+        if (!nextUrl) throw new Error("재생할 음성이 없습니다.");
+        // This is the sole source owner; React must not reassign src during play().
+        if (player.getAttribute("src") !== nextUrl) player.src = nextUrl;
       }
-      if (!nextUrl) throw new Error("재생할 음성이 없습니다.");
-      if (audio.current.src !== nextUrl) audio.current.src = nextUrl;
-      await audio.current.play();
+      await player.play();
     } catch (reason) {
+      if (attempt !== sequence.current) return;
+      setPlaying(false);
+      player.removeAttribute("src");
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "음성을 재생하지 못했습니다.",
+        reason instanceof Error && reason.name === "AbortError"
+          ? "재생이 중단됐습니다. 다시 재생해 주세요."
+          : reason instanceof Error
+            ? reason.message
+            : "음성을 재생하지 못했습니다.",
       );
     } finally {
-      setLoading(false);
+      if (attempt === sequence.current) {
+        busy.current = false;
+        setLoading(false);
+      }
     }
   }
   const time = (seconds: number) =>
@@ -88,7 +120,6 @@ export function ReferencePlayer({
       </div>
       <audio
         ref={audio}
-        src={url}
         loop={repeat}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
@@ -103,7 +134,6 @@ export function ReferencePlayer({
         }
         onError={() => {
           setPlaying(false);
-          setUrl(undefined);
           setError("음성을 불러오지 못했습니다. 다시 재생해 주세요.");
         }}
       />
