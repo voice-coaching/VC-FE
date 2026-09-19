@@ -1,52 +1,24 @@
-import { createDevApi } from "./dev";
+import { clearAccessToken, getAccessToken } from "./client";
 import { createRemoteApi } from "./remote";
-import type { ApiContract } from "./types";
+import { markAnonymousSession } from "../auth-session";
 
-// Keep browser and native requests on the frontend origin. The server route
-// forwards them to the configured backend and turns the HttpOnly refresh
-// cookie into a first-party cookie, which is reliable inside iOS WKWebView.
-const remoteApi = createRemoteApi("/api/backend");
-const DEVELOPER_MODE_KEY = "ttobak.developer-mode";
-let developerModeEnabled = false;
+// Catalog, examples, recordings and results share one authenticated DB API.
+// A browser flag must never replace server content IDs with mock records.
+export const api = createRemoteApi("/api/backend");
 
-function hasStoredDeveloperMode() {
-  if (typeof window === "undefined") return false;
+export function disableDeveloperApi() {
+  if (typeof window === "undefined") return;
   try {
-    return window.localStorage.getItem(DEVELOPER_MODE_KEY) === "true";
-  } catch {
-    return false;
+    window.localStorage.removeItem("ttobak.developer-mode");
+  } catch {}
+  if (getAccessToken() === "ttobak-local-development-token") {
+    clearAccessToken();
+    markAnonymousSession();
   }
 }
 
-function activeApi() {
-  return isDeveloperApiEnabled() ? developerApi : remoteApi;
-}
-
-export function isDeveloperApiEnabled() {
-  return developerModeEnabled || hasStoredDeveloperMode();
-}
-
-export function enableDeveloperApi() {
-  developerModeEnabled = true;
-  try {
-    window.localStorage.setItem(DEVELOPER_MODE_KEY, "true");
-  } catch {}
-}
-
-export function disableDeveloperApi() {
-  developerModeEnabled = false;
-  try {
-    window.localStorage.removeItem(DEVELOPER_MODE_KEY);
-  } catch {}
-}
-
-const developerApi = createDevApi(disableDeveloperApi);
-
-export const api = new Proxy(remoteApi, {
-  get(_target, property: keyof ApiContract) {
-    return activeApi()[property];
-  },
-}) as ApiContract;
+// Migrate only the old local token; preserve real authenticated sessions.
+disableDeveloperApi();
 
 export { ApiError } from "./client";
 export type * from "./types";

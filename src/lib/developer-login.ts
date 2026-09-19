@@ -1,19 +1,9 @@
-import { api, disableDeveloperApi, enableDeveloperApi } from "@/lib/api";
-import { markAuthenticatedSession } from "@/lib/auth-session";
+import { ApiError } from "./api/client";
 
-const DEVELOPER_ACCOUNT = {
-  email: "dev@ttobak.local",
-  password: "Dev1234!",
-} as const;
-
-export async function requestDeveloperSession() {
-  enableDeveloperApi();
-  try {
-    const session = await api.auth.signIn(DEVELOPER_ACCOUNT);
-    markAuthenticatedSession(session);
-    return session;
-  } catch (reason) {
-    disableDeveloperApi();
-    throw reason;
-  }
+export async function requestDeveloperSession(): Promise<never> {
+  throw new ApiError(
+    "예문과 연습 데이터는 서버에서 불러옵니다. 실제 계정으로 로그인해 주세요.",
+    401,
+    "REAL_ACCOUNT_REQUIRED",
+  );
 }
