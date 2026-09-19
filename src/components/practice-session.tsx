@@ -18,7 +18,6 @@ import {
 } from "@/hooks/use-audio-recorder";
 import {
   api,
-  isDeveloperApiEnabled,
   type AnalysisCapabilities,
   type AnalysisResult,
   type AnalysisSegment,
@@ -452,12 +451,6 @@ export function PracticeSession({
     if (localOnly) {
       setRequestError(
         "내 문장은 서버 콘텐츠 ID가 없어 AI 분석을 요청할 수 없습니다.",
-      );
-      return;
-    }
-    if (isDeveloperApiEnabled()) {
-      setRequestError(
-        "개발자 로그인에서는 고정된 예시 결과를 제공하지 않습니다. 실제 AI 분석은 카카오·네이버·구글 로그인 후 이용해 주세요.",
       );
       return;
     }
