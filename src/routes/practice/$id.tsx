@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PracticeDetail } from "@/components/practice-detail";
@@ -8,10 +8,7 @@ import { PracticeSession } from "@/components/practice-session";
 import { TopBar } from "@/components/top-bar";
 import { api, type PracticeContent } from "@/lib/api";
 import { safeInternalPath } from "@/lib/navigation";
-import {
-  createExamplePracticeContent,
-  findPracticeExample,
-} from "@/lib/practice-examples";
+import { loadPracticeContent } from "@/lib/practice-examples";
 
 export default function Practice({ contentId }: { contentId: string }) {
   const searchParams = useSearchParams();
@@ -22,22 +19,23 @@ export default function Practice({ contentId }: { contentId: string }) {
   const requestedReturnTo = searchParams.get("returnTo");
   const returnTo = safeInternalPath(requestedReturnTo, "/home");
   const exampleId = searchParams.get("exampleId");
-  const localExample = useMemo(
-    () => findPracticeExample(exampleId),
-    [exampleId],
-  );
+  const courseId = searchParams.get("courseId");
+  const stepId = searchParams.get("courseStepId");
+  const revision = searchParams.get("exampleRevision");
+  const sessionId = searchParams.get("sessionId");
 
   useEffect(() => {
     let active = true;
     setContent(null);
     setError(null);
-    setStarted(Boolean(localExample));
-    if (localExample) {
-      setContent(createExamplePracticeContent(localExample));
-      return;
-    }
-    api.content
-      .get(contentId)
+    setStarted(Boolean(exampleId));
+    loadPracticeContent(api, contentId, {
+      exampleId,
+      courseId,
+      stepId,
+      revision,
+      sessionId,
+    })
       .then((value) => active && setContent(value))
       .catch(
         (reason) =>
@@ -51,7 +49,7 @@ export default function Practice({ contentId }: { contentId: string }) {
     return () => {
       active = false;
     };
-  }, [contentId, exampleId, localExample]);
+  }, [contentId, exampleId, courseId, stepId, revision, sessionId]);
 
   return (
     <AppShell nav={false}>
@@ -79,7 +77,6 @@ export default function Practice({ contentId }: { contentId: string }) {
           <PracticeSession
             key={String(content.id)}
             content={content}
-            localOnly={Boolean(localExample)}
             onTitleChange={setSessionTitle}
           />
         ) : (

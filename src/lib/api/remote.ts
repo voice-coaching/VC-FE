@@ -48,7 +48,8 @@ function profileImageForm(input: { file: Blob; fileName: string }) {
 }
 
 export function createRemoteApi(baseUrl: string): ApiContract {
-  const { request, upload, refreshAccessToken } = createHttpClient(baseUrl);
+  const { request, requestAudio, upload, refreshAccessToken } =
+    createHttpClient(baseUrl);
 
   async function persistSession(
     session: AuthSession,
@@ -221,6 +222,12 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request<PageResult<PracticeContentSummary>>(
           `/api/practice-contents${query(filters)}`,
         ),
+      createCustom: (input, idempotencyKey) =>
+        request("/api/practice-contents/custom", {
+          method: "POST",
+          body: input,
+          headers: { "Idempotency-Key": idempotencyKey },
+        }),
       get: (contentId) =>
         request<PracticeContent>(`/api/practice-contents/${id(contentId)}`),
       getNext: (filters) =>
@@ -246,6 +253,16 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
       getReferenceAudioPlaybackUrl: (audioId) =>
         request(`/api/reference-audios/${id(audioId)}/playback-url`),
+    },
+    examples: {
+      list: (courseId, stepId, sessionId) =>
+        request(
+          `/api/courses/${id(courseId)}/steps/${id(stepId)}/practice-examples${query({ sessionId })}`,
+        ),
+      getAudio: (exampleId, signal) =>
+        requestAudio(`/api/practice-examples/${id(exampleId)}/audio`, {
+          signal,
+        }),
     },
     courses: {
       list: (filters = {}) => request(`/api/courses${query(filters)}`),

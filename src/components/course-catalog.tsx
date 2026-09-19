@@ -18,7 +18,7 @@ import {
   type CourseType,
   type UserCourseProgress,
 } from "@/lib/api";
-import type { PracticeExample } from "@/lib/practice-examples";
+import type { PracticeExample } from "@/lib/api";
 
 function progressMap(items: UserCourseProgress[]) {
   return Object.fromEntries(items.map((item) => [String(item.courseId), item]));
@@ -325,20 +325,22 @@ export function CourseCatalog({
     return (
       <AppShell nav={false}>
         <CourseLesson
+          key={`${lesson.course.id}:${lesson.step.id}`}
           course={lesson.course}
           step={lesson.step}
           stepCount={lesson.count}
           description={detailsByCourse[String(lesson.course.id)]?.description}
           onClose={() => setLesson(null)}
-          onPractice={(example: PracticeExample) => {
+          onPractice={(example: PracticeExample, revision: number) => {
             const params = new URLSearchParams({
               courseId: String(lesson.course.id),
               courseStepId: String(lesson.step.id),
               returnTo: type ? `/class/${type.toLowerCase()}` : "/class",
               exampleId: example.id,
+              exampleRevision: String(revision),
             });
             router.push(
-              `/practice/${lesson.step.practiceContentId}?${params.toString()}`,
+              `/practice/${example.practiceContentId}?${params.toString()}`,
             );
           }}
         />
