@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ReferencePlayer } from "@/components/reference-player";
 import { api, type PracticeContent } from "@/lib/api";
 import { categoryLabel } from "@/lib/content-labels";
+import { splitSentences } from "@/lib/sentences";
 
 export function PracticeDetail({
   content,
@@ -42,9 +43,7 @@ export function PracticeDetail({
   }
   const announcer = content.contentType === "ANNOUNCER";
   const news = content.contentType === "NEWS";
-  const sentences = content.scriptText
-    .match(/[^.!?。！？]+[.!?。！？]*/g)
-    ?.filter((value) => value.trim()) ?? [content.scriptText];
+  const sentences = splitSentences(content.scriptText);
   const difficulty = {
     BEGINNER: "초급",
     INTERMEDIATE: "중급",

@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen, Check, ChevronRight, TrendingUp } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CourseLesson } from "@/components/course-lesson";
-import { TopBar } from "@/components/top-bar";
 import {
   ApiError,
   api,
@@ -348,30 +347,62 @@ export function CourseCatalog({
     );
 
   return (
-    <AppShell nav={!selectedCourse}>
-      <TopBar
-        to="/home"
-        onBack={selectedCourse ? () => setExpandedId(null) : undefined}
-        title={selectedCourse?.title ?? "클래스"}
-      />
+    <AppShell
+      nav={!selectedCourse}
+      chromeColor="#f2f4f6"
+      className="bg-[#f2f4f6]"
+    >
+      <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
+        {selectedCourse ? (
+          <button
+            type="button"
+            onClick={() => setExpandedId(null)}
+            aria-label="클래스 목록으로 돌아가기"
+            className="flex size-10 items-center justify-center"
+          >
+            <Image
+              src="/figma/home/chevron-left.svg"
+              alt=""
+              width={24}
+              height={24}
+            />
+          </button>
+        ) : (
+          <Link
+            href="/home"
+            aria-label="홈으로 돌아가기"
+            className="flex size-10 items-center justify-center"
+          >
+            <Image
+              src="/figma/home/chevron-left.svg"
+              alt=""
+              width={24}
+              height={24}
+            />
+          </Link>
+        )}
+        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
+          {selectedCourse?.title ?? "클래스"}
+        </h1>
+      </header>
       <div className="flex min-h-[calc(100dvh-80px)] flex-col">
-        <div className="px-5 pb-6">
+        <div className={selectedCourse ? "px-5 pb-6" : "pb-6"}>
           <p className="sr-only">
             {title} · {description}
           </p>
           {!selectedCourse && (
             <nav
-              className="relative mb-5 grid grid-cols-2 gap-1 rounded-xl bg-[#f3f4f5] p-1"
+              className="relative mx-5 mb-4 grid h-[58px] grid-cols-2 border-b border-[#dfe3e7]"
               aria-label="클래스 유형"
             >
               <span
                 aria-hidden="true"
                 data-active-indicator={indicatorType.toLowerCase()}
-                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%_-_6px)] rounded-[9px] bg-white shadow-[0_2px_5px_#0000000a] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/2 bg-[#191f28] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
                 style={{
                   transform:
                     indicatorType === "INTONATION"
-                      ? "translate3d(calc(100% + 4px), 0, 0)"
+                      ? "translate3d(100%, 0, 0)"
                       : "translate3d(0, 0, 0)",
                 }}
               />
@@ -383,10 +414,10 @@ export function CourseCatalog({
                 aria-current={
                   indicatorType === "PRONUNCIATION" ? "page" : undefined
                 }
-                className={`relative z-10 rounded-[9px] px-1 py-2.5 text-center text-sm transition-colors duration-200 ${
+                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-200 ${
                   indicatorType === "PRONUNCIATION"
-                    ? "font-semibold text-[#191f28]"
-                    : "text-[#8b929a]"
+                    ? "font-bold text-[#191f28]"
+                    : "font-medium text-[#8b95a1]"
                 }`}
               >
                 발음 클래스
@@ -399,10 +430,10 @@ export function CourseCatalog({
                 aria-current={
                   indicatorType === "INTONATION" ? "page" : undefined
                 }
-                className={`relative z-10 rounded-[9px] px-1 py-2.5 text-center text-sm transition-colors duration-200 ${
+                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-200 ${
                   indicatorType === "INTONATION"
-                    ? "font-semibold text-[#191f28]"
-                    : "text-[#8b929a]"
+                    ? "font-bold text-[#191f28]"
+                    : "font-medium text-[#8b95a1]"
                 }`}
               >
                 억양 클래스
@@ -419,47 +450,37 @@ export function CourseCatalog({
           )}
           {selectedCourse ? (
             <>
-              <div className="mb-3 flex gap-2 text-xs text-muted-foreground">
-                <span className="rounded bg-muted px-2 py-1">
+              <div className="flex gap-3 pt-2 text-xs font-medium">
+                <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-primary">
                   {level(selectedCourse.difficulty)}
                 </span>
-                {detail && (
-                  <span className="rounded bg-muted px-2 py-1">
+                {detail ? (
+                  <span className="px-0 py-1 text-[#6b7684]">
                     {detail.stepCount}단계
                   </span>
-                )}
-                <span className="rounded bg-muted px-2 py-1">
-                  약 {selectedCourse.estimatedMinutes}분
-                </span>
+                ) : null}
               </div>
-              <h2 className="text-2xl font-bold">{selectedCourse.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {detail?.description ?? "상세 정보를 불러오는 중…"}
+              <h2 className="mt-3 text-[22px] leading-8 font-bold tracking-[-0.02em]">
+                {detail?.description || selectedCourse.title}
+              </h2>
+              <p className="mt-1 text-sm leading-5 text-[#6b7684]">
+                발음 원리를 단계별로 익히고 직접 소리 내어 연습해요
               </p>
-              <section className="my-5 rounded-[20px] bg-[#edf2ff] p-5 text-primary">
-                <div className="mb-4 flex justify-between text-sm">
-                  <span>진행 상황</span>
-                  <b>{Math.round(selectedCourse.progressPercent)}%</b>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-primary/10">
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: `${selectedCourse.progressPercent}%` }}
-                  />
-                </div>
-                {steps.find((step) => !step.completed) && (
-                  <p className="mt-3 text-xs">
-                    다음: {steps.find((step) => !step.completed)?.title}
-                  </p>
-                )}
+              <section className="mt-4 rounded-2xl bg-white p-4 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
+                <strong className="block text-[15px] leading-[22px]">
+                  이 클래스를 마치면
+                </strong>
+                <p className="mt-1 text-[13px] leading-[18px] text-[#4e5968]">
+                  {detail?.description ?? "학습 내용을 불러오는 중이에요"}
+                </p>
               </section>
-              <div className="mb-4 flex justify-between">
-                <h3 className="text-base font-semibold">구성 단계</h3>
-                <span className="text-sm text-muted-foreground">
+              <div className="mt-5 mb-3 flex justify-between">
+                <h3 className="text-[17px] leading-6 font-bold">구성 단계</h3>
+                <span className="text-[13px] leading-[18px] text-[#8b95a1]">
                   {steps.length}단계
                 </span>
               </div>
-              <ol className="design-card divide-y divide-border !py-0">
+              <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
                 {steps.map((step, index) => {
                   const firstIncomplete = steps.findIndex(
                     (item) => !item.completed,
@@ -474,10 +495,10 @@ export function CourseCatalog({
                         type="button"
                         disabled={locked || startingId !== null}
                         onClick={() => void start(selectedCourse, step)}
-                        className="flex w-full items-center gap-3 py-4 text-left disabled:cursor-default disabled:opacity-35"
+                        className="flex min-h-[57px] w-full items-center gap-3 text-left disabled:cursor-default"
                       >
                         <span
-                          className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm ${step.completed ? "bg-primary text-white" : locked ? "bg-muted text-muted-foreground" : "border border-primary text-primary"}`}
+                          className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] font-medium ${step.completed ? "bg-primary text-white" : locked ? "bg-[#f2f4f6] text-[#b0b8c1]" : "border-2 border-primary text-primary"}`}
                         >
                           {step.completed ? (
                             <Check className="size-4" />
@@ -485,10 +506,14 @@ export function CourseCatalog({
                             index + 1
                           )}
                         </span>
-                        <span className="flex-1 text-sm font-medium">
+                        <span
+                          className={`flex-1 text-[15px] leading-[22px] font-medium ${locked ? "text-[#b0b8c1]" : "text-[#333d4b]"}`}
+                        >
                           {step.title}
                         </span>
-                        <ChevronRight className="size-4 text-muted-foreground" />
+                        {!locked ? (
+                          <ChevronRight className="size-5 text-[#b0b8c1]" />
+                        ) : null}
                       </button>
                     </li>
                   );
@@ -500,7 +525,7 @@ export function CourseCatalog({
               클래스를 불러오는 중…
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 px-5">
               {items.map((course) => {
                 const detail = detailsByCourse[String(course.id)];
                 const progress = Math.max(
@@ -512,7 +537,7 @@ export function CourseCatalog({
                     key={String(course.id)}
                     type="button"
                     onClick={() => void toggleDetails(course)}
-                    className="design-card flex w-full items-start gap-3.5 !p-[18px] text-left"
+                    className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
                   >
                     <span
                       className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${activeType === "PRONUNCIATION" ? "bg-[#ccddff]" : "bg-[#edf2ff]"}`}
@@ -521,9 +546,7 @@ export function CourseCatalog({
                         src={
                           activeType === "PRONUNCIATION"
                             ? "/figma/class/icon.svg"
-                            : /의문/.test(course.title)
-                              ? "/figma/class/rising.svg"
-                              : "/figma/class/falling.svg"
+                            : "/figma/class/falling.svg"
                         }
                         alt=""
                         width={28}
@@ -533,7 +556,7 @@ export function CourseCatalog({
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <h2 className="text-[15px] font-bold">
+                        <h2 className="text-[15px] leading-[22px] font-bold">
                           {course.title}
                         </h2>
                         <span
@@ -544,19 +567,19 @@ export function CourseCatalog({
                             : `${Math.round(progress)}%`}
                         </span>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                      <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
                         {detail?.description || "원리부터 차근차근 연습해요"}
                       </p>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#e5e8eb]">
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dfe3e7]">
                         <div
                           className="h-full rounded-full bg-primary"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        {level(course.difficulty)}　
-                        {detail ? `|　${detail.stepCount}단계　` : ""}|　약{" "}
-                        {course.estimatedMinutes}분
+                      <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
+                        {detail
+                          ? `${detail.stepCount}단계`
+                          : "단계 정보 불러오는 중"}
                       </p>
                     </div>
                   </button>

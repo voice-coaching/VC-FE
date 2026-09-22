@@ -6,6 +6,16 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { TopBar } from "@/components/top-bar";
 import { api } from "@/lib/api";
 import { getCachedUser, markAuthenticatedUser } from "@/lib/auth-session";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const PROFILE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -21,6 +31,7 @@ export default function ProfileSettings() {
     null,
   );
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,8 +92,7 @@ export default function ProfileSettings() {
   }
 
   async function deleteProfileImage() {
-    if (!profileImageUrl || !window.confirm("프로필 사진을 삭제할까요?"))
-      return;
+    if (!profileImageUrl) return;
     setImageAction("delete");
     setMessage(null);
     try {
@@ -139,7 +149,7 @@ export default function ProfileSettings() {
               <button
                 type="button"
                 disabled={imageAction !== null}
-                onClick={() => void deleteProfileImage()}
+                onClick={() => setConfirmDelete(true)}
                 className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#f7f8fa] px-4 text-sm font-semibold text-[#6b7684] disabled:opacity-50"
               >
                 <Trash2 className="size-4" />
@@ -203,6 +213,27 @@ export default function ProfileSettings() {
           {saving ? "저장 중…" : "저장하기"}
         </button>
       </div>
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">
+          <AlertDialogHeader>
+            <AlertDialogTitle>프로필 사진을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              삭제한 사진은 복구할 수 없어요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
+            <AlertDialogCancel className="mt-0 min-h-12 rounded-full">
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-12 rounded-full bg-red-500 text-white"
+              onClick={() => void deleteProfileImage()}
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

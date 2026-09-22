@@ -1,0 +1,11 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="speak-gradient" x1="11" y1="8" x2="55" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#56B4FF"/>
+      <stop offset="0.48" stop-color="#0080FF"/>
+      <stop offset="1" stop-color="#6C5CE7"/>
+    </linearGradient>
+  </defs>
+  <path d="M49.5 16.5C45.6 11.5 39.9 9 32.4 9C22.7 9 16 14.2 16 21.6C16 29 21.6 31.8 31.7 34.1C41 36.2 44.3 38.1 44.3 42.6C44.3 47 40 50 33 50C25.6 50 20 47.4 15.4 42" stroke="url(#speak-gradient)" stroke-width="9" stroke-linecap="round"/>
+  <path d="M12 52.5L18.5 46" stroke="#0080FF" stroke-width="5" stroke-linecap="round"/>
+</svg>

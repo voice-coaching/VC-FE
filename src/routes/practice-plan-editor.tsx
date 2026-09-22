@@ -13,6 +13,16 @@ import {
   type PracticePlan,
 } from "@/lib/practice-plan";
 import styles from "./practice-plan-editor.module.css";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const titles: Record<keyof PracticePlan, string> = {
   goal: "무엇을 위해 연습하고 싶나요?",
@@ -37,6 +47,7 @@ export function PracticePlanEditor({
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const activeTrigger = useRef<HTMLButtonElement | null>(null);
   const multiple = field === "focus" || field === "method";
   // Retain custom text entered with the previous free-text editor.
@@ -68,12 +79,8 @@ export function PracticePlanEditor({
             const changed = planFields.some(
               ([key]) => draft[key] !== plan[key],
             );
-            if (
-              !changed ||
-              window.confirm("변경한 내용을 저장하지 않고 나갈까요?")
-            ) {
-              onBack();
-            }
+            if (!changed) onBack();
+            else setConfirmLeave(true);
           }}
         >
           <NavigationIcon />
@@ -235,6 +242,27 @@ export function PracticePlanEditor({
           </button>
         </Dialog.Content>
       </Dialog.Root>
+      <AlertDialog open={confirmLeave} onOpenChange={setConfirmLeave}>
+        <AlertDialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">
+          <AlertDialogHeader>
+            <AlertDialogTitle>수정을 그만할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              변경한 연습 계획은 저장되지 않아요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
+            <AlertDialogCancel className="mt-0 min-h-12 rounded-full">
+              계속 수정
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-12 rounded-full bg-[#2f6bff] text-white"
+              onClick={onBack}
+            >
+              나가기
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

@@ -23,12 +23,13 @@ export default function Practice({ contentId }: { contentId: string }) {
   const stepId = searchParams.get("courseStepId");
   const revision = searchParams.get("exampleRevision");
   const sessionId = searchParams.get("sessionId");
+  const startImmediately = searchParams.get("start") === "1";
 
   useEffect(() => {
     let active = true;
     setContent(null);
     setError(null);
-    setStarted(Boolean(exampleId));
+    setStarted(Boolean(exampleId) || startImmediately);
     loadPracticeContent(api, contentId, {
       exampleId,
       courseId,
@@ -49,10 +50,23 @@ export default function Practice({ contentId }: { contentId: string }) {
     return () => {
       active = false;
     };
-  }, [contentId, exampleId, courseId, stepId, revision, sessionId]);
+  }, [
+    contentId,
+    exampleId,
+    courseId,
+    stepId,
+    revision,
+    sessionId,
+    startImmediately,
+  ]);
 
   return (
-    <AppShell nav={false}>
+    <AppShell
+      nav={false}
+      viewportLocked
+      chromeColor="#f2f4f6"
+      className="flex min-h-0 flex-col bg-[#f2f4f6]"
+    >
       <TopBar
         to={returnTo}
         title={
@@ -65,32 +79,34 @@ export default function Practice({ contentId }: { contentId: string }) {
                 : "문장 연습"
         }
       />
-      {error ? (
-        <p
-          role="alert"
-          className="px-5 py-12 text-center text-sm text-destructive"
-        >
-          {error}
-        </p>
-      ) : content ? (
-        started || searchParams.get("sessionId") ? (
-          <PracticeSession
-            key={String(content.id)}
-            content={content}
-            onTitleChange={setSessionTitle}
-          />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        {error ? (
+          <p
+            role="alert"
+            className="px-5 py-12 text-center text-sm text-destructive"
+          >
+            {error}
+          </p>
+        ) : content ? (
+          started || searchParams.get("sessionId") ? (
+            <PracticeSession
+              key={String(content.id)}
+              content={content}
+              onTitleChange={setSessionTitle}
+            />
+          ) : (
+            <PracticeDetail
+              key={String(content.id)}
+              content={content}
+              onStart={() => setStarted(true)}
+            />
+          )
         ) : (
-          <PracticeDetail
-            key={String(content.id)}
-            content={content}
-            onStart={() => setStarted(true)}
-          />
-        )
-      ) : (
-        <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-          콘텐츠를 불러오는 중…
-        </p>
-      )}
+          <p className="px-5 py-12 text-center text-sm text-muted-foreground">
+            콘텐츠를 불러오는 중…
+          </p>
+        )}
+      </div>
     </AppShell>
   );
 }

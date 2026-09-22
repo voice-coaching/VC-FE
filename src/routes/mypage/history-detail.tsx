@@ -2,10 +2,42 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
-import { TopBar } from "@/components/top-bar";
 import { ReferencePlayer } from "@/components/reference-player";
-import { api, type TrainingHistoryDetail } from "@/lib/api";
+import { TopBar } from "@/components/top-bar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  api,
+  type AnalysisResult,
+  type AnalysisSegment,
+  type PracticeContent,
+  type TrainingHistoryDetail,
+} from "@/lib/api";
+import { splitSentences } from "@/lib/sentences";
+
+type DetailBundle = {
+  detail: TrainingHistoryDetail;
+  content: PracticeContent;
+  analysis: AnalysisResult;
+  segments: AnalysisSegment[];
+};
+
+const contentLabels: Record<PracticeContent["contentType"], string> = {
+  NEWS: "뉴스 읽기",
+  SENTENCE: "문장 연습",
+  ANNOUNCER: "아나운서 따라 읽기",
+  CLASS_PRACTICE: "클래스",
+};
 
 export default function LearningHistoryDetail({
   sessionId,
@@ -13,48 +45,44 @@ export default function LearningHistoryDetail({
   sessionId: string;
 }) {
   const router = useRouter();
-  const [detail, setDetail] = useState<TrainingHistoryDetail | null>(null);
+  const [bundle, setBundle] = useState<DetailBundle | null>(null);
+  const [tab, setTab] = useState<"recording" | "report">("recording");
   const [error, setError] = useState<string | null>(null);
-  const [playbackUrl, setPlaybackUrl] = useState<string>();
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     let active = true;
-    api.myPage
-      .getTrainingSession(sessionId)
-      .then((value) => active && setDetail(value))
-      .catch(
-        (reason) =>
-          active &&
+    void (async () => {
+      try {
+        const detail = await api.myPage.getTrainingSession(sessionId);
+        const [content, analysis, segmentPage] = await Promise.all([
+          api.content.get(detail.content.id),
+          api.analyses.get(detail.analysis.id),
+          api.analyses.getSegments(detail.analysis.id, { page: 0, size: 100 }),
+        ]);
+        if (active)
+          setBundle({
+            detail,
+            content,
+            analysis,
+            segments: segmentPage.items,
+          });
+      } catch (reason) {
+        if (active)
           setError(
             reason instanceof Error
               ? reason.message
               : "학습 기록을 불러오지 못했습니다.",
-          ),
-      );
+          );
+      }
+    })();
     return () => {
       active = false;
     };
   }, [sessionId]);
 
-  async function playRecording() {
-    if (!detail) return;
-    try {
-      const { playbackUrl } = await api.training.getRecordingPlaybackUrl(
-        detail.recording.id,
-      );
-      setPlaybackUrl(playbackUrl);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "녹음 파일을 재생하지 못했습니다.",
-      );
-    }
-  }
-
   async function deleteHistory() {
-    if (!window.confirm("이 학습 기록을 삭제할까요?")) return;
     setDeleting(true);
     setError(null);
     try {
@@ -70,92 +98,125 @@ export default function LearningHistoryDetail({
     }
   }
 
+  const sentences = bundle
+    ? splitSentences(bundle.content.scriptText)
+    : ([] as string[]);
+
   return (
-    <AppShell nav={false}>
-      <TopBar to="/mypage/history" title="연습 기록" />
-      <div className="space-y-4 px-5 pb-10">
-        {error && (
-          <p
-            role="alert"
-            className="rounded-2xl bg-destructive/10 p-4 text-sm text-destructive"
+    <AppShell
+      nav={false}
+      viewportLocked
+      className="flex flex-col !bg-[#f2f4f6]"
+    >
+      <div className="shrink-0 bg-white">
+        <TopBar
+          to="/mypage/history"
+          title={
+            bundle ? contentLabels[bundle.content.contentType] : "연습 기록"
+          }
+        />
+        <div className="flex px-5">
+          <button
+            type="button"
+            onClick={() => setTab("recording")}
+            className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "recording" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
           >
-            {error}
-          </p>
-        )}
-        {!detail && !error && (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            기록을 불러오는 중…
-          </p>
-        )}
-        {detail && (
-          <>
-            <section className="design-card">
-              <p className="text-xs text-muted-foreground">
-                {new Date(detail.session.completedAt).toLocaleString("ko-KR")}
-              </p>
-              <h1 className="mt-2 text-xl font-bold">{detail.content.title}</h1>
-              <p className="mt-4 text-sm leading-relaxed">
-                {detail.content.scriptText}
-              </p>
-              <div className="mt-5 flex items-end justify-between">
-                <button
-                  type="button"
-                  onClick={() => void playRecording()}
-                  className="rounded-full bg-primary/10 px-4 py-3 text-xs font-semibold text-primary"
+            녹음
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("report")}
+            className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "report" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
+          >
+            AI 리포트
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="m-5 rounded-2xl bg-red-50 p-4 text-sm text-red-600"
+        >
+          {error}
+        </p>
+      )}
+      {!bundle && !error && (
+        <p className="py-12 text-center text-sm text-[#8b95a1]">
+          기록을 불러오는 중…
+        </p>
+      )}
+
+      {bundle && tab === "recording" && (
+        <>
+          <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-6">
+            <section className="space-y-3.5 rounded-[20px] bg-white p-[18px] text-[16px] leading-[1.6]">
+              {sentences.map((sentence, index) => (
+                <p
+                  key={`${index}-${sentence}`}
+                  className={
+                    index === 0
+                      ? "font-bold text-[#191f28]"
+                      : "font-medium text-[#b0b8c1]"
+                  }
                 >
-                  내 녹음 듣기
-                </button>
-                <strong className="text-4xl text-primary">
-                  {detail.analysis.overallScore == null
-                    ? "—"
-                    : Math.round(detail.analysis.overallScore)}
-                </strong>
-              </div>
+                  {sentence}
+                </p>
+              ))}
             </section>
-
-            {playbackUrl && (
-              <ReferencePlayer source={playbackUrl} title="내 녹음" />
-            )}
-            <section className="design-card">
-              <h2 className="text-sm font-semibold">분석 결과</h2>
-              <p className="mt-3 text-sm text-muted-foreground">
-                {detail.analysis.transcript ??
-                  "음성 인식 결과가 제공되지 않았어요."}
-              </p>
-              <div className="mt-4 space-y-2">
-                {detail.segments.map((segment) => (
-                  <div
-                    key={segment.sequenceNo}
-                    className="rounded-2xl bg-surface px-4 py-3 text-xs"
-                  >
-                    <span className="font-semibold">
-                      {segment.expectedText ?? `구간 ${segment.sequenceNo}`}
-                    </span>
-                    {segment.recognizedText != null &&
-                      segment.expectedText !== segment.recognizedText && (
-                        <span className="ml-2 text-destructive">
-                          → {segment.recognizedText}
-                        </span>
-                      )}
-                    <span className="float-right text-muted-foreground">
-                      {segment.resultStatus === "NORMAL" ? "정확" : "개선 필요"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
             <button
               type="button"
               disabled={deleting}
-              onClick={() => void deleteHistory()}
-              className="w-full py-3 text-xs font-semibold text-destructive underline disabled:opacity-50"
+              onClick={() => setConfirmDelete(true)}
+              className="mt-6 w-full py-3 text-[12px] font-medium text-[#8b95a1] underline disabled:opacity-50"
             >
-              {deleting ? "삭제 중…" : "학습 기록 삭제"}
+              {deleting ? "삭제 중…" : "연습 기록 삭제"}
             </button>
-          </>
-        )}
-      </div>
+          </main>
+          <div className="shrink-0 px-5 pb-4">
+            <ReferencePlayer
+              recordingId={bundle.detail.recording.id}
+              title="내 녹음 듣기"
+              durationSeconds={bundle.detail.recording.durationMs / 1_000}
+              variant="recording"
+            />
+          </div>
+        </>
+      )}
+
+      {bundle && tab === "report" && (
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <AnalysisView
+            analysis={bundle.analysis}
+            segments={bundle.segments}
+            content={bundle.content}
+            recordingId={bundle.detail.recording.id}
+            courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
+          />
+        </main>
+      )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 연습 기록을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              삭제한 기록과 분석 결과는 복구할 수 없어요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
+            <AlertDialogCancel className="mt-0 min-h-12 rounded-full">
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-12 rounded-full bg-red-500 text-white"
+              onClick={() => void deleteHistory()}
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }

@@ -1,21 +1,26 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
 import { api, type Id } from "@/lib/api";
 
 type ReferencePlayerProps = {
   contentId?: Id;
+  recordingId?: Id;
   title?: string;
   source?: string;
   durationSeconds?: number;
   compact?: boolean;
+  buttonTone?: "primary" | "neutral";
+  variant?: "default" | "guide" | "recording";
+  disabled?: boolean;
 };
 
 export function ReferencePlayer(props: ReferencePlayerProps) {
   return (
     <ReferencePlayerSession
-      key={JSON.stringify([props.contentId, props.source])}
+      key={JSON.stringify([props.contentId, props.recordingId, props.source])}
       {...props}
     />
   );
@@ -23,10 +28,14 @@ export function ReferencePlayer(props: ReferencePlayerProps) {
 
 function ReferencePlayerSession({
   contentId,
+  recordingId,
   title = "기준 발음 듣기",
   source,
   durationSeconds,
   compact = false,
+  buttonTone,
+  variant = "default",
+  disabled = false,
 }: ReferencePlayerProps) {
   const audio = useRef<HTMLAudioElement>(null);
   const sequence = useRef(0);
@@ -74,6 +83,10 @@ function ReferencePlayerSession({
             await api.content.getReferenceAudioPlaybackUrl(selected.id)
           ).playbackUrl;
         }
+        if (!nextUrl && recordingId != null) {
+          nextUrl = (await api.training.getRecordingPlaybackUrl(recordingId))
+            .playbackUrl;
+        }
         if (attempt !== sequence.current) return;
         if (!nextUrl) throw new Error("재생할 음성이 없습니다.");
         // This is the sole source owner; React must not reassign src during play().
@@ -104,14 +117,119 @@ function ReferencePlayerSession({
       .padStart(2, "0")}:${Math.floor(seconds % 60)
       .toString()
       .padStart(2, "0")}`;
+  if (variant === "guide")
+    return (
+      <section className="flex flex-col items-center gap-1.5">
+        <audio
+          ref={audio}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+          onError={() => setError("가이드 음성을 불러오지 못했습니다.")}
+        />
+        <button
+          type="button"
+          disabled={disabled || loading}
+          onClick={() => void toggle()}
+          aria-label={playing ? "가이드 일시 정지" : "가이드 듣기"}
+          className="flex size-14 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(26,33,48,0.06)] disabled:opacity-45"
+        >
+          {playing ? (
+            <Pause className="size-[22px] text-[#4e5968]" />
+          ) : (
+            <Image
+              src="/figma/practice/headphones.svg"
+              alt=""
+              width={22}
+              height={22}
+            />
+          )}
+        </button>
+        <span className="text-[12px] leading-4 font-bold text-[#4e5968]">
+          {loading ? "불러오는 중" : "가이드 듣기"}
+        </span>
+        {error && <span className="sr-only">{error}</span>}
+      </section>
+    );
+
+  if (variant === "recording")
+    return (
+      <section className="w-full">
+        <audio
+          ref={audio}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
+          onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
+          onLoadedMetadata={(event) =>
+            setDuration(
+              Number.isFinite(event.currentTarget.duration)
+                ? event.currentTarget.duration
+                : fallbackDuration,
+            )
+          }
+          onError={() => setError("녹음 음성을 불러오지 못했습니다.")}
+        />
+        <div className="flex h-14 items-center gap-3 rounded-full bg-white py-2 pr-[18px] pl-2 shadow-[0_2px_4px_rgba(26,33,48,0.06)]">
+          <button
+            type="button"
+            disabled={disabled || loading}
+            onClick={() => void toggle()}
+            aria-label={playing ? "전체 녹음 일시 정지" : "전체 녹음 재생"}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-45"
+          >
+            {playing ? (
+              <Pause className="size-4 text-white" />
+            ) : (
+              <Image
+                src="/figma/practice/play-white.svg"
+                alt=""
+                width={16}
+                height={16}
+              />
+            )}
+          </button>
+          <div className="min-w-0 flex-1 pb-1">
+            <div className="flex text-[12px] leading-4 font-medium text-[#4e5968]">
+              <span className="flex-1">{title}</span>
+              <span className="text-[#6b7684]">
+                {time(elapsed)} / {time(duration)}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#dfe3e8]">
+              <div
+                className="h-full rounded-full bg-[#2f6bff]"
+                style={{
+                  width: `${duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        {error && (
+          <p role="alert" className="mt-2 text-center text-xs text-red-600">
+            {error}
+          </p>
+        )}
+      </section>
+    );
+
   return (
     <section
       className={
-        compact ? "rounded-full bg-white/20 p-1.5 text-white" : "design-card"
+        buttonTone
+          ? "w-full"
+          : compact
+            ? "rounded-full bg-white/20 p-1.5 text-white"
+            : "design-card"
       }
     >
       <div
-        className={compact ? "sr-only" : "flex items-center justify-between"}
+        className={
+          compact || buttonTone
+            ? "sr-only"
+            : "flex items-center justify-between"
+        }
       >
         <h2 className="text-sm font-semibold">{title}</h2>
         <span className="text-xs text-muted-foreground">
@@ -137,14 +255,37 @@ function ReferencePlayerSession({
           setError("음성을 불러오지 못했습니다. 다시 재생해 주세요.");
         }}
       />
-      {compact ? (
+      {buttonTone ? (
+        <button
+          type="button"
+          disabled={disabled || loading}
+          onClick={() => void toggle()}
+          className={`flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14px] leading-5 font-bold disabled:opacity-60 ${
+            buttonTone === "primary"
+              ? "bg-[#edf2ff] text-primary"
+              : "bg-[#f2f4f6] text-[#4e5968]"
+          }`}
+        >
+          <Image
+            src={
+              buttonTone === "primary"
+                ? "/figma/report/play.svg"
+                : "/figma/report/headphones.svg"
+            }
+            alt=""
+            width={18}
+            height={18}
+          />
+          {loading ? "불러오는 중…" : playing ? "일시 정지" : title}
+        </button>
+      ) : compact ? (
         <div className="flex items-center gap-3">
           <button
             type="button"
             aria-label={playing ? "내 녹음 일시 정지" : "내 녹음 재생"}
-            disabled={loading}
+            disabled={disabled || loading}
             onClick={() => void toggle()}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#3468ff]"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#2f6bff]"
           >
             {playing ? (
               <Pause className="size-4" />

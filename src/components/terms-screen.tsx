@@ -8,6 +8,19 @@ import { IPhoneFrame } from "@/components/iphone-frame";
 import { api, disableDeveloperApi } from "@/lib/api";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { markTermsAccepted, type SignupDraft } from "@/lib/terms-flow";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  PRIVACY_TERMS,
+  SERVICE_TERMS,
+  TERMS_EFFECTIVE_DATE,
+  type LegalSection,
+} from "@/lib/legal-terms";
 
 type TermKey = "age" | "service" | "privacy" | "quality" | "marketing";
 
@@ -53,6 +66,7 @@ export function TermsScreen({
   const [terms, setTerms] = useState(INITIAL_TERMS);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailKey, setDetailKey] = useState<TermKey | null>(null);
 
   const allChecked = TERM_ITEMS.every((item) => terms[item.key]);
   const requiredChecked = terms.age && terms.service && terms.privacy;
@@ -143,7 +157,7 @@ export function TermsScreen({
             반가워요!
           </h2>
           <p className="terms-content-reveal mt-2 text-[14px] leading-5 tracking-[0.203px] text-[#4e5968] [animation-delay:140ms]">
-            SpeakAI를 사용하시려면 동의가 필요해요
+            Speak AI를 사용하시려면 동의가 필요해요
           </p>
 
           <button
@@ -172,40 +186,50 @@ export function TermsScreen({
 
           <div className="mt-1.5 flex flex-col">
             {TERM_ITEMS.map((item, index) => (
-              <button
+              <div
                 key={item.key}
-                type="button"
-                onClick={() => toggleTerm(item.key)}
-                aria-pressed={terms[item.key]}
-                className="terms-content-reveal flex w-full touch-manipulation items-center gap-3 px-1 py-3.5 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                className="terms-content-reveal flex w-full items-center"
                 style={{ animationDelay: `${280 + index * 55}ms` }}
               >
-                <Image
-                  src={
-                    terms[item.key]
-                      ? "/figma/auth/terms-row-check-selected.svg"
-                      : "/figma/auth/terms-row-check-unselected.svg"
-                  }
-                  alt=""
-                  width={20}
-                  height={20}
-                  aria-hidden="true"
-                  className="size-5 shrink-0"
-                />
-                <span className="min-w-0 flex-1 text-[15px] leading-[22px] font-medium tracking-[0.144px]">
-                  {item.label}
-                </span>
-                {item.hasDetails && (
+                <button
+                  type="button"
+                  onClick={() => toggleTerm(item.key)}
+                  aria-pressed={terms[item.key]}
+                  className="flex min-h-[52px] min-w-0 flex-1 touch-manipulation items-center gap-3 px-1 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                >
                   <Image
-                    src="/figma/auth/chevron-right.svg"
+                    src={
+                      terms[item.key]
+                        ? "/figma/auth/terms-row-check-selected.svg"
+                        : "/figma/auth/terms-row-check-unselected.svg"
+                    }
                     alt=""
-                    width={18}
-                    height={18}
+                    width={20}
+                    height={20}
                     aria-hidden="true"
-                    className="size-[18px] shrink-0"
+                    className="size-5 shrink-0"
                   />
-                )}
-              </button>
+                  <span className="min-w-0 flex-1 text-[15px] leading-[22px] font-medium tracking-[0.144px]">
+                    {item.label}
+                  </span>
+                </button>
+                {item.hasDetails ? (
+                  <button
+                    type="button"
+                    onClick={() => setDetailKey(item.key)}
+                    aria-label={`${item.label} 내용 보기`}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                  >
+                    <Image
+                      src="/figma/auth/chevron-right.svg"
+                      alt=""
+                      width={18}
+                      height={18}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : null}
+              </div>
             ))}
           </div>
 
@@ -232,6 +256,72 @@ export function TermsScreen({
 
         <div className="h-[34px] shrink-0" aria-hidden="true" />
       </section>
+      <TermDetailDialog value={detailKey} onClose={() => setDetailKey(null)} />
     </IPhoneFrame>
+  );
+}
+
+function TermDetailDialog({
+  value,
+  onClose,
+}: {
+  value: TermKey | null;
+  onClose: () => void;
+}) {
+  const details: Partial<
+    Record<
+      TermKey,
+      { title: string; sections?: LegalSection[]; description?: string }
+    >
+  > = {
+    service: { title: "이용약관", sections: SERVICE_TERMS },
+    privacy: { title: "개인정보 수집 및 이용", sections: PRIVACY_TERMS },
+    quality: {
+      title: "서비스 품질 향상",
+      description:
+        "오류 진단과 사용성 개선을 위해 비식별 이용 정보를 활용하는 선택 동의입니다. 동의하지 않아도 서비스를 이용할 수 있습니다.",
+    },
+    marketing: {
+      title: "이벤트 및 혜택 알림 수신",
+      description:
+        "새로운 학습 콘텐츠와 이벤트 안내를 받기 위한 선택 동의입니다. 설정에서 언제든 변경할 수 있습니다.",
+    },
+  };
+  const detail = value ? details[value] : undefined;
+  return (
+    <Dialog open={Boolean(value)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[82dvh] w-[calc(100%-40px)] max-w-[362px] overflow-hidden rounded-[24px] border-0 p-0">
+        <DialogHeader className="border-b border-border px-5 py-5 text-left">
+          <DialogTitle>{detail?.title}</DialogTitle>
+          <DialogDescription>시행일 {TERMS_EFFECTIVE_DATE}</DialogDescription>
+        </DialogHeader>
+        <article className="min-h-0 overflow-y-auto px-5 py-4">
+          {detail?.sections ? (
+            detail.sections.map((section) => (
+              <section key={section.title} className="mb-5">
+                <h3 className="text-sm font-bold">{section.title}</h3>
+                {section.paragraphs.map((paragraph) => (
+                  <p
+                    key={paragraph}
+                    className="mt-2 text-xs leading-6 text-muted-foreground"
+                  >
+                    {paragraph}
+                  </p>
+                ))}
+              </section>
+            ))
+          ) : (
+            <p className="text-sm leading-7 text-muted-foreground">
+              {detail?.description}
+            </p>
+          )}
+        </article>
+        <div className="border-t border-border p-4">
+          <button type="button" onClick={onClose} className="design-action">
+            확인
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
