@@ -20,6 +20,7 @@ const PROTECTED_PREFIXES = [
   "/announcer",
   "/class",
   "/practice",
+  "/lip-practice",
   "/mypage",
 ] as const;
 

@@ -57,7 +57,22 @@
 }
 
 :root {
-  --app-chrome-background: #f5f6f8;
+  --app-shell-width: 402px;
+  --app-design-height: 874px;
+  --app-chrome-background: #eef1f5;
+  --color-brand-blue: #2f6bff;
+  --color-brand-blue-pressed: #1f55e0;
+  --color-brand-blue-soft: #edf2ff;
+  --color-canvas: #f7f8fa;
+  --color-text-primary: #191f28;
+  --color-text-secondary: #4e5968;
+  --color-text-tertiary: #8b95a1;
+  --color-line: #e6e9ed;
+  --color-positive: #00a878;
+  --color-caution: #ff9f0a;
+  --color-negative: #f04452;
+  --shadow-card: 0 8px 24px rgb(25 31 40 / 6%);
+  --shadow-shell: 0 0 40px rgb(25 31 40 / 12%);
   --radius: 1rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.16 0.005 285);
@@ -65,8 +80,8 @@
   --card-foreground: oklch(0.16 0.005 285);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.16 0.005 285);
-  --primary: oklch(0.19 0.006 285);
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: #2f6bff;
+  --primary-foreground: #fff;
   --secondary: oklch(0.962 0 0);
   --secondary-foreground: oklch(0.19 0.006 285);
   --muted: oklch(0.962 0 0);
@@ -79,13 +94,13 @@
   --success-foreground: oklch(0.16 0.03 150);
   --warning: oklch(0.85 0.16 92);
   --warning-foreground: oklch(0.22 0.05 80);
-  --brand: oklch(0.62 0.25 320);
-  --brand-foreground: oklch(0.99 0 0);
+  --brand: #2f6bff;
+  --brand-foreground: #fff;
   --surface: oklch(0.955 0 0);
   --surface-foreground: oklch(0.19 0.006 285);
   --border: oklch(0.918 0 0);
   --input: oklch(0.918 0 0);
-  --ring: oklch(0.19 0.006 285);
+  --ring: #2f6bff;
   --chart-1: oklch(0.19 0.006 285);
   --chart-2: oklch(0.74 0.19 148);
   --chart-3: oklch(0.85 0.16 92);
@@ -150,6 +165,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
   }
 }
 
@@ -168,18 +184,20 @@
   -webkit-user-select: none;
   user-select: none;
   touch-action: manipulation;
-  transition-property: color, background-color, border-color,
-    text-decoration-color, fill, stroke, opacity, box-shadow, transform,
-    translate, scale, rotate, filter, backdrop-filter;
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke,
+    opacity, box-shadow, transform, translate, scale, rotate, filter,
+    backdrop-filter;
   transition-duration: 140ms;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 :where(
-  button:not(:disabled),
-  a[href]:not([aria-disabled="true"]),
-  [role="button"]:not([aria-disabled="true"])
-) :where(img, svg) {
+    button:not(:disabled),
+    a[href]:not([aria-disabled="true"]),
+    [role="button"]:not([aria-disabled="true"])
+  )
+  :where(img, svg) {
   -webkit-user-drag: none;
   user-select: none;
 }
@@ -215,35 +233,38 @@
 @utility app-shell {
   margin-inline: auto;
   width: 100%;
+  max-width: var(--app-shell-width);
   min-height: 100dvh;
   background-color: var(--color-background);
   position: relative;
+  isolation: isolate;
+  box-shadow: var(--shadow-shell);
 }
 
 /* 03_Screen / Frame 1000002915 learning screens. */
 .learning-shell {
-  background-color: #fafbfc;
-  color: #191f28;
-  --background: #fafbfc;
+  background-color: var(--color-canvas);
+  color: var(--color-text-primary);
+  --background: var(--color-canvas);
   --foreground: #191f28;
-  --primary: #3468ff;
+  --primary: var(--color-brand-blue);
   --primary-foreground: #fff;
-  --brand: #3468ff;
+  --brand: var(--color-brand-blue);
   --brand-foreground: #fff;
   --muted: #f3f4f5;
   --muted-foreground: #8b929a;
   --surface: #fff;
   --border: #e8eaed;
-  --ring: #3468ff;
+  --ring: var(--color-brand-blue);
   --success: #07865f;
-  max-width: 100%;
+  max-width: var(--app-shell-width);
 }
 
 .design-card {
   border-radius: 20px;
   background: #fff;
   padding: 20px;
-  box-shadow: 0 2px 4px #191f2806;
+  box-shadow: var(--shadow-card);
 }
 
 .design-action {
@@ -266,8 +287,25 @@
 .design-action:focus-visible,
 .learning-shell button:focus-visible,
 .learning-shell a:focus-visible {
-  outline: 2px solid #3468ff;
+  outline: 2px solid var(--color-brand-blue);
   outline-offset: 3px;
+}
+
+@media (max-width: 401px) {
+  .design-card {
+    border-radius: 18px;
+  }
+}
+
+@media (min-width: 403px) {
+  body {
+    display: flex;
+    justify-content: center;
+  }
+
+  body > * {
+    width: 100%;
+  }
 }
 .design-dock {
   position: sticky;

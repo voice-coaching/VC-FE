@@ -13,7 +13,7 @@
     "verify:api": "tsx scripts/verify-api-contract.ts",
     "format": "prettier --write .",
     "native:sync": "cap sync",
-    "native:assets": "npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor '#2f6bff' --iconBackgroundColorDark '#2f6bff' --splashBackgroundColor '#2f6bff' --splashBackgroundColorDark '#2f6bff'",
+    "native:assets": "npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor '#2f6bff' --iconBackgroundColorDark '#2f6bff' --splashBackgroundColor '#336fff' --splashBackgroundColorDark '#336fff'",
     "native:doctor": "cap doctor",
     "native:android": "cap open android",
     "native:ios": "cap open ios"

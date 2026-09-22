@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +19,7 @@ const tabFlowPrefixes = [
   "/my-script",
   "/announcer",
   "/practice",
+  "/lip-practice",
 ];
 
 export function BottomNav() {
@@ -34,11 +35,13 @@ export function AppShell({
   nav = true,
   className,
   viewportLocked = false,
+  chromeColor,
 }: {
   children: ReactNode;
   nav?: boolean;
   className?: string;
   viewportLocked?: boolean;
+  chromeColor?: string;
 }) {
   const pathname = usePathname();
   const lockViewport = nav || viewportLocked;
@@ -56,6 +59,11 @@ export function AppShell({
 
   return (
     <div
+      style={
+        chromeColor
+          ? ({ "--app-chrome-background": chromeColor } as CSSProperties)
+          : undefined
+      }
       className={cn(
         "app-shell learning-shell flex flex-col",
         styles.safeAreaShell,

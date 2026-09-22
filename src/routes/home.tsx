@@ -1,17 +1,19 @@
 "use client";
-import { AppShell } from "@/components/app-shell";
 
+import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type UIEvent } from "react";
+import { Check, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
+  type CourseDetail,
   type HomeDashboard,
   type PracticeContentSummary,
   type Recommendation,
-  type CourseDetail,
+  type Statistics,
+  type TrainingHistoryItem,
 } from "@/lib/api";
-import styles from "./home.module.css";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -25,7 +27,6 @@ type PracticeCard = {
   icon: string;
   iconWidth: number;
   iconHeight: number;
-  badgeClassName: string;
 };
 
 const EMPTY_DASHBOARD: HomeDashboard = {
@@ -34,6 +35,8 @@ const EMPTY_DASHBOARD: HomeDashboard = {
   recentTraining: null,
   courseProgress: null,
 };
+
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const PRACTICE_CARDS: PracticeCard[] = [
   {
@@ -47,9 +50,8 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home/news.svg",
-    iconWidth: 23.31,
-    iconHeight: 28.31,
-    badgeClassName: "bg-[#a5e8ff]",
+    iconWidth: 32,
+    iconHeight: 36.8,
   },
   {
     href: "/sentences",
@@ -62,24 +64,22 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home/sentence.svg",
-    iconWidth: 26.54,
-    iconHeight: 25.27,
-    badgeClassName: "bg-[#aeebb4]",
+    iconWidth: 38.4,
+    iconHeight: 36.8,
   },
   {
     href: "/announcer",
     title: "따라 읽기",
     description: (
       <>
-        아나운서의
+        아나운서 음성을
         <br />
-        음성을 듣고 따라 해요
+        듣고 따라 해요
       </>
     ),
     icon: "/figma/home/follow.svg",
-    iconWidth: 14.15,
-    iconHeight: 31.85,
-    badgeClassName: "bg-[#bfceff]",
+    iconWidth: 17.6,
+    iconHeight: 36.8,
   },
   {
     href: "/my-script",
@@ -92,9 +92,8 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home/custom.svg",
-    iconWidth: 24.77,
-    iconHeight: 23.97,
-    badgeClassName: "bg-[#c9bbff]",
+    iconWidth: 35.2,
+    iconHeight: 33.6,
   },
 ];
 
@@ -121,98 +120,87 @@ function combineRecommendations(
   });
 }
 
+function localDateKey(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function currentWeekRange(today: Date) {
+  const monday = new Date(today);
+  const day = monday.getDay();
+  monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
+  monday.setHours(0, 0, 0, 0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+  return { monday, sunday };
+}
+
 export default function Home() {
+  const now = useMemo(() => new Date(), []);
+  const weekRange = useMemo(() => currentWeekRange(now), [now]);
   const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationCard[]>(
     [],
   );
   const [recentCourses, setRecentCourses] = useState<CourseDetail[]>([]);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [weekSessions, setWeekSessions] = useState<TrainingHistoryItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let active = true;
-    api.courses
-      .getMyProgress()
-      .then((items) =>
-        Promise.all(
-          items
-            .filter(
-              (item) => item.progressPercent > 0 && item.progressPercent < 100,
-            )
-            .slice(0, 2)
-            .map(async (item) => {
-              const course = await api.courses.get(item.courseId);
-              return { ...course, progressPercent: item.progressPercent };
-            }),
-        ),
-      )
-      .then((items) => {
-        if (active) setRecentCourses(items);
-      })
-      .catch(() => undefined);
+    const from = localDateKey(weekRange.monday);
+    const to = localDateKey(weekRange.sunday);
+
+    void Promise.allSettled([
+      api.courses.getMyProgress(),
+      api.myPage.getStatistics({ from, to }),
+      api.myPage.listTrainingSessions({
+        status: "COMPLETED",
+        from,
+        to,
+        page: 0,
+        size: 100,
+      }),
+    ]).then(async ([courseResult, statisticsResult, historyResult]) => {
+      if (!active) return;
+
+      if (statisticsResult.status === "fulfilled") {
+        setStatistics(statisticsResult.value);
+      }
+      if (historyResult.status === "fulfilled") {
+        setWeekSessions(historyResult.value.items);
+      }
+      if (courseResult.status !== "fulfilled") return;
+
+      const courses = await Promise.all(
+        courseResult.value
+          .filter(
+            (item) => item.progressPercent > 0 && item.progressPercent < 100,
+          )
+          .slice(0, 2)
+          .map(async (item) => {
+            const course = await api.courses.get(item.courseId);
+            return { ...course, progressPercent: item.progressPercent };
+          }),
+      );
+      if (active) setRecentCourses(courses);
+    });
+
     return () => {
       active = false;
     };
-  }, []);
-  const [error, setError] = useState<string | null>(null);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const headerVisibleRef = useRef(true);
-  const previousScrollTop = useRef(0);
-  const scrollDirection = useRef<"up" | "down" | null>(null);
-  const directionalDistance = useRef(0);
-  const pendingScrollTop = useRef(0);
-  const scrollFrame = useRef<number | null>(null);
-
-  function updateHeaderVisibility(visible: boolean) {
-    if (headerVisibleRef.current === visible) return;
-    headerVisibleRef.current = visible;
-    setHeaderVisible(visible);
-  }
-
-  function updateHeaderForScroll(scrollTop: number) {
-    const delta = scrollTop - previousScrollTop.current;
-    previousScrollTop.current = scrollTop;
-
-    if (scrollTop <= 12) {
-      scrollDirection.current = null;
-      directionalDistance.current = 0;
-      updateHeaderVisibility(true);
-      return;
-    }
-    if (Math.abs(delta) < 1) return;
-
-    const nextDirection = delta > 0 ? "down" : "up";
-    if (scrollDirection.current !== nextDirection) {
-      scrollDirection.current = nextDirection;
-      directionalDistance.current = 0;
-    }
-    directionalDistance.current += Math.abs(delta);
-
-    const threshold = nextDirection === "down" ? 24 : 10;
-    if (directionalDistance.current < threshold) return;
-
-    updateHeaderVisibility(nextDirection === "up");
-    directionalDistance.current = 0;
-  }
-
-  function handleHomeScroll(event: UIEvent<HTMLDivElement>) {
-    pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
-    if (scrollFrame.current !== null) return;
-
-    scrollFrame.current = window.requestAnimationFrame(() => {
-      scrollFrame.current = null;
-      updateHeaderForScroll(pendingScrollTop.current);
-    });
-  }
-
-  useEffect(() => {
-    return () => {
-      if (scrollFrame.current !== null) {
-        window.cancelAnimationFrame(scrollFrame.current);
-      }
-    };
-  }, []);
+  }, [reloadKey, weekRange]);
 
   useEffect(() => {
     let active = true;
+    setError(null);
+
     void (async () => {
       const [dashboardResult, recommendationResult] = await Promise.allSettled([
         api.home.get(),
@@ -242,8 +230,9 @@ export default function Home() {
             page: 0,
             size: 3,
           });
-          if (active)
+          if (active) {
             setRecommendations(generalRecommendations(fallback.items));
+          }
         } catch (reason) {
           if (active) {
             setError(
@@ -255,10 +244,11 @@ export default function Home() {
         }
       }
     })();
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const firstRecommendation = combineRecommendations(
     recommendations,
@@ -268,142 +258,253 @@ export default function Home() {
   const dailyDone =
     today.goalCount > 0 && today.completedCount >= today.goalCount;
   const todayHref = firstRecommendation
-    ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome`
+    ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome&start=1`
     : "/news";
+  const completedWeekdays = useMemo(
+    () => new Set(weekSessions.map((item) => localDateKey(item.completedAt))),
+    [weekSessions],
+  );
+  const weekDates = useMemo(
+    () =>
+      WEEKDAYS.map((label, index) => {
+        const date = new Date(weekRange.monday);
+        date.setDate(date.getDate() + index);
+        return {
+          label,
+          key: localDateKey(date),
+          isFuture: date > now,
+        };
+      }),
+    [now, weekRange],
+  );
+  const streakDays = statistics?.consecutiveLearningDays ?? 0;
 
   return (
-    <AppShell viewportLocked>
-      <div className="relative flex h-full min-h-0 flex-col bg-[#f5f6f8] text-[#191f28]">
-        <header
-          data-state={headerVisible ? "visible" : "hidden"}
-          aria-hidden={!headerVisible}
-          className={`${styles.header} pointer-events-none absolute inset-x-0 top-0 z-10 flex h-16 items-center bg-[#f5f6f8] px-5 py-3`}
-        >
+    <AppShell viewportLocked chromeColor="#2f6bff">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f2f4f6] text-[#191f28]">
+        <div className="absolute inset-x-0 top-0 h-[205px] bg-[linear-gradient(180deg,#2f6bff_0%,#3f7bff_100%)]" />
+
+        <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5">
           <Image
-            src="/figma/home/logo.svg"
-            alt="SpeakAI"
-            width={30}
-            height={25}
+            src="/figma/home/brand-white.svg"
+            alt="Speak AI"
+            width={23.2}
+            height={32}
             priority
           />
+          <Link
+            href="/home/notifications"
+            aria-label="알림 보기"
+            className="relative flex size-12 items-center justify-center"
+          >
+            <Image
+              src="/figma/home/bell-white.svg"
+              alt=""
+              width={28}
+              height={28}
+            />
+            <span className="absolute top-[9px] right-[4px] size-2 rounded-full border border-white bg-[#ff4d5e]" />
+          </Link>
         </header>
 
-        <div
-          data-scroll-container="home"
-          onScroll={handleHomeScroll}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-16 pb-[26px] [-webkit-overflow-scrolling:touch]"
-        >
+        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-2 pb-8 [-webkit-overflow-scrolling:touch]">
           {error ? (
-            <p
+            <div
               role="alert"
-              className="mb-3 rounded-xl bg-[#fff0f0] px-4 py-3 text-xs text-[#d91b34]"
+              className="mb-3 flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 text-xs text-[#d91b34]"
             >
-              {error}
-            </p>
+              <p className="min-w-0 flex-1">{error}</p>
+              <button
+                type="button"
+                onClick={() => setReloadKey((value) => value + 1)}
+                className="min-h-11 shrink-0 rounded-full px-3 font-bold"
+              >
+                다시 시도
+              </button>
+            </div>
           ) : null}
 
-          <section className="h-[360px] overflow-hidden rounded-[20px] bg-white px-5 pt-6 pb-5 shadow-[0_2px_8px_rgba(26,33,48,0.06)]">
-            <p className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.034em] text-[#2f6bff]">
-              오늘 {today.completedCount}/{today.goalCount}회 완료
-            </p>
-
-            <h1 className="mt-3.5 text-[22px] leading-[30px] font-bold tracking-[-0.0194em]">
-              {dailyDone ? "오늘의 연습을 마쳤어요" : "오늘은 뉴스 읽기예요"}
-              <br />
-              {dailyDone
-                ? "조금씩 꾸준히, 잘하고 있어요"
-                : "추천 문장으로 연습해요"}
-            </h1>
-
-            <div className="mt-[18px] flex h-[124px] items-center justify-center">
-              <div className="flex size-[124px] items-center justify-center overflow-hidden rounded-[36px] bg-[#a5e8ff]">
-                <Image
-                  src="/figma/home/news-hero.svg"
-                  alt="뉴스 읽기"
-                  width={66}
-                  height={80}
-                  priority
-                />
-              </div>
-            </div>
-
+          <section className="h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
             <Link
-              href={dailyDone ? "/mypage/history" : todayHref}
-              className="mt-[18px] flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-base leading-6 font-bold tracking-[0.0057em] text-white transition duration-150 active:scale-[0.985] active:bg-[#1f55e0]"
+              href="/home/streak"
+              className="flex h-full items-center gap-3"
             >
-              {dailyDone ? "오늘의 연습 기록 보기" : "오늘의 연습 시작하기"}
+              <span className="min-w-0 flex-1">
+                <span className="flex h-5 items-center text-[13px] leading-[18px]">
+                  연속 연습
+                  <strong className="ml-1 text-sm leading-5">
+                    {streakDays}일째
+                  </strong>
+                </span>
+                <span className="mt-2 flex justify-between">
+                  {weekDates.map((day) => {
+                    const completed = completedWeekdays.has(day.key);
+                    return (
+                      <span
+                        key={day.key}
+                        className="flex w-5 flex-col items-center gap-[3px]"
+                      >
+                        <span
+                          className={`flex size-5 items-center justify-center rounded-full ${
+                            completed
+                              ? "bg-white text-primary"
+                              : "bg-white/20 text-transparent"
+                          }`}
+                        >
+                          {completed ? (
+                            <Check className="size-3.5" strokeWidth={3} />
+                          ) : null}
+                        </span>
+                        <span
+                          className={`text-[11px] leading-[14px] ${day.isFuture ? "text-white/55" : "text-white/90"}`}
+                        >
+                          {day.label}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </span>
+              </span>
+              <ChevronRight
+                className="size-[18px] shrink-0"
+                strokeWidth={2.4}
+              />
             </Link>
           </section>
 
-          <h2 className="mt-[22px] text-xl leading-7 font-bold tracking-[-0.012em]">
-            무엇을 연습할까요?
-          </h2>
+          <div className="h-11" />
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {PRACTICE_CARDS.map((card) => (
-              <PracticeTile key={card.title} {...card} />
-            ))}
-          </div>
+          <section className="relative h-[200px] overflow-hidden rounded-[20px] bg-white p-5">
+            <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-xs leading-[14px] font-bold text-primary">
+              {dashboard?.courseProgress
+                ? dashboard.courseProgress.title
+                : "오늘의 추천"}
+            </span>
+            <h1 className="mt-3 text-[22px] leading-7 font-bold tracking-[-0.019em]">
+              {dailyDone ? (
+                <>
+                  오늘 연습을 마쳤어요
+                  <br />
+                  내일 다시 만나요
+                </>
+              ) : (
+                <>
+                  오늘은 뉴스예요
+                  <br />
+                  {today.goalCount > 0
+                    ? `${today.goalCount}문장이면 끝나요`
+                    : "가볍게 시작해 봐요"}
+                </>
+              )}
+            </h1>
+            <Link
+              href={dailyDone ? "/mypage/history" : todayHref}
+              className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
+            >
+              {dailyDone ? "기록 보기" : "시작하기"}
+            </Link>
+            <Image
+              src="/figma/home/news-character.png"
+              alt="뉴스를 읽는 Speak AI 캐릭터"
+              width={185}
+              height={185}
+              priority
+              className="absolute right-[-1px] bottom-[-37px] size-[185px] object-contain"
+            />
+          </section>
 
-          <h2 className="mt-12 mb-4 text-xl font-bold">이어서 하기</h2>
-          <section className="design-card divide-y divide-[#f2f4f6] !py-0">
-            {dashboard?.recentTraining && (
-              <div className="flex items-center gap-3 py-5">
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-bold">
-                    {dashboard.recentTraining.title}
-                  </h3>
-                  <p className="mt-1 text-xs text-[#8b95a1]">
-                    {dashboard.recentTraining.status === "COMPLETED"
-                      ? "완료한 연습"
-                      : "지난 연습을 이어서 시작해요"}
-                  </p>
-                </div>
-                <Link
-                  className="shrink-0 rounded-xl bg-[#edf2ff] px-4 py-3 text-xs font-bold text-primary"
+          <section className="mt-8">
+            <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
+              무엇을 연습할까요?
+            </h2>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {PRACTICE_CARDS.map((card) => (
+                <PracticeTile key={card.title} {...card} />
+              ))}
+            </div>
+            <Link
+              href="/lip-practice"
+              className="mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] bg-white p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]"
+            >
+              <Image
+                src="/figma/home/lip-practice.svg"
+                alt=""
+                width={44}
+                height={44}
+                className="shrink-0"
+              />
+              <span className="min-w-0 flex-1 overflow-hidden">
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <strong className="text-[15px] leading-[22px]">
+                    입모양 보며 연습
+                  </strong>
+                  <span className="rounded-full bg-[#f2f4f6] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684]">
+                    카메라 사용
+                  </span>
+                </span>
+                <span className="mt-[3px] block truncate text-[13px] leading-[18px] text-[#4e5968]">
+                  영상으로 입모양과 소리를 함께 교정해요
+                </span>
+              </span>
+              <ChevronRight className="size-5 shrink-0 text-[#b0b8c1]" />
+            </Link>
+          </section>
+
+          <section className="mt-8 pb-1">
+            <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
+              진행 중인 연습
+            </h2>
+            <div className="mt-3 space-y-2">
+              {dashboard?.recentTraining ? (
+                <ContinueCard
                   href={
                     dashboard.recentTraining.status === "COMPLETED"
                       ? `/mypage/history/${dashboard.recentTraining.sessionId}`
                       : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
                   }
-                >
-                  {dashboard.recentTraining.status === "COMPLETED"
-                    ? "기록 보기"
-                    : "이어하기"}
-                </Link>
-              </div>
-            )}
-            {recentCourses.map((course) => (
-              <div
-                key={String(course.id)}
-                className="flex items-center gap-3 py-5"
-              >
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold">
-                    {course.courseType === "INTONATION"
-                      ? "억양 클래스"
-                      : "발음 클래스"}
-                    <span className="ml-2 font-medium text-primary">
-                      {Math.round(course.progressPercent)}%
-                    </span>
-                  </h3>
-                  <p className="mt-1 truncate text-xs text-[#8b95a1]">
-                    {course.title}
-                  </p>
-                </div>
-                <Link
+                  title={dashboard.recentTraining.title}
+                  detail={
+                    dashboard.recentTraining.status === "COMPLETED"
+                      ? "최근 완료한 연습"
+                      : "멈춘 지점부터 이어서 시작해요"
+                  }
+                  badge="최근"
+                  icon="/figma/home/progress-announcer.svg"
+                  progress={
+                    dashboard.recentTraining.status === "COMPLETED" ? 100 : null
+                  }
+                  count={
+                    dashboard.recentTraining.status === "COMPLETED"
+                      ? "완료"
+                      : "계속"
+                  }
+                />
+              ) : null}
+              {recentCourses.map((course) => (
+                <ContinueCard
+                  key={String(course.id)}
                   href={`/class/${course.courseType.toLowerCase()}`}
-                  className="shrink-0 rounded-xl bg-[#edf2ff] px-4 py-3 text-xs font-bold text-primary"
-                >
-                  이어하기
-                </Link>
-              </div>
-            ))}
-            {!dashboard?.recentTraining && !recentCourses.length && (
-              <p className="py-6 text-sm text-[#8b95a1]">
-                연습을 시작하면 이어서 할 수 있어요.
-              </p>
-            )}
+                  title={
+                    course.courseType === "INTONATION"
+                      ? "억양 클래스"
+                      : "발음 클래스"
+                  }
+                  detail={course.title}
+                  icon={
+                    course.courseType === "INTONATION"
+                      ? "/figma/home/progress-intonation.svg"
+                      : "/figma/home/progress-pronunciation.svg"
+                  }
+                  progress={Math.round(course.progressPercent)}
+                  count={`${Math.round(course.progressPercent)}%`}
+                />
+              ))}
+              {!dashboard?.recentTraining && recentCourses.length === 0 ? (
+                <div className="flex h-[76px] items-center rounded-[18px] bg-white px-5 text-[13px] text-[#8b95a1] shadow-[0_2px_6px_rgba(26,33,48,0.05)]">
+                  연습을 시작하면 이곳에서 이어갈 수 있어요.
+                </div>
+              ) : null}
+            </div>
           </section>
         </div>
       </div>
@@ -418,24 +519,77 @@ function PracticeTile({
   icon,
   iconWidth,
   iconHeight,
-  badgeClassName,
 }: PracticeCard) {
   return (
     <Link
       href={href}
-      className="flex h-[138px] min-w-0 touch-manipulation flex-col overflow-hidden rounded-[18px] bg-white px-4 pt-4 pb-3 shadow-[0_2px_8px_rgba(26,33,48,0.06)] transition duration-150 active:scale-[0.98] active:shadow-[0_1px_4px_rgba(26,33,48,0.05)]"
+      className="relative flex h-[136px] min-w-0 flex-col overflow-hidden rounded-[18px] bg-white p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)] active:scale-[0.98]"
     >
-      <h3 className="text-sm leading-5 font-bold tracking-[0.0145em]">
-        {title}
-      </h3>
-      <p className="mt-1 text-xs leading-4 font-normal tracking-[0.0252em] text-[#4e5968]">
-        {description}
-      </p>
-      <span className="flex-1" />
-      <span
-        className={`ml-auto flex size-11 shrink-0 items-center justify-center rounded-[17px] ${badgeClassName}`}
-      >
+      <h3 className="text-base leading-6 font-bold">{title}</h3>
+      <p className="mt-1 text-[13px] leading-4 text-[#8b95a1]">{description}</p>
+      <span className="absolute right-[14px] bottom-[14px] flex size-[41.6px] items-center justify-center">
         <Image src={icon} alt="" width={iconWidth} height={iconHeight} />
+      </span>
+    </Link>
+  );
+}
+
+function ContinueCard({
+  href,
+  title,
+  detail,
+  badge,
+  icon,
+  progress,
+  count,
+}: {
+  href: string;
+  title: string;
+  detail: string;
+  badge?: string;
+  icon: string;
+  progress: number | null;
+  count: string;
+}) {
+  const clampedProgress =
+    progress == null ? null : Math.min(100, Math.max(0, progress));
+  return (
+    <Link
+      href={href}
+      className="flex h-[76px] items-center rounded-[18px] bg-white px-[14px] shadow-[0_2px_6px_rgba(26,33,48,0.05)]"
+    >
+      <span
+        className="flex size-12 shrink-0 items-center justify-center rounded-full p-[3px]"
+        style={{
+          background:
+            clampedProgress == null
+              ? "#dbe5ff"
+              : `conic-gradient(#2f6bff ${clampedProgress}%, #dbe5ff 0)`,
+        }}
+      >
+        <span className="flex size-[42px] items-center justify-center rounded-full bg-white">
+          <span className="flex size-[34px] items-center justify-center rounded-full bg-[#edf2ff]">
+            <Image src={icon} alt="" width={28} height={28} />
+          </span>
+        </span>
+      </span>
+      <span className="ml-[14px] min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <strong className="truncate text-sm leading-5">{title}</strong>
+          {badge ? (
+            <span className="rounded-full bg-[#edf2ff] px-1.5 py-0.5 text-[11px] leading-[14px] font-medium text-primary">
+              {badge}
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-1 flex min-w-0 items-center text-xs leading-4">
+          <strong className="mr-1 shrink-0 text-primary">다음</strong>
+          <span className="truncate text-[#8b95a1]">{detail}</span>
+        </span>
+      </span>
+      <span className="ml-3 flex shrink-0 items-center text-[13px] leading-[18px] font-medium text-[#333d4b]">
+        {count}
+        <ChevronRight className="ml-0.5 size-[18px] text-[#b0b8c1]" />
       </span>
     </Link>
   );

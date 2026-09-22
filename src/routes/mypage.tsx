@@ -1,23 +1,32 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Award, Settings, ChevronRight, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { ProfileAvatar } from "@/components/profile-avatar";
 import {
   api,
   type Statistics,
   type StrengthsWeaknesses,
-  type TrainingHistoryItem,
   type UserAccount,
   type UserTitleProgress,
 } from "@/lib/api";
-import { useProfile } from "@/lib/use-profile";
-import { METHOD_OPTIONS } from "@/lib/onboarding-options";
 import { getCachedUser } from "@/lib/auth-session";
+import { useProfile } from "@/lib/use-profile";
 import { getUserTitleProgress } from "@/lib/user-title";
+
+function titlePercent(progress: UserTitleProgress | null) {
+  if (!progress) return 0;
+  if (!progress.next) return 100;
+  const span = Math.max(
+    1,
+    progress.next.requiredTrainingCount - progress.minimumTrainingCount,
+  );
+  const completed =
+    progress.completedTrainingCount - progress.minimumTrainingCount;
+  return Math.min(100, Math.max(0, Math.round((completed / span) * 100)));
+}
 
 export default function MyPage() {
   const router = useRouter();
@@ -25,7 +34,6 @@ export default function MyPage() {
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
-  const [history, setHistory] = useState<TrainingHistoryItem[]>([]);
   const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
     null,
   );
@@ -39,48 +47,37 @@ export default function MyPage() {
       cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
-      api.myPage.listTrainingSessions({
-        status: "COMPLETED",
-        page: 0,
-        size: 5,
-      }),
       api.users.getTitle().catch(() => null),
     ])
-      .then(([user, stats, strengthsWeaknesses, sessions, userTitle]) => {
+      .then(([user, stats, strengthsWeaknesses, userTitle]) => {
         if (!active) return;
         setAccount(user);
         setStatistics(stats);
         setFeedback(strengthsWeaknesses);
-        setHistory(sessions.items);
         setTitleProgress(
           userTitle ??
             getUserTitleProgress("ABSOLUTE_BEGINNER", stats.totalSessionCount),
         );
       })
       .catch((reason) => {
-        if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "마이페이지를 불러오지 못했습니다.",
-          );
+        if (!active) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "마이페이지를 불러오지 못했습니다.",
+        );
       });
     return () => {
       active = false;
     };
   }, []);
 
+  const percent = titlePercent(titleProgress);
   const displayName = account?.nickname ?? profile?.name;
-  const hours = Math.floor((statistics?.totalLearningSeconds ?? 0) / 3600);
-  const minutes = Math.floor(
-    ((statistics?.totalLearningSeconds ?? 0) % 3600) / 60,
-  );
-  const methods = profile?.learningSituations
-    .map(
-      (value) =>
-        METHOD_OPTIONS.find((item) => item.value === value)?.summary ?? value,
-    )
-    .join(", ");
+  const totalSeconds = statistics?.totalLearningSeconds ?? 0;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const learningTime = hours ? `${hours}시간 ${minutes}분` : `${minutes}분`;
 
   async function startTitleExam() {
     setExamStarting(true);
@@ -88,7 +85,7 @@ export default function MyPage() {
     try {
       const exam = await api.users.createTitleExam();
       router.push(
-        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage`,
+        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage&start=1`,
       );
     } catch (reason) {
       setError(
@@ -101,297 +98,261 @@ export default function MyPage() {
   }
 
   return (
-    <AppShell>
-      <header className="flex h-16 shrink-0 items-center justify-between px-5 py-3">
-        <h1 className="text-lg font-bold">마이페이지</h1>
+    <AppShell
+      chromeColor="#c5d6ff"
+      viewportLocked
+      className="relative overflow-hidden bg-[#f2f4f6]"
+    >
+      <div className="absolute inset-x-0 top-0 h-[262px] bg-[#c5d6ff]" />
+
+      <header className="absolute inset-x-0 top-0 z-10 grid h-10 grid-cols-[24px_1fr_24px] items-center px-5">
+        <span aria-hidden="true" />
+        <h1 className="text-center text-[17px] leading-6 font-bold text-[#191f28]">
+          마이
+        </h1>
         <Link
           href="/mypage/settings"
           aria-label="설정"
-          className="mr-2 flex size-8 items-center justify-center rounded-full"
+          className="flex size-10 -translate-x-2 items-center justify-center justify-self-center"
         >
-          <Settings className="size-5" />
+          <Image
+            src="/figma/mypage/settings.svg"
+            alt=""
+            width={24}
+            height={24}
+          />
         </Link>
       </header>
-      <Link
-        href="/mypage/settings/profile"
-        className="flex items-center gap-3 bg-white px-5 py-1"
-      >
-        <ProfileAvatar src={account?.profileImageUrl} size={48} />
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold">
-              {displayName ?? "불러오는 중…"}
-            </h2>
-            {titleProgress && (
-              <span className="rounded-full bg-[#e8efff] px-3 py-1 text-xs font-semibold text-primary">
-                {titleProgress.label}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-[#8b95a1]">
-            {profile
-              ? `하루 ${profile.minutesPerDay}분 연습`
-              : "나만의 말하기 연습"}
-          </p>
-        </div>
-        <ChevronRight className="size-5 text-[#8b95a1]" />
-      </Link>
-      <div className="space-y-4 px-5 pt-3 pb-8">
-        {error && (
-          <p
-            role="alert"
-            className="rounded-xl bg-destructive/5 p-3 text-xs text-destructive"
-          >
-            {error}
-          </p>
-        )}
-        {titleProgress && (
-          <TitleProgressCard
-            progress={titleProgress}
-            starting={examStarting}
-            onStart={() => void startTitleExam()}
-          />
-        )}
-        <section className="design-card">
-          <p className="flex items-baseline gap-2">
-            <strong className="text-[26px] font-bold text-primary">
-              {statistics?.consecutiveLearningDays ?? 0}일째
-            </strong>
-            <span className="text-sm font-bold">연속 연습 중이에요</span>
-          </p>
-          <div className="mt-4 grid grid-cols-3 divide-x divide-[#f2f4f6] border-t border-[#f2f4f6] pt-5 text-center">
-            <Metric
-              label="연습 횟수"
-              value={`${statistics?.totalSessionCount ?? 0}회`}
+
+      <section className="absolute inset-x-0 top-10 z-10 flex h-[222px] flex-col items-center pt-5">
+        <Link
+          href="/mypage/settings/profile"
+          aria-label="프로필 수정"
+          className="relative size-[104px] rounded-[42px] p-1.5"
+          style={{
+            background: `conic-gradient(#2f6bff ${percent * 3.6}deg, rgba(255,255,255,.58) 0deg)`,
+          }}
+        >
+          <span className="relative block size-full overflow-hidden rounded-[37px] border-2 border-white bg-[#edf2ff]">
+            <Image
+              src="/figma/mypage/avatar-character.png"
+              alt=""
+              fill
+              sizes="92px"
+              className="scale-[1.18] object-contain object-bottom"
+              priority
             />
-            <Metric label="연습 시간" value={`${hours}시간 ${minutes}분`} />
-            <Metric
-              label="평균 점수"
-              value={
-                statistics?.totalSessionCount
-                  ? `${Math.round(statistics.averageOverallScore)}점`
-                  : "—"
-              }
-            />
-          </div>
-        </section>
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center text-sm font-bold">
-              <Sparkles className="mr-1 size-5 fill-primary text-primary" />내
-              발음 리포트
-            </h2>
-            <span className="text-[11px] text-[#8b95a1]">
-              이번 달 연습 기준
+          </span>
+          {titleProgress ? (
+            <span className="absolute top-[89px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-white bg-primary px-2.5 py-1 text-[11px] leading-[14px] font-bold text-white">
+              {titleProgress.label}
             </span>
-          </div>
-          <div className="rounded-[20px] bg-[#edf2ff] p-[18px]">
-            <ReportRow
-              title="잘하는 발음"
-              tone="green"
-              items={(feedback?.strengths ?? []).map((item) => item.label)}
-            />
-            <ReportRow
-              title="자주 틀리는 발음"
-              tone="red"
-              items={(feedback?.weaknesses ?? []).map((item) => item.label)}
-            />
-            <ReportRow
-              title="억양 특성"
-              tone="blue"
-              items={["문장 끝을 올려 읽는 편"]}
-              sample
-            />
+          ) : null}
+        </Link>
+        <h2 className="mt-5 text-[20px] leading-7 font-bold text-[#191f28]">
+          {displayName ?? "불러오는 중…"}
+        </h2>
+        {statistics ? (
+          <p className="mt-1 flex items-center gap-2 text-[13px] leading-[18px] font-medium text-[#3d4a5c]">
+            <span>연속 {statistics.consecutiveLearningDays}일</span>
+            <span className="h-2.5 w-px bg-[#8fa0bc]" />
+            <span>총 {statistics.totalSessionCount}회 연습</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-[13px] leading-[18px] text-[#3d4a5c]">
+            학습 기록을 불러오는 중
+          </p>
+        )}
+      </section>
+
+      <div className="absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6]">
+        <div className="bg-white px-5 pt-4">
+          {titleProgress ? (
+            <button
+              type="button"
+              disabled={!titleProgress.next?.eligible || examStarting}
+              onClick={() => void startTitleExam()}
+              className="flex min-h-[72px] w-full items-center rounded-[20px] bg-[#edf2ff] py-4 pr-4 pl-[18px] text-left disabled:opacity-100"
+            >
+              <span className="min-w-0 flex-1">
+                <strong className="block text-[15px] leading-[22px] font-bold text-[#191f28]">
+                  {titleProgress.next
+                    ? titleProgress.next.eligible
+                      ? "승급 시험 응시 가능"
+                      : `연습 ${titleProgress.next.remainingTrainingCount}회 남았어요`
+                    : `누적 ${titleProgress.completedTrainingCount}회 연습했어요`}
+                </strong>
+                <span className="mt-[3px] block text-[12px] leading-4 font-medium text-[#4e5968]">
+                  {titleProgress.next
+                    ? `다음 칭호  ${titleProgress.next.label}  `
+                    : "최고 칭호"}
+                  <b className="text-primary">
+                    {titleProgress.completedTrainingCount}
+                  </b>
+                  <span className="text-[#8b95a1]">
+                    /
+                    {titleProgress.next?.requiredTrainingCount ??
+                      titleProgress.completedTrainingCount}
+                    회
+                  </span>
+                </span>
+              </span>
+              {titleProgress.next?.eligible ? (
+                <span className="flex shrink-0 items-center gap-0.5 rounded-xl bg-primary px-3.5 py-2.5 text-[14px] leading-5 font-bold text-white">
+                  {examStarting ? "준비 중" : "시험 보기"}
+                  <Image
+                    src="/figma/mypage/chevron-right-white.svg"
+                    alt=""
+                    width={20}
+                    height={20}
+                  />
+                </span>
+              ) : (
+                <span className="shrink-0 text-[17px] leading-6 font-bold text-primary">
+                  {percent}%
+                </span>
+              )}
+            </button>
+          ) : (
+            <div className="h-[76px] animate-pulse rounded-2xl bg-[#edf2ff]" />
+          )}
+
+          <nav
+            aria-label="마이페이지 메뉴"
+            className="mt-3 grid h-11 grid-cols-3 border-b border-[#e5e8eb]"
+          >
+            <Link
+              href="/mypage"
+              aria-current="page"
+              className="relative flex items-center justify-center text-[15px] font-bold text-[#191f28] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#191f28]"
+            >
+              요약
+            </Link>
+            <Link
+              href="/mypage/history"
+              className="flex items-center justify-center text-[15px] font-medium text-[#8b95a1]"
+            >
+              기록
+            </Link>
+            <Link
+              href="/mypage/plan"
+              className="flex items-center justify-center text-[15px] font-medium text-[#8b95a1]"
+            >
+              계획
+            </Link>
+          </nav>
+        </div>
+
+        <div className="space-y-3 px-5 pt-4 pb-6">
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive"
+            >
+              {error}
+            </p>
+          ) : null}
+
+          <section className="rounded-2xl bg-white px-4 py-[18px]">
+            <p className="text-[15px] leading-[22px] font-bold text-[#333d4b]">
+              이번 달 연습 기록
+            </p>
+            <div className="mt-4 grid grid-cols-3 divide-x divide-[#e5e8eb] text-center">
+              <Metric
+                label="연습 횟수"
+                value={`${statistics?.totalSessionCount ?? 0}회`}
+              />
+              <Metric label="연습 시간" value={learningTime} />
+              <Metric
+                label="평균 점수"
+                value={
+                  statistics?.totalSessionCount
+                    ? `${Math.round(statistics.averageOverallScore)}점`
+                    : "—"
+                }
+              />
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-white px-4 py-[18px]">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] leading-[22px] font-bold text-[#333d4b]">
+                나의 발음 리포트
+              </h2>
+              <span className="text-[11px] leading-[14px] text-[#8b95a1]">
+                이번 달 기준
+              </span>
+            </div>
+            <div className="mt-4 space-y-4">
+              <ReportRow
+                title="잘하는 발음"
+                items={(feedback?.strengths ?? []).map((item) => item.label)}
+              />
+              <ReportRow
+                title="자주 틀리는 발음"
+                items={(feedback?.weaknesses ?? []).map((item) => item.label)}
+              />
+              <ReportRow title="억양 특성" items={[]} unavailable />
+            </div>
             <Link
               href="/class/pronunciation"
-              className="design-action mt-4 !min-h-12"
+              className="mt-5 flex min-h-12 items-center justify-center rounded-xl bg-[#edf2ff] text-[14px] font-bold text-primary"
             >
               약점 집중 연습하기
+              <Image
+                src="/figma/mypage/chevron-right-blue.svg"
+                alt=""
+                width={20}
+                height={20}
+                className="ml-1"
+              />
             </Link>
-          </div>
-        </section>
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-bold">연습 기록</h2>
-            <Link href="/mypage/history" className="text-xs text-primary">
-              전체 보기
-            </Link>
-          </div>
-          <div className="design-card divide-y divide-[#f2f4f6] !px-[18px] !py-0">
-            {history.length ? (
-              history.slice(0, 3).map((item) => (
-                <Link
-                  key={String(item.sessionId)}
-                  href={`/mypage/history/${item.sessionId}`}
-                  className="flex items-center gap-3 py-4"
-                >
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-bold">{item.title}</h3>
-                    <p className="mt-1 text-xs text-[#8b95a1]">연습 완료</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-primary">
-                      {item.overallScore == null
-                        ? "점수 없음"
-                        : `${Math.round(item.overallScore)}점`}
-                    </p>
-                    <p className="mt-1 text-[10px] text-[#8b95a1]">
-                      {new Date(item.completedAt).toLocaleDateString("ko-KR")}
-                    </p>
-                  </div>
-                </Link>
-              ))
-            ) : (
-              <p className="py-8 text-center text-sm text-[#8b95a1]">
-                아직 연습 기록이 없어요
-              </p>
-            )}
-          </div>
-        </section>
-        <section className="design-card !p-[18px]">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold">내 연습 계획</h2>
-            <Link href="/mypage/plan" className="text-xs text-primary">
-              수정
-            </Link>
-          </div>
-          <dl className="space-y-4 text-xs">
-            <PlanRow
-              label="목표"
-              value={profile?.goalDescription || "연습 목표를 설정해 보세요"}
-            />
-            <PlanRow
-              label="연습 일정"
-              value={
-                profile ? `주 ${profile.weeklySessions}일` : "불러오는 중…"
-              }
-            />
-            <PlanRow
-              label="연습 방식"
-              value={methods || "연습 방식을 선택해 주세요"}
-            />
-          </dl>
-        </section>
+          </section>
+        </div>
       </div>
     </AppShell>
   );
 }
 
-function TitleProgressCard({
-  progress,
-  starting,
-  onStart,
-}: {
-  progress: UserTitleProgress;
-  starting: boolean;
-  onStart: () => void;
-}) {
-  const levelSpan = progress.next
-    ? progress.next.requiredTrainingCount - progress.minimumTrainingCount
-    : 1;
-  const completedInLevel = progress.next
-    ? progress.completedTrainingCount - progress.minimumTrainingCount
-    : levelSpan;
-  const percent = Math.min(
-    100,
-    Math.max(0, Math.round((completedInLevel / levelSpan) * 100)),
-  );
-
-  return (
-    <section className="design-card" aria-label="칭호 진행도">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex size-9 items-center justify-center rounded-full bg-[#fff4d6] text-[#b77900]">
-            <Award className="size-5" />
-          </span>
-          <div>
-            <p className="text-xs text-[#8b95a1]">나의 칭호</p>
-            <h2 className="text-base font-bold">{progress.label}</h2>
-          </div>
-        </div>
-        <span className="text-xs font-semibold text-primary">
-          누적 {progress.completedTrainingCount}회
-        </span>
-      </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf2ff]">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <p className="mt-2 text-xs text-[#6b7684]">
-        {progress.next?.eligible
-          ? `${progress.next.label} 승급 시험 · ${progress.next.passingScore}점 이상 합격`
-          : progress.next
-            ? `승급 시험까지 학습 ${progress.next.remainingTrainingCount}회 남았어요`
-            : "최고 칭호를 달성했어요"}
-      </p>
-      {progress.next?.eligible && (
-        <button
-          type="button"
-          disabled={starting}
-          onClick={onStart}
-          className="mt-4 flex min-h-11 w-full items-center justify-center rounded-full bg-primary text-sm font-semibold text-white disabled:opacity-60"
-        >
-          {starting ? "시험 준비 중…" : "승급 시험 보기"}
-        </button>
-      )}
-    </section>
-  );
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="whitespace-nowrap text-base font-bold">{value}</p>
-      <p className="mt-1 text-xs text-[#8b95a1]">{label}</p>
+    <div className="min-w-0 px-1">
+      <p className="truncate text-[17px] leading-6 font-bold text-[#191f28]">
+        {value}
+      </p>
+      <p className="mt-1 text-[11px] leading-[14px] text-[#8b95a1]">{label}</p>
     </div>
   );
 }
-function PlanRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-5">
-      <dt className="shrink-0 text-[#6b7684]">{label}</dt>
-      <dd className="text-right font-semibold leading-5">{value}</dd>
-    </div>
-  );
-}
+
 function ReportRow({
   title,
-  tone,
   items,
-  sample = false,
+  unavailable = false,
 }: {
   title: string;
-  tone: "green" | "red" | "blue";
   items: string[];
-  sample?: boolean;
+  unavailable?: boolean;
 }) {
-  const colors = {
-    green: "bg-[#e3f7ef] text-[#079777]",
-    red: "bg-[#ffebe5] text-[#f05a38]",
-    blue: "bg-white text-[#3468ff]",
-  };
   return (
-    <div className="mb-4">
-      <h3 className="mb-2 text-xs text-[#6b7684]">
+    <div className="flex items-start justify-between gap-4">
+      <h3 className="shrink-0 pt-1 text-[13px] leading-[18px] text-[#6b7684]">
         {title}
-        {sample && (
-          <span className="ml-1 text-[10px] text-[#8b95a1]">· 예시</span>
-        )}
       </h3>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap justify-end gap-1.5">
         {items.length ? (
           items.map((item) => (
             <span
               key={item}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${colors[tone]}`}
+              className="rounded-full bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 font-semibold text-[#333d4b]"
             >
               {item}
             </span>
           ))
         ) : (
-          <p className="text-xs text-[#8b95a1]">아직 분석할 기록이 없어요</p>
+          <span className="rounded-full bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 text-[#8b95a1]">
+            {unavailable ? "데이터 미제공" : "분석 기록 없음"}
+          </span>
         )}
       </div>
     </div>

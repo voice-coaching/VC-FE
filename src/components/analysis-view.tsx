@@ -1,32 +1,47 @@
 "use client";
 
-import { AnalysisScoreHierarchyView } from "@/components/analysis-score-hierarchy";
-
-import { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { AnalysisScoreBreakdownView } from "@/components/analysis-score-breakdown";
+import Image from "next/image";
+import { useMemo, useState, type ReactNode } from "react";
 import { ReferencePlayer } from "@/components/reference-player";
-import { CoachingView } from "@/components/coaching-view";
-import { supportedCoaching } from "@/lib/coaching";
 import type {
   AnalysisResult,
   AnalysisSegment,
+  Id,
   PracticeContent,
 } from "@/lib/api";
 
+type ReportView = "summary" | "pronunciation" | "sentence";
+
+const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
+  NEWS: "뉴스 읽기",
+  SENTENCE: "문장 연습",
+  ANNOUNCER: "아나운서 따라 읽기",
+  CLASS_PRACTICE: "클래스",
+};
+
 function scoreText(score: number | null) {
-  return score == null ? "—" : `${Math.round(score)}점`;
+  return score == null ? "—" : String(Math.round(score));
 }
 
-function displayText(value: string | null, fallback: string) {
-  return value?.trim() || fallback;
+function segmentText(segment: AnalysisSegment) {
+  return segment.expectedText?.trim() || `문장 ${segment.sequenceNo}`;
+}
+
+function ReportIcon({
+  name,
+  size = 18,
+}: {
+  name: "warning" | "check" | "info";
+  size?: number;
+}) {
+  return (
+    <Image
+      src={`/figma/report/${name}.svg`}
+      alt=""
+      width={size}
+      height={size}
+    />
+  );
 }
 
 export function AnalysisView({
@@ -34,522 +49,638 @@ export function AnalysisView({
   segments,
   content,
   recordingUrl,
+  recordingId,
   courseMode = false,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
   content: PracticeContent;
   recordingUrl?: string;
+  recordingId?: Id;
   courseMode?: boolean;
 }) {
-  const sentenceTabs =
-    content.contentType === "NEWS" || content.contentType === "ANNOUNCER";
-  const [tab, setTab] = useState(sentenceTabs ? "sentences" : "pronunciation");
-  const [selectedSyllable, setSelectedSyllable] = useState(0);
+  const [view, setView] = useState<ReportView>("summary");
   const [selected, setSelected] = useState<AnalysisSegment | null>(null);
-  const problems = segments.filter(
-    (segment) => segment.resultStatus !== "NORMAL",
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+  const unavailable = segments.filter(
+    (segment) => segment.pronunciationScore == null,
   );
-  const focusScore =
-    courseMode && content.learningFocus === "INTONATION"
-      ? analysis.intonationScore
-      : analysis.pronunciationScore;
-  const speed =
-    analysis.speedStatus == null
-      ? null
-      : ["TOO_SLOW", "SLOW"].includes(analysis.speedStatus)
-        ? "느림"
-        : ["TOO_FAST", "FAST"].includes(analysis.speedStatus)
-          ? "빠름"
-          : "보통";
-  const summaryFeedback =
-    analysis.summaryFeedback?.trim() ||
-    (analysis.outcome === "COMPLETED_NO_ISSUE"
-      ? "이번 분석에서는 교정할 발음 근거가 선택되지 않았어요."
-      : "제공된 코칭 문구가 없습니다.");
-  const coaching = supportedCoaching(analysis.coaching);
-  if (coaching)
-    return <CoachingView coaching={coaching} recordingUrl={recordingUrl} />;
-  return (
-    <>
-      <section className="rounded-[20px] bg-gradient-to-br from-[#285df5] to-[#5c86ff] p-5 text-white shadow-[0_8px_16px_#3468ff20]">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-white/80">
-            {courseMode && content.learningFocus === "INTONATION"
-              ? "억양 정확도"
-              : "발음 정확도"}
-          </p>
-          {focusScore != null && (
-            <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold">
-              {focusScore >= 80
-                ? "좋음"
-                : focusScore >= 60
-                  ? "보통"
-                  : "연습 필요"}
-            </span>
+  const needsReview = segments.filter(
+    (segment) =>
+      segment.pronunciationScore != null && segment.resultStatus !== "NORMAL",
+  );
+  const good = segments.filter(
+    (segment) =>
+      segment.pronunciationScore != null && segment.resultStatus === "NORMAL",
+  );
+  const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
+  const summary =
+    analysis.summaryFeedback?.trim() || "제공된 AI 총평이 없습니다.";
+  const sourceLabel = courseMode
+    ? "클래스"
+    : CONTENT_LABEL[content.contentType];
+
+  const scoreRows = useMemo(() => {
+    if (analysis.scoreBreakdown?.items.length) {
+      return analysis.scoreBreakdown.items.map((item) => ({
+        id: item.criterionId,
+        label: item.label,
+        description: item.description,
+        score: item.score,
+        maxScore: item.maxScore,
+        available: item.applicable,
+      }));
+    }
+    if (analysis.scoreHierarchy?.groups.length) {
+      return analysis.scoreHierarchy.groups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        description: group.description,
+        score: group.score,
+        maxScore: group.maxScore,
+        available: group.score != null,
+      }));
+    }
+    return [];
+  }, [analysis.scoreBreakdown, analysis.scoreHierarchy]);
+
+  if (view === "pronunciation") {
+    return (
+      <ReportOverlay title="발음 분석" onBack={() => setView("summary")}>
+        <div className="px-5 pt-1">
+          <section className="flex min-h-[112px] items-center gap-3 rounded-[18px] bg-white px-5 py-[18px]">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[15px] leading-[22px] font-bold">
+                종합 점수
+              </h2>
+              <p className="mt-1 text-[12px] leading-4 text-[#8b95a1]">
+                이번 녹음의 발음 분석 결과예요
+              </p>
+            </div>
+            <ScoreRing score={overallScore} />
+          </section>
+        </div>
+        <div className="space-y-2.5 px-5 pt-3 pb-6">
+          {scoreRows.length ? (
+            scoreRows.map((row) => (
+              <details
+                key={row.id}
+                className="overflow-hidden rounded-2xl bg-white"
+              >
+                <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2.5 px-[18px] py-4 marker:hidden">
+                  <strong className="min-w-0 flex-1 text-[16px] leading-6">
+                    {row.label}
+                  </strong>
+                  <span className="shrink-0 text-[16px] leading-6">
+                    {row.available && row.score != null ? (
+                      <>
+                        <b>{formatPoints(row.score)}</b>
+                        <span className="font-medium text-[#8b95a1]">
+                          {row.maxScore == null
+                            ? "점"
+                            : ` / ${formatPoints(row.maxScore)}점`}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[13px] text-[#8b95a1]">
+                        {row.available ? "점수 미제공" : "평가 대상 없음"}
+                      </span>
+                    )}
+                  </span>
+                  <Image
+                    src="/figma/report/chevron.svg"
+                    alt=""
+                    width={18}
+                    height={18}
+                    className="rotate-90"
+                  />
+                </summary>
+                <p className="border-t border-[#f2f4f6] px-[18px] py-4 text-[13px] leading-5 text-[#6b7684]">
+                  {row.description || "세부 설명이 제공되지 않았습니다."}
+                </p>
+              </details>
+            ))
+          ) : (
+            <section className="rounded-2xl bg-white px-5 py-8 text-center">
+              <h2 className="text-[15px] font-bold">세부 점수 데이터 미제공</h2>
+              <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
+                이번 분석에는 항목별 발음 점수가 포함되지 않았어요.
+              </p>
+            </section>
           )}
         </div>
-        <p className="mt-2 text-[42px] leading-tight font-bold">
-          {focusScore == null ? "—" : Math.round(focusScore)}
-          {focusScore != null && (
-            <span className="text-sm font-normal">점</span>
-          )}
-        </p>
-        <p className="mt-3 text-sm leading-6">{summaryFeedback}</p>
-        {recordingUrl && (
-          <div className="mt-4">
-            <ReferencePlayer
-              source={recordingUrl}
-              title="내 발음 다시 듣기"
-              compact
-            />
-          </div>
-        )}
-      </section>
-      {analysis.scoreHierarchy ? (
-        <AnalysisScoreHierarchyView hierarchy={analysis.scoreHierarchy} />
-      ) : (
-        <AnalysisScoreBreakdownView breakdown={analysis.scoreBreakdown} />
-      )}
-      {analysis.pronunciationEvidence && (
-        <section className="design-card">
-          <h2 className="text-sm font-bold">교정 근거</h2>
-          <p className="mt-3 text-sm leading-6">
-            선택된 발음 단위:{" "}
-            <b>{analysis.pronunciationEvidence.selectedPhone}</b>
-          </p>
-          {analysis.pronunciationEvidence.selectedStartMs != null &&
-            analysis.pronunciationEvidence.selectedEndMs != null && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                녹음 구간{" "}
-                {(
-                  analysis.pronunciationEvidence.selectedStartMs / 1_000
-                ).toFixed(1)}
-                초–
-                {(analysis.pronunciationEvidence.selectedEndMs / 1_000).toFixed(
-                  1,
-                )}
-                초
-              </p>
-            )}
-        </section>
-      )}
-      {courseMode ? (
-        <>
-          <section className="design-card">
-            <h2 className="mb-4 text-sm font-bold">
-              {content.learningFocus === "INTONATION"
-                ? "문장 끝 억양 확인"
-                : "발음 소리 확인"}
-            </h2>
-            {content.learningFocus === "INTONATION" && (
-              <p className="mb-4 rounded-xl bg-muted px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
-                현재 분석 API는 억양 곡선 데이터를 제공하지 않습니다.
-              </p>
-            )}
-            {analysis.strengths.map((item) => (
-              <p key={item} className="mb-2 text-sm leading-6">
-                {item}
-              </p>
-            ))}
-            <p className="text-sm leading-6 text-muted-foreground">
-              {summaryFeedback}
+      </ReportOverlay>
+    );
+  }
+
+  if (view === "sentence" && selected) {
+    const index = segments.findIndex(
+      (segment) => String(segment.id) === String(selected.id),
+    );
+    const problem = selected.resultStatus !== "NORMAL";
+    return (
+      <ReportOverlay
+        title="문장별 피드백"
+        trailing={`${Math.max(1, index + 1)} / ${Math.max(segments.length, 1)}`}
+        onBack={() => {
+          setSelected(null);
+          setView("summary");
+        }}
+        footer={
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(null);
+              setView("summary");
+            }}
+            className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white"
+          >
+            확인하기
+          </button>
+        }
+      >
+        <div className="px-5 pt-1">
+          <section className="rounded-2xl bg-white px-5 py-[18px]">
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-md px-[7px] py-[3px] text-[11px] leading-[14px] font-bold text-[#4e5968]">
+                {String(selected.sequenceNo).padStart(2, "0")}
+              </span>
+              <span
+                className={`flex items-center gap-1 rounded-md px-[7px] py-[3px] text-[11px] leading-[14px] font-bold ${problem ? "bg-[#fff2f3] text-[#f04f5f]" : "bg-[#eefaf6] text-[#10a87b]"}`}
+              >
+                <ReportIcon name={problem ? "warning" : "check"} size={12} />
+                {problem ? "다시 확인" : "잘 읽음"}
+              </span>
+            </div>
+            <p className="mt-2 text-[17px] leading-6 font-bold">
+              {segmentText(selected)}
             </p>
           </section>
-          <section className="design-card">
-            <h2 className="mb-3 text-sm font-bold">다음에도 이렇게 해보세요</h2>
-            {analysis.weaknesses.length ? (
-              analysis.weaknesses.map((item) => (
-                <p
-                  key={item}
-                  className="text-sm leading-6 text-muted-foreground"
-                >
-                  {item}
-                </p>
-              ))
-            ) : (
-              <p className="text-sm leading-6 text-muted-foreground">
-                지금처럼 문장 끝까지 또렷하게 읽어 주세요.
-              </p>
-            )}
-          </section>
-        </>
-      ) : (
-        <>
-          <section className="design-card grid grid-cols-3 divide-x divide-border !px-2 text-center">
-            <div>
-              <b className="text-lg">{scoreText(analysis.overallScore)}</b>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                종합 점수
-              </p>
-            </div>
-            <div>
-              <b className="text-lg">{speed ?? "분석 없음"}</b>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                말하기 속도
-              </p>
-            </div>
-            <div>
-              <b className="text-lg">{scoreText(analysis.intonationScore)}</b>
-              <p className="mt-1 text-[10px] text-muted-foreground">억양</p>
-            </div>
-          </section>
-          <div
-            className="design-tabs"
-            style={{
-              gridTemplateColumns: `repeat(${sentenceTabs ? 3 : 2}, minmax(0,1fr))`,
-            }}
-            role="tablist"
-            aria-label="분석 항목"
-          >
-            {sentenceTabs && (
-              <button
-                type="button"
-                role="tab"
-                id="sentences-tab"
-                aria-controls="analysis-panel"
-                aria-selected={tab === "sentences"}
-                onClick={() => setTab("sentences")}
-              >
-                문장별
-              </button>
-            )}
-            <button
-              type="button"
-              role="tab"
-              id="pronunciation-tab"
-              aria-controls="analysis-panel"
-              aria-selected={tab === "pronunciation"}
-              onClick={() => setTab("pronunciation")}
-            >
-              {sentenceTabs ? "발음 상세" : "발음"}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="prosody-tab"
-              aria-controls="analysis-panel"
-              aria-selected={tab === "prosody"}
-              onClick={() => setTab("prosody")}
-            >
-              속도와 억양
-            </button>
-          </div>
-          <div
-            id="analysis-panel"
-            role="tabpanel"
-            aria-labelledby={`${tab}-tab`}
-            className="space-y-5"
-          >
-            {tab === "sentences" ? (
-              <div className="space-y-3">
-                {segments.length ? (
-                  segments.map((segment) => (
-                    <button
-                      key={String(segment.id)}
-                      type="button"
-                      onClick={() => {
-                        setSelected(segment);
-                        setSelectedSyllable(0);
-                      }}
-                      className="design-card flex w-full items-center gap-3 !p-4 text-left"
-                    >
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold leading-6">
-                          {displayText(
-                            segment.expectedText,
-                            "구간 " + segment.sequenceNo,
-                          )}
-                        </p>
-                        {segment.resultStatus !== "NORMAL" && (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            이렇게 들렸어요{" "}
-                            <span className="ml-1 text-[#ff684c]">
-                              {segment.recognizedText || "누락"}
-                            </span>
-                          </p>
-                        )}
-                      </div>
-                      <span
-                        className={`shrink-0 text-xs ${segment.resultStatus === "NORMAL" ? "text-muted-foreground" : "text-[#ff684c]"}`}
-                      >
-                        {scoreText(segment.pronunciationScore)}
-                      </span>
-                      <ChevronRight className="size-4 shrink-0" />
-                    </button>
-                  ))
-                ) : (
-                  <section className="design-card text-sm leading-6">
-                    <p className="text-xs font-semibold text-muted-foreground">
-                      {analysis.transcript
-                        ? "음성 인식 문장"
-                        : "분석한 연습 문장"}
-                    </p>
-                    <p className="mt-2">
-                      {displayText(analysis.transcript, content.scriptText)}
-                    </p>
-                    {!analysis.transcript && (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        이번 분석은 받아쓰기 텍스트 대신 발음 근거와 AI 코칭을
-                        제공했어요.
-                      </p>
-                    )}
-                  </section>
-                )}
+        </div>
+
+        <div className="space-y-3 px-5 pt-4 pb-6">
+          {problem ? (
+            <section className="pb-1">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[15px] leading-[22px] font-bold">
+                  다시 확인할 단어
+                </h2>
+                <strong className="text-[14px] text-primary">
+                  {selected.targetUnit ? "1개" : "데이터 미제공"}
+                </strong>
               </div>
-            ) : tab === "pronunciation" ? (
-              <>
-                <section className="design-card">
-                  <div className="mb-4 flex justify-between text-xs text-muted-foreground">
-                    <span>구간을 눌러 확인해 보세요</span>
-                    <span>{segments.length}구간</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {segments.map((segment) => (
-                      <button
-                        type="button"
-                        key={String(segment.id)}
-                        onClick={() => {
-                          setSelected(segment);
-                          setSelectedSyllable(0);
-                        }}
-                        className={`min-h-10 min-w-9 rounded-lg px-2 py-2 text-base font-medium ${segment.resultStatus === "NORMAL" ? "bg-muted" : "bg-rose-50 text-rose-500"}`}
-                      >
-                        {displayText(
-                          segment.expectedText,
-                          "구간 " + segment.sequenceNo,
-                        )}
-                      </button>
-                    ))}
-                    {segments.length === 0 && (
-                      <div className="text-sm leading-6">
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          {analysis.transcript
-                            ? "음성 인식 문장"
-                            : "분석한 연습 문장"}
-                        </p>
-                        <p className="mt-2">
-                          {displayText(analysis.transcript, content.scriptText)}
-                        </p>
-                        {!analysis.transcript && (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            이번 분석은 구간별 받아쓰기 대신 발음 근거와 AI
-                            코칭을 제공했어요.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-5 text-[10px] text-muted-foreground">
-                    ● 정확　<span className="text-rose-400">● 개선 필요</span>
-                  </p>
-                </section>
-                <section>
-                  <div className="mb-3 flex justify-between">
-                    <h2 className="text-sm font-bold">개선이 필요한 구간</h2>
-                    <span className="text-xs text-muted-foreground">
-                      {problems.length}개
-                    </span>
-                  </div>
-                  <div className="design-card divide-y divide-border !py-0">
-                    {problems.map((segment) => (
-                      <button
-                        type="button"
-                        key={String(segment.id)}
-                        onClick={() => {
-                          setSelected(segment);
-                          setSelectedSyllable(0);
-                        }}
-                        className="flex w-full items-center gap-3 py-4 text-left"
-                      >
-                        <span className="rounded-lg bg-muted px-3 py-2 font-bold">
-                          {displayText(
-                            segment.expectedText,
-                            "구간 " + segment.sequenceNo,
-                          )}
-                        </span>
-                        <span className="flex-1 text-xs">
-                          <span className="text-muted-foreground">
-                            이렇게 들렸어요{" "}
-                          </span>
-                          <span className="text-rose-500">
-                            {segment.recognizedText || "누락"}
-                          </span>
-                          <span className="mt-1 block leading-5 text-muted-foreground">
-                            {segment.feedback}
-                          </span>
-                        </span>
-                        <ChevronRight className="size-4 text-muted-foreground" />
-                      </button>
-                    ))}
-                    {problems.length === 0 && (
-                      <p className="py-5 text-sm text-muted-foreground">
-                        개선이 필요한 구간이 없습니다.
-                      </p>
-                    )}
-                  </div>
-                </section>
-              </>
-            ) : (
-              <>
-                <section className="design-card">
-                  <div className="flex justify-between text-sm">
-                    <h2 className="font-bold">말하기 속도</h2>
-                    <span className="text-muted-foreground">
-                      분당{" "}
-                      <b className="text-foreground">
-                        {analysis.speedWpm == null
-                          ? "—"
-                          : Math.round(analysis.speedWpm)}
-                      </b>
-                      단어
-                    </span>
-                  </div>
-                  <div className="mt-5 grid grid-cols-3 gap-1">
-                    {["느림", "보통", "빠름"].map((label) => (
-                      <div key={label}>
-                        <div
-                          className={`h-2 rounded-full ${speed === label ? "bg-primary" : "bg-muted"}`}
-                        />
-                        <p
-                          className={`mt-2 text-center text-[10px] ${speed === label ? "text-primary" : "text-muted-foreground"}`}
-                        >
-                          {label === "보통" ? "적정" : label}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-                <section className="design-card">
-                  <h2 className="mb-5 text-sm font-bold">억양 변화</h2>
-                  <p className="mb-5 rounded-xl bg-muted px-4 py-5 text-center text-xs leading-5 text-muted-foreground">
-                    현재 분석 API는 억양 곡선 데이터를 제공하지 않습니다.
-                  </p>
-                  <div className="space-y-4">
-                    {[
-                      { label: "억양", score: analysis.intonationScore },
-                      { label: "강세", score: analysis.stressScore },
-                      { label: "쉼", score: analysis.pauseScore },
-                    ].map(({ label, score }) => (
-                      <div key={label}>
-                        <div className="mb-2 flex justify-between text-xs">
-                          <span>{label}</span>
-                          <span className="text-primary">
-                            {scoreText(score)}
-                          </span>
-                        </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{
-                              width:
-                                (score == null
-                                  ? 0
-                                  : Math.min(100, Math.max(0, score))) + "%",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-5 text-xs leading-5 text-muted-foreground">
-                    {summaryFeedback}
-                  </p>
-                </section>
-              </>
-            )}
-          </div>
-        </>
-      )}
-      <Dialog
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-      >
-        <DialogContent className="learning-shell !top-0 !h-dvh !max-h-dvh !w-full !max-w-[402px] !translate-y-0 overflow-y-auto !rounded-none border-0 !p-5 !pt-12">
-          {selected && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-center">
-                  {selected.sequenceNo}번 구간
-                </DialogTitle>
-                <DialogDescription className="text-center text-muted-foreground">
-                  발음을 확인하고 다시 연습해 보세요
-                </DialogDescription>
-              </DialogHeader>
-              <section className="design-card">
-                <div className="mb-5 flex justify-between text-xs text-muted-foreground">
-                  <span>음절을 눌러 확인해 보세요</span>
-                  <b className="text-primary">
-                    {scoreText(selected.pronunciationScore)}
-                  </b>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from(
-                    displayText(
-                      selected.expectedText,
-                      "구간 " + selected.sequenceNo,
-                    ),
-                  ).map((char, index) => (
-                    <button
-                      type="button"
-                      aria-pressed={selectedSyllable === index}
-                      onClick={() => setSelectedSyllable(index)}
-                      key={index}
-                      className={`rounded-lg px-2 py-2 text-lg ${selectedSyllable === index ? "ring-2 ring-primary" : ""} ${selected.resultStatus === "NORMAL" ? "bg-[#f2f4f6]" : "bg-[#ffebe5] text-[#ef7157]"}`}
-                    >
-                      {char}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-5 text-xs text-muted-foreground">
-                  ● 정확　<span className="text-[#ef7157]">● 개선 필요</span>
-                </p>
-              </section>
-              {recordingUrl && (
+              {selected.targetUnit ? (
+                <span className="mt-2.5 inline-flex rounded-full bg-primary px-4 py-2 text-[15px] leading-[22px] font-bold text-white">
+                  {selected.targetUnit}
+                </span>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className="rounded-2xl bg-white p-5">
+            <h2 className="text-[20px] leading-7 font-bold">
+              {selected.targetUnit || segmentText(selected)}
+            </h2>
+            <p className="mt-2.5 text-[15px] leading-6 font-medium">
+              {selected.feedback?.trim() ||
+                (problem
+                  ? "이 문장에 대한 세부 피드백이 제공되지 않았어요."
+                  : "이번 문장은 또렷하게 읽었어요.")}
+            </p>
+            {problem && selected.recognizedText ? (
+              <p className="mt-3 rounded-xl bg-[#fff2f3] px-3 py-2 text-[13px] text-[#f04f5f]">
+                인식된 소리: {selected.recognizedText}
+              </p>
+            ) : null}
+            <h3 className="mt-[18px] text-[15px] leading-[22px] font-bold">
+              소리 비교
+            </h3>
+            <div className="mt-2.5 space-y-2.5">
+              {recordingUrl || recordingId != null ? (
                 <ReferencePlayer
                   source={recordingUrl}
-                  title="내 발음 다시 듣기"
+                  recordingId={recordingId}
+                  title="내 음성 듣기"
+                  buttonTone="primary"
                 />
+              ) : (
+                <UnavailableAudio label="내 음성 데이터 없음" primary />
               )}
-              <section className="design-card">
-                <h2 className="text-2xl font-bold">
-                  {displayText(
-                    selected.expectedText,
-                    "구간 " + selected.sequenceNo,
-                  )}
-                </h2>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  이렇게 들렸어요
-                </p>
-                <p className="mt-1 text-lg font-bold text-[#ef7157]">
-                  {selected.recognizedText || "누락"}
-                </p>
-                <h3 className="mt-5 text-sm font-bold">무엇이 문제였나요</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {selected.feedback || "인식한 발음과 원문을 비교해 보세요."}
-                </p>
-                <h3 className="mt-5 text-sm font-bold">이렇게 해보세요</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  예시를 듣고 어려운 소리를 천천히 나누어 읽어 보세요.
-                </p>
-                {content.referenceAudioAvailable && (
-                  <div className="mt-4">
-                    <ReferencePlayer contentId={content.id} title="기준 발음" />
-                  </div>
-                )}
-              </section>
-              <button
-                className="design-action"
-                onClick={() => setSelected(null)}
-              >
-                확인
-              </button>
-            </>
+              {content.referenceAudioAvailable ? (
+                <ReferencePlayer
+                  contentId={content.id}
+                  title="가이드 음성 듣기"
+                  buttonTone="neutral"
+                />
+              ) : (
+                <UnavailableAudio label="가이드 음성 데이터 없음" />
+              )}
+            </div>
+          </section>
+
+          <div className="flex items-center justify-between px-1 pt-2">
+            <button
+              type="button"
+              disabled={index <= 0}
+              onClick={() => setSelected(segments[index - 1])}
+              className="flex min-h-11 items-center gap-0.5 text-[13px] font-bold text-[#4e5968] disabled:opacity-35"
+            >
+              <Image
+                src="/figma/settings/back.svg"
+                alt=""
+                width={16}
+                height={16}
+              />
+              이전 문장
+            </button>
+            <button
+              type="button"
+              disabled={index < 0 || index >= segments.length - 1}
+              onClick={() => setSelected(segments[index + 1])}
+              className="flex min-h-11 items-center gap-0.5 text-[13px] font-bold text-[#4e5968] disabled:opacity-35"
+            >
+              다음 문장
+              <Image
+                src="/figma/report/chevron.svg"
+                alt=""
+                width={16}
+                height={16}
+              />
+            </button>
+          </div>
+        </div>
+      </ReportOverlay>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="flex flex-col items-center gap-4 pt-2">
+        <p className="flex items-center gap-2 text-[13px] leading-[18px]">
+          <b className="text-primary">{sourceLabel}</b>
+          <span className="h-2.5 w-px bg-[#e5e8eb]" />
+          <span className="max-w-[240px] truncate font-medium text-[#8b95a1]">
+            {content.title}
+          </span>
+        </p>
+        <div className="w-full rounded-[18px] bg-primary px-4 py-3.5 text-white">
+          <div className="flex items-center gap-1">
+            <Image
+              src="/figma/report/ai-sparkle.svg"
+              alt=""
+              width={14}
+              height={14}
+            />
+            <h2 className="text-[12px] leading-4 font-bold">AI 총평</h2>
+          </div>
+          <p
+            className={`mt-1.5 text-[14px] leading-5 font-medium ${summaryExpanded ? "" : "line-clamp-3"}`}
+          >
+            {summary}
+          </p>
+          {summary.length > 80 ? (
+            <button
+              type="button"
+              aria-expanded={summaryExpanded}
+              onClick={() => setSummaryExpanded((value) => !value)}
+              className="mt-1.5 flex min-h-8 w-full items-center justify-center gap-0.5 text-[13px] font-bold"
+            >
+              {summaryExpanded ? "접기" : "더보기"}
+              <Image
+                src="/figma/report/chevron-white.svg"
+                alt=""
+                width={14}
+                height={14}
+                className={summaryExpanded ? "-rotate-90" : "rotate-90"}
+              />
+            </button>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-4">
+        <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
+          연습 문장
+        </h2>
+        <p className="mt-1.5 text-[15px] leading-[1.5] font-medium">
+          {content.scriptText}
+        </p>
+        <div className="mt-3.5 grid grid-cols-2 gap-2">
+          {recordingUrl || recordingId != null ? (
+            <ReferencePlayer
+              source={recordingUrl}
+              recordingId={recordingId}
+              title="내 녹음 전체 듣기"
+              buttonTone="primary"
+            />
+          ) : (
+            <UnavailableAudio label="내 녹음 데이터 없음" primary />
           )}
-        </DialogContent>
-      </Dialog>
-    </>
+          {content.referenceAudioAvailable ? (
+            <ReferencePlayer
+              contentId={content.id}
+              title="가이드 전체 듣기"
+              buttonTone="neutral"
+            />
+          ) : (
+            <UnavailableAudio label="가이드 데이터 없음" />
+          )}
+        </div>
+      </section>
+
+      <button
+        type="button"
+        onClick={() => setView("pronunciation")}
+        className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
+      >
+        <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
+        <span className="flex items-end gap-1">
+          <b className="text-[20px] leading-7 text-primary">
+            {scoreText(overallScore)}
+          </b>
+          {overallScore != null ? (
+            <span className="text-[12px] leading-4 text-[#8b95a1]">/ 100</span>
+          ) : null}
+        </span>
+        <Image src="/figma/report/chevron.svg" alt="" width={18} height={18} />
+      </button>
+
+      {segments.length ? (
+        <div className="space-y-3">
+          <section className="rounded-[20px] bg-white px-5 py-4">
+            <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
+            <p className="mt-[3px] text-[13px] leading-[18px] text-[#8b95a1]">
+              {segments.length}개 문장을 분석했어요
+            </p>
+            <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-[#eef0f3]">
+              <span
+                className="bg-[#f04f5f]"
+                style={{ flexGrow: needsReview.length }}
+              />
+              <span
+                className="bg-[#10a87b]"
+                style={{ flexGrow: good.length }}
+              />
+              <span
+                className="bg-[#98a2b2]"
+                style={{ flexGrow: unavailable.length }}
+              />
+            </div>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              <StatusChip
+                icon="warning"
+                label="다시 확인"
+                count={needsReview.length}
+                tone="warning"
+              />
+              <StatusChip
+                icon="check"
+                label="잘 읽음"
+                count={good.length}
+                tone="check"
+              />
+              <StatusChip
+                icon="info"
+                label="분석 어려움"
+                count={unavailable.length}
+                tone="info"
+              />
+            </div>
+          </section>
+
+          <SegmentSection
+            title="다시 확인해 보세요"
+            items={needsReview}
+            icon="warning"
+            tone="warning"
+            onSelect={(segment) => {
+              setSelected(segment);
+              setView("sentence");
+            }}
+          />
+          <SegmentSection
+            title="잘 읽은 문장"
+            items={good}
+            icon="check"
+            tone="check"
+            onSelect={(segment) => {
+              setSelected(segment);
+              setView("sentence");
+            }}
+          />
+          <SegmentSection
+            title="분석이 어려운 문장"
+            items={unavailable}
+            icon="info"
+            tone="info"
+            defaultOpen={false}
+            onSelect={(segment) => {
+              setSelected(segment);
+              setView("sentence");
+            }}
+          />
+        </div>
+      ) : (
+        <section className="rounded-[20px] bg-white p-5">
+          <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
+          <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
+            문장별 분석 데이터가 제공되지 않았어요.
+          </p>
+        </section>
+      )}
+
+      {analysis.pronunciationEvidence ? (
+        <section className="rounded-[20px] bg-white p-5">
+          <h2 className="text-[15px] leading-[22px] font-bold">교정 근거</h2>
+          <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
+            선택된 발음 단위: {analysis.pronunciationEvidence.selectedPhone}
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function formatPoints(value: number) {
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(
+    value,
+  );
+}
+
+function ScoreRing({ score }: { score: number | null }) {
+  const clamped = score == null ? 0 : Math.min(100, Math.max(0, score));
+  return (
+    <span
+      className="flex size-[76px] shrink-0 items-center justify-center rounded-full p-1.5"
+      style={{
+        background: `conic-gradient(#2f6bff ${clamped}%, #eef0f3 0)`,
+      }}
+    >
+      <span className="flex size-full items-center justify-center rounded-full bg-white">
+        <b className="text-[20px] leading-7">{scoreText(score)}</b>
+        {score != null ? (
+          <span className="ml-px self-center pt-2 text-[11px] font-bold text-[#8b95a1]">
+            점
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+function StatusChip({
+  icon,
+  label,
+  count,
+  tone,
+}: {
+  icon: "warning" | "check" | "info";
+  label: string;
+  count: number;
+  tone: "warning" | "check" | "info";
+}) {
+  const styles = {
+    warning: "bg-[#fff2f3] text-[#f04f5f]",
+    check: "bg-[#eefaf6] text-[#10a87b]",
+    info: "bg-white text-[#4e5968]",
+  };
+  return (
+    <span
+      className={`flex items-center gap-1 rounded-[10px] px-2.5 py-1.5 text-[12px] leading-4 font-medium ${styles[tone]}`}
+    >
+      <ReportIcon name={icon} size={14} />
+      {label} <b>{count}</b>
+    </span>
+  );
+}
+
+function SegmentSection({
+  title,
+  items,
+  icon,
+  tone,
+  onSelect,
+  defaultOpen = true,
+}: {
+  title: string;
+  items: AnalysisSegment[];
+  icon: "warning" | "check" | "info";
+  tone: "warning" | "check" | "info";
+  onSelect: (segment: AnalysisSegment) => void;
+  defaultOpen?: boolean;
+}) {
+  const toneText = {
+    warning: "text-[#f04f5f]",
+    check: "text-[#10a87b]",
+    info: "text-[#8b95a1]",
+  }[tone];
+  return (
+    <details open={defaultOpen} className="rounded-[20px] bg-white px-5 py-0.5">
+      <summary className="flex min-h-[54px] cursor-pointer list-none items-center gap-2 marker:hidden">
+        <ReportIcon name={icon} />
+        <strong className="min-w-0 flex-1 text-[17px] leading-6">
+          {title}
+        </strong>
+        <span className={`text-[13px] leading-[18px] font-bold ${toneText}`}>
+          {items.length}개
+        </span>
+        <Image
+          src="/figma/report/chevron.svg"
+          alt=""
+          width={18}
+          height={18}
+          className="rotate-90"
+        />
+      </summary>
+      {items.map((segment) => (
+        <button
+          key={String(segment.id)}
+          type="button"
+          onClick={() => onSelect(segment)}
+          className="flex min-h-[56px] w-full items-start gap-3 pb-4 pt-1 text-left"
+        >
+          <span className="shrink-0 pt-0.5 text-[13px] leading-6 text-[#8b95a1]">
+            {String(segment.sequenceNo).padStart(2, "0")}
+          </span>
+          <span className="min-w-0 flex-1 text-[16px] leading-6 font-medium">
+            {segmentText(segment)}
+          </span>
+          <Image
+            src="/figma/report/chevron.svg"
+            alt=""
+            width={16}
+            height={16}
+            className="mt-1"
+          />
+        </button>
+      ))}
+      {items.length === 0 ? (
+        <p className="pb-4 text-[13px] text-[#8b95a1]">
+          해당하는 문장이 없어요.
+        </p>
+      ) : null}
+    </details>
+  );
+}
+
+function UnavailableAudio({
+  label,
+  primary = false,
+}: {
+  label: string;
+  primary?: boolean;
+}) {
+  return (
+    <span
+      aria-disabled="true"
+      className={`flex h-12 items-center justify-center rounded-2xl px-2 text-center text-[12px] font-bold ${primary ? "bg-[#edf2ff] text-[#8fa9e8]" : "bg-[#f2f4f6] text-[#8b95a1]"}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ReportOverlay({
+  title,
+  trailing,
+  onBack,
+  footer,
+  children,
+}: {
+  title: string;
+  trailing?: string;
+  onBack: () => void;
+  footer?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col bg-[#f2f4f6] pt-[max(44px,env(safe-area-inset-top,0px))] text-[#191f28]">
+      <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="피드백으로 돌아가기"
+          className="flex size-10 items-center justify-center"
+        >
+          <Image src="/figma/settings/back.svg" alt="" width={24} height={24} />
+        </button>
+        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
+          {title}
+        </h1>
+        {trailing ? (
+          <span className="absolute right-3 text-[12px] leading-4 font-bold text-[#8b95a1]">
+            {trailing}
+          </span>
+        ) : null}
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        {children}
+      </div>
+      {footer ? (
+        <div className="shrink-0 bg-white px-5 pt-3 pb-[max(24px,env(safe-area-inset-bottom,0px))]">
+          {footer}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Badge">
+<path id="Camera Body" d="M13.1429 11H26.8571C29.7029 11 32 13.345 32 16.25V26.75C32 29.655 29.7029 32 26.8571 32H13.1429C10.2971 32 8 29.655 8 26.75V16.25C8 13.345 10.2971 11 13.1429 11Z" fill="url(#paint0_linear_0_9)"/>
+<path id="Camera Lens" d="M33 17.2215L39.2222 13.2144C40.1111 12.6679 41 13.2144 41 14.3072V26.6928C41 27.7856 40.1111 28.3321 39.2222 27.7856L33 23.7785V17.2215Z" fill="#FFB3C2"/>
+<circle id="Rec" cx="14.525" cy="19.725" r="2.275" fill="white"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_9" x1="11.6667" y1="14.2083" x2="26.1209" y2="30.7275" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF8FA8"/>
+<stop offset="1" stop-color="#F0527A"/>
+</linearGradient>
+</defs>
+</svg>

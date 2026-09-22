@@ -1,15 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
 import { api, type SocialProvider } from "@/lib/api";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
-import { requestDeveloperSession } from "@/lib/developer-login";
 import { redirectToOAuthProvider } from "@/lib/oauth";
-import { getPostLoginDestination } from "@/lib/terms-flow";
 import appShellStyles from "./app-shell.module.css";
 
 const SOCIAL_METHODS = [
@@ -27,7 +24,7 @@ const SOCIAL_METHODS = [
   },
   {
     provider: "GOOGLE",
-    label: "구글로 시작하기",
+    label: "Google로 계속하기",
     icon: "/figma/auth/google.svg",
     className: "border border-[#dadce0] bg-white text-[#1f1f1f]",
   },
@@ -38,8 +35,7 @@ const SOCIAL_METHODS = [
   className: string;
 }>;
 
-const DEVELOPER_UNLOCK_COUNT = 5;
-const SPLASH_DURATION_MS = 1_000;
+const SPLASH_DURATION_MS = 800;
 
 type EntryPhase = "splash" | "login";
 
@@ -62,10 +58,8 @@ export function LandingLoginScreen() {
   const [oauthProvider, setOAuthProvider] = useState<SocialProvider | null>(
     null,
   );
-  const [developerSubmitting, setDeveloperSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const developerUnlockClicks = useRef(0);
-  const submitting = oauthProvider !== null || developerSubmitting;
+  const submitting = oauthProvider !== null;
 
   useEffect(() => {
     let active = true;
@@ -125,53 +119,27 @@ export function LandingLoginScreen() {
     }
   }, []);
 
-  async function signInAsDeveloper() {
-    setDeveloperSubmitting(true);
-    setError(null);
-    try {
-      const session = await requestDeveloperSession();
-      router.replace(getPostLoginDestination(session, "/home"));
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "개발자 로그인에 실패했습니다.",
-      );
-    } finally {
-      setDeveloperSubmitting(false);
-    }
-  }
-
-  function handleDeveloperUnlock() {
-    developerUnlockClicks.current += 1;
-    if (developerUnlockClicks.current < DEVELOPER_UNLOCK_COUNT) return;
-    developerUnlockClicks.current = 0;
-    void signInAsDeveloper();
-  }
-
   if (entryPhase !== "login") {
     return (
-      <IPhoneFrame backgroundColor="#2f6bff">
+      <IPhoneFrame backgroundColor="#336fff">
         <div
           role="status"
-          aria-label="SPEAK AI 워드마크 시작 화면"
-          className="relative h-full w-full overflow-hidden bg-[#2f6bff]"
+          aria-label="Speak AI 시작 화면"
+          className="flex h-full w-full flex-col bg-[#336fff]"
         >
-          <Image
-            src="/figma/auth/01-splash.svg"
-            alt="SPEAK AI"
-            fill
-            priority
-            sizes="100vw"
-            className="object-contain"
-          />
-          <div className="absolute top-[61%] left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-white/25 bg-white/15 px-4 text-[12px] leading-4 font-semibold whitespace-nowrap text-white backdrop-blur-sm">
-            <span
+          <div className="h-11 shrink-0" aria-hidden="true" />
+          <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+            <Image
+              src="/figma/brand/splash-final.svg"
+              alt=""
+              width={70}
+              height={98}
+              priority
               aria-hidden="true"
-              className="size-3 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none"
             />
-            로딩 중…
           </div>
+          <div className="h-[34px] shrink-0" aria-hidden="true" />
+          <span className="sr-only">로딩 중…</span>
         </div>
       </IPhoneFrame>
     );
@@ -180,51 +148,40 @@ export function LandingLoginScreen() {
   return (
     <IPhoneFrame backgroundColor="#ffffff">
       <div
-        className={`${appShellStyles.tabContent} ${appShellStyles.fromRight} flex h-full flex-col bg-white px-6`}
+        className={`${appShellStyles.tabContent} ${appShellStyles.fromRight} flex h-full flex-col bg-white`}
       >
-        <section className="flex flex-col items-center pt-[172px] text-center">
-          <Image
-            src="/figma/auth/brand-symbol.svg"
-            alt=""
-            width={52}
-            height={44}
-            priority
-            aria-hidden="true"
-          />
-          <h1 className="mt-4 text-[24px] leading-8 font-extrabold tracking-[-0.4px]">
-            SPEAK AI
+        <div className="h-11 shrink-0" aria-hidden="true" />
+        <main className="flex min-h-0 flex-1 flex-col px-6">
+          <div className="min-h-0 flex-1" aria-hidden="true" />
+          <h1 className="flex shrink-0 flex-col items-center gap-4">
+            <Image
+              src="/figma/brand/s-symbol.svg"
+              alt=""
+              width={38.6}
+              height={54}
+              priority
+              aria-hidden="true"
+            />
+            <Image
+              src="/figma/brand/wordmark.svg"
+              alt="Speak AI"
+              width={146}
+              height={32}
+              priority
+            />
           </h1>
-          <p className="mt-2 text-[13px] leading-5 font-medium tracking-[-0.1px] text-[#6b7280]">
-            또박또박 말하는 연습
-          </p>
-        </section>
+          <div className="min-h-0 flex-1" aria-hidden="true" />
 
-        <section className="mt-[190px]" aria-labelledby="landing-login-methods">
-          <h2
-            id="landing-login-methods"
-            className="text-center text-[12px] leading-4 font-medium text-[#8b95a1]"
-          >
-            <button
-              type="button"
-              disabled={submitting}
-              aria-busy={developerSubmitting}
-              onClick={handleDeveloperUnlock}
-              className="cursor-default select-none rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] disabled:opacity-60"
-            >
-              {developerSubmitting ? "개발자 로그인 중…" : "로그인 옵션"}
-            </button>
-          </h2>
-
-          <div className="mt-3 flex flex-col gap-2.5">
+          <section aria-label="로그인 옵션" className="flex flex-col gap-2.5">
             {SOCIAL_METHODS.map((method) => (
               <button
                 key={method.provider}
                 type="button"
                 disabled={submitting}
                 onClick={() => startOAuth(method.provider)}
-                className={`relative flex h-[50px] w-full items-center justify-center rounded-full px-12 text-[16px] leading-6 font-bold tracking-[0.0912px] transition-[filter,opacity] active:brightness-[0.97] disabled:opacity-45 ${method.className}`}
+                className={`relative flex h-14 w-full shrink-0 items-center justify-center rounded-full px-12 text-[17px] leading-6 font-medium transition-[filter,opacity] active:brightness-[0.97] disabled:opacity-45 ${method.className}`}
               >
-                <span className="absolute left-[18px] top-1/2 flex size-5 -translate-y-1/2 items-center justify-center">
+                <span className="absolute left-5 top-[18px] flex size-5 items-center justify-center">
                   <Image
                     src={method.icon}
                     alt=""
@@ -236,14 +193,7 @@ export function LandingLoginScreen() {
                 {oauthProvider === method.provider ? "이동 중…" : method.label}
               </button>
             ))}
-          </div>
-
-          <p className="mt-6 text-center text-[12px] leading-4 font-medium tracking-[0.15px] text-[#8b95a1]">
-            아직 회원이 아니신가요?{" "}
-            <Link href="/signup" className="font-semibold text-[#2f6bff]">
-              회원가입
-            </Link>
-          </p>
+          </section>
 
           {error && (
             <p
@@ -253,7 +203,10 @@ export function LandingLoginScreen() {
               {error}
             </p>
           )}
-        </section>
+          <div className="h-5 shrink-0" aria-hidden="true" />
+          <div className="h-6 shrink-0" aria-hidden="true" />
+        </main>
+        <div className="h-[34px] shrink-0" aria-hidden="true" />
       </div>
     </IPhoneFrame>
   );

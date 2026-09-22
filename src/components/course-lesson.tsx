@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, X } from "lucide-react";
+import { CircleAlert, X } from "lucide-react";
 import {
   api,
   type CourseSummary,
@@ -77,22 +77,6 @@ export function CourseLesson({
       active = false;
     };
   }, [step.practiceContentId]);
-  const declarative =
-    course.courseType === "INTONATION" && /평서/.test(course.title);
-  const rieul = course.courseType === "PRONUNCIATION" && /ㄹ/.test(step.title);
-  const instructions = declarative
-    ? [
-        "문장 끝 음절에서 소리를 낮춰요",
-        "속도를 천천히 줄여요",
-        "끝까지 힘을 유지해요",
-      ]
-    : rieul
-      ? [
-          "혀끝을 윗잇몸 뒤에 붙여요",
-          "혀를 떼면서 소리를 내요",
-          "끝까지 힘을 유지해요",
-        ]
-      : [];
   const selectedExample = examples?.items[selectedExampleIndex];
   return (
     <div className="flex min-h-dvh flex-col">
@@ -116,13 +100,7 @@ export function CourseLesson({
       <div className="space-y-5 px-5 py-6">
         <div>
           <h2 className="text-[23px] font-bold">
-            {example
-              ? "예시를 듣고 따라 해보세요"
-              : declarative
-                ? "문장 끝에서 소리를 낮춰요"
-                : rieul
-                  ? "받침 ㄹ, 이렇게 소리 내요"
-                  : step.title}
+            {example ? "예시를 듣고 따라 해보세요" : step.title}
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {example
@@ -204,116 +182,22 @@ export function CourseLesson({
           </>
         ) : (
           <>
-            <div className="flex min-h-52 flex-col items-center justify-center rounded-[20px] bg-white p-6 text-primary shadow-sm">
-              {declarative ? (
-                <svg
-                  viewBox="0 0 300 150"
-                  role="img"
-                  aria-label="문장 끝에서 소리를 낮추는 억양 예시"
-                  className="w-full"
-                >
-                  <path d="M20 90H280" stroke="#d5ddef" strokeDasharray="3 4" />
-                  <path
-                    d="M20 55L85 51L150 56L215 62L280 114"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  />
-                  {[
-                    [20, 55],
-                    [85, 51],
-                    [150, 56],
-                    [215, 62],
-                    [280, 114],
-                  ].map(([x, y], index) => (
-                    <g key={x}>
-                      <circle
-                        cx={x}
-                        cy={y}
-                        r={index === 4 ? 7 : 4}
-                        fill={index === 4 ? "currentColor" : "white"}
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                      <text
-                        x={x}
-                        y={index === 4 ? 141 : 125}
-                        textAnchor="middle"
-                        fontSize="13"
-                        fill={index === 4 ? "currentColor" : "#8b929a"}
-                      >
-                        {["정", "말", "좋", "네", "요"][index]}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              ) : rieul ? (
-                <svg
-                  viewBox="0 0 240 150"
-                  role="img"
-                  aria-label="혀끝을 윗잇몸 뒤에 붙이는 받침 ㄹ 발음 예시"
-                  className="h-36 w-full"
-                >
-                  <path
-                    d="M63 132C61 112 54 87 57 55C60 20 94 12 124 22C143 29 153 44 170 51L189 59Q203 67 187 74L174 77L177 91L169 105L169 130Q116 142 63 132Z"
-                    fill="white"
-                    stroke="#c7d3ee"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M75 119Q88 89 117 82Q126 80 128 88Q113 102 87 125Z"
-                    fill="#ffb596"
-                    stroke="#ef967a"
-                  />
-                  <path
-                    d="M89 81Q116 69 145 83"
-                    fill="none"
-                    stroke="#9fb4df"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M81 136L109 88"
-                    stroke="#3468ff"
-                    strokeWidth="1.5"
-                    strokeDasharray="4 3"
-                  />
-                  <path d="M105 84L114 87L107 94Z" fill="#3468ff" />
-                </svg>
-              ) : (
-                <BookOpen className="size-16" strokeWidth={1.4} />
-              )}
-              <p className="mt-3 text-xs">
-                {declarative
-                  ? "문장 끝 → 소리 낮추기"
-                  : rieul
-                    ? "혀끝 → 윗잇몸"
-                    : "원리를 이해하고 소리 내어 연습해요"}
+            <section className="flex min-h-52 flex-col items-center justify-center rounded-[20px] border border-dashed border-[#bfdcff] bg-[#f4f9ff] p-6 text-center">
+              <CircleAlert className="size-12 text-primary" strokeWidth={1.7} />
+              <h3 className="mt-4 text-base font-bold">원리 콘텐츠 준비 중</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                서버에서 구조화된 발음·억양 원리가 제공되면 이 영역에
+                표시됩니다.
               </p>
-            </div>
-            {instructions.length > 0 ? (
-              <ol className="design-card divide-y divide-border !py-0">
-                {instructions.map((instruction, index) => (
-                  <li
-                    key={instruction}
-                    className="flex gap-3 py-5 text-sm font-semibold"
-                  >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/5 text-xs text-primary">
-                      {index + 1}
-                    </span>
-                    {instruction}
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <section className="design-card">
-                <h3 className="mb-3 text-sm font-semibold">학습 안내</h3>
-                <p className="text-sm leading-7">
-                  {content?.description ??
-                    description ??
-                    "예시를 듣고 문장을 따라 읽어보세요."}
-                </p>
-              </section>
-            )}
+            </section>
+            <section className="design-card">
+              <h3 className="mb-3 text-sm font-semibold">학습 안내</h3>
+              <p className="text-sm leading-7">
+                {content?.description ??
+                  description ??
+                  "예시를 듣고 문장을 따라 읽어보세요."}
+              </p>
+            </section>
           </>
         )}
       </div>
