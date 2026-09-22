@@ -282,49 +282,31 @@ export default function Home() {
   return (
     <AppShell viewportLocked chromeColor="#2f6bff">
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f2f4f6] text-[#191f28]">
-        <div className="absolute inset-x-0 top-0 h-[205px] bg-[linear-gradient(180deg,#2f6bff_0%,#3f7bff_100%)]" />
-
-        <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5">
-          <Image
-            src="/figma/home/brand-white.svg"
-            alt="Speak AI"
-            width={23.2}
-            height={32}
-            priority
-          />
-          <Link
-            href="/home/notifications"
-            aria-label="알림 보기"
-            className="relative flex size-12 items-center justify-center"
-          >
+        <header className="relative z-20 h-[205px] shrink-0 bg-[linear-gradient(180deg,#2f6bff_0%,#3f7bff_100%)] px-5">
+          <div className="flex h-16 items-center justify-between">
             <Image
-              src="/figma/home/bell-white.svg"
-              alt=""
-              width={28}
-              height={28}
+              src="/figma/home/brand-white.svg"
+              alt="Speak AI"
+              width={23.2}
+              height={32}
+              priority
             />
-            <span className="absolute top-[9px] right-[4px] size-2 rounded-full border border-white bg-[#ff4d5e]" />
-          </Link>
-        </header>
-
-        <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-2 pb-8 [-webkit-overflow-scrolling:touch]">
-          {error ? (
-            <div
-              role="alert"
-              className="mb-3 flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 text-xs text-[#d91b34]"
+            <Link
+              href="/home/notifications"
+              aria-label="알림 보기"
+              className="relative flex size-12 items-center justify-center"
             >
-              <p className="min-w-0 flex-1">{error}</p>
-              <button
-                type="button"
-                onClick={() => setReloadKey((value) => value + 1)}
-                className="min-h-11 shrink-0 rounded-full px-3 font-bold"
-              >
-                다시 시도
-              </button>
-            </div>
-          ) : null}
+              <Image
+                src="/figma/home/bell-white.svg"
+                alt=""
+                width={28}
+                height={28}
+              />
+              <span className="absolute top-[9px] right-[4px] size-2 rounded-full border border-white bg-[#ff4d5e]" />
+            </Link>
+          </div>
 
-          <section className="h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
+          <section className="mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
             <Link
               href="/home/streak"
               className="flex h-full items-center gap-3"
@@ -371,8 +353,24 @@ export default function Home() {
               />
             </Link>
           </section>
+        </header>
 
-          <div className="h-11" />
+        <main className="relative z-10 -mt-1 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-8 [-webkit-overflow-scrolling:touch]">
+          {error ? (
+            <div
+              role="alert"
+              className="mb-3 flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 text-xs text-[#d91b34]"
+            >
+              <p className="min-w-0 flex-1">{error}</p>
+              <button
+                type="button"
+                onClick={() => setReloadKey((value) => value + 1)}
+                className="min-h-11 shrink-0 rounded-full px-3 font-bold"
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : null}
 
           <section className="relative h-[200px] overflow-hidden rounded-[20px] bg-white p-5">
             <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-xs leading-[14px] font-bold text-primary">
@@ -506,7 +504,7 @@ export default function Home() {
               ) : null}
             </div>
           </section>
-        </div>
+        </main>
       </div>
     </AppShell>
   );

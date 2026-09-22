@@ -17,7 +17,6 @@ import { PRIVACY_TERMS, SERVICE_TERMS } from "@/lib/legal-terms";
 
 type Panel =
   | "마이크와 음성"
-  | "계정 관리"
   | "공지사항"
   | "1:1 문의하기"
   | "개인정보 처리방침"
@@ -35,10 +34,6 @@ const GROUPS: Array<{
         icon: "/figma/settings/microphone.svg",
       },
     ],
-  },
-  {
-    title: "계정과 이용",
-    items: [{ label: "계정 관리", icon: "/figma/settings/user.svg" }],
   },
   {
     title: "도움말",
@@ -197,11 +192,7 @@ export default function AccountSettings() {
           <DialogHeader>
             <DialogTitle>{panel}</DialogTitle>
             <DialogDescription className="text-[#8b95a1]">
-              {legal
-                ? "서비스 문서"
-                : panel === "계정 관리"
-                  ? "가입 정보를 확인하고 수정할 수 있어요"
-                  : "설정 안내"}
+              {legal ? "서비스 문서" : "설정 안내"}
             </DialogDescription>
           </DialogHeader>
           {legal ? (
@@ -218,21 +209,6 @@ export default function AccountSettings() {
                 ))}
               </section>
             ))
-          ) : panel === "계정 관리" ? (
-            <div className="space-y-2">
-              <Link
-                href="/mypage/settings/profile"
-                className="block rounded-xl bg-[#f2f4f6] p-4 text-sm"
-              >
-                프로필 수정하기
-              </Link>
-              <Link
-                href="/mypage/plan"
-                className="block rounded-xl bg-[#f2f4f6] p-4 text-sm"
-              >
-                연습 계획 수정
-              </Link>
-            </div>
           ) : (
             <p className="text-sm leading-6 text-[#6b7684]">
               {panel === "마이크와 음성"

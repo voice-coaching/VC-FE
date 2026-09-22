@@ -27,12 +27,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/app-icon-192.png", sizes: "192x192", type: "image/png" },
-    ],
+    icon: [{ url: "/favicon.svg", sizes: "any", type: "image/svg+xml" }],
     apple: [
       {
         url: "/apple-touch-icon.png",
@@ -40,7 +35,7 @@ export const metadata: Metadata = {
         type: "image/png",
       },
     ],
-    shortcut: ["/favicon.ico"],
+    shortcut: ["/favicon.svg"],
   },
 };
 
