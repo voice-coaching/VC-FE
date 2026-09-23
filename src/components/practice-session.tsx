@@ -28,6 +28,15 @@ import {
   PracticeInputError,
 } from "@/lib/practice-error";
 import { splitSentences } from "@/lib/sentences";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import {
+  CLIENT_CACHE_LIVE_MAX_AGE_MS,
+  readUserClientCache,
+  removeUserClientCache,
+  removeUserClientCacheGroup,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 
 type Phase =
   | "idle"
@@ -39,6 +48,15 @@ type Phase =
   | "error";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function invalidateLearningCaches() {
+  const userId = getAuthenticatedUserId();
+  removeUserClientCacheGroup(userId, "home-");
+  removeUserClientCacheGroup(userId, "mypage-history-");
+  removeUserClientCacheGroup(userId, "streak-");
+  removeUserClientCacheGroup(userId, "course-catalog-");
+  removeUserClientCache(userId, "mypage-overview");
+}
 
 export function PracticeSession({
   content,
@@ -216,6 +234,7 @@ export function PracticeSession({
             Math.round((selectedRecording?.durationMs ?? 0) / 1_000),
           );
           await api.training.complete(resumedSessionId, durationSeconds);
+          invalidateLearningCaches();
           completedRef.current = true;
           analysisPendingRef.current = false;
         }
@@ -256,7 +275,18 @@ export function PracticeSession({
 
   async function getAnalysisCapabilities() {
     if (capabilitiesRef.current) return capabilitiesRef.current;
-    const capabilities = await api.training.getAnalysisCapabilities();
+    const userId = getAuthenticatedUserId();
+    const capabilities =
+      readUserClientCache<AnalysisCapabilities>(
+        userId,
+        cacheResources.analysisCapabilities,
+        CLIENT_CACHE_LIVE_MAX_AGE_MS,
+      ) ?? (await api.training.getAnalysisCapabilities());
+    writeUserClientCache(
+      userId,
+      cacheResources.analysisCapabilities,
+      capabilities,
+    );
     if (
       capabilities.recordingUpload !== "CONFIGURED" ||
       capabilities.analysisRequests !== "CONFIGURED"
@@ -378,6 +408,7 @@ export function PracticeSession({
       activeSessionId,
       Math.max(1, Math.round(recorder.durationMs / 1_000)),
     );
+    invalidateLearningCaches();
     completedRef.current = true;
 
     if (courseId && courseStepId) {

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import {
   Dialog,
@@ -12,7 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { api } from "@/lib/api";
+import {
+  api,
+  type NotificationPreferences,
+  type NoticeSummary,
+} from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import {
+  CLIENT_CACHE_DAY_MAX_AGE_MS,
+  readUserClientCache,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 import { PRIVACY_TERMS, SERVICE_TERMS } from "@/lib/legal-terms";
 
 type Panel =
@@ -46,10 +57,166 @@ const GROUPS: Array<{
 
 export default function AccountSettings() {
   const router = useRouter();
+  const userId = getAuthenticatedUserId();
+  const [initialPreferences] = useState(() =>
+    readUserClientCache<NotificationPreferences>(
+      userId,
+      cacheResources.notificationPreferences,
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    ),
+  );
   const [panel, setPanel] = useState<Panel | null>(null);
   const [withdrawConfirm, setWithdrawConfirm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [action, setAction] = useState<"logout" | "withdraw" | null>(null);
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences | null>(initialPreferences);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(
+    null,
+  );
+  const [notices, setNotices] = useState<NoticeSummary[] | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [inquirySubject, setInquirySubject] = useState("");
+  const [inquiryBody, setInquiryBody] = useState("");
+  const [inquiryEmail, setInquiryEmail] = useState("");
+  const [inquirySending, setInquirySending] = useState(false);
+  const [inquirySent, setInquirySent] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const cached = readUserClientCache<NotificationPreferences>(
+      userId,
+      cacheResources.notificationPreferences,
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    );
+    if (cached) setNotificationPreferences(cached);
+    api.notifications
+      .getPreferences()
+      .then((value) => {
+        if (!active) return;
+        setNotificationPreferences(value);
+        writeUserClientCache(
+          userId,
+          cacheResources.notificationPreferences,
+          value,
+        );
+      })
+      .catch((reason: unknown) => {
+        if (active && !cached)
+          setNotificationMessage(
+            reason instanceof Error
+              ? reason.message
+              : "알림 설정을 불러오지 못했습니다.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (panel !== "공지사항") return;
+    let active = true;
+    const cached = readUserClientCache<NoticeSummary[]>(
+      userId,
+      cacheResources.notices,
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    );
+    setNotices(cached);
+    setPanelError(null);
+    api.support
+      .listNotices({ page: 0, size: 20 })
+      .then((result) => {
+        if (!active) return;
+        setNotices(result.items);
+        writeUserClientCache(userId, cacheResources.notices, result.items);
+      })
+      .catch((reason: unknown) => {
+        if (active && !cached)
+          setPanelError(
+            reason instanceof Error
+              ? reason.message
+              : "공지사항을 불러오지 못했습니다.",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [panel, userId]);
+
+  function openPanel(nextPanel: Panel) {
+    setPanelError(null);
+    if (nextPanel === "1:1 문의하기") setInquirySent(false);
+    setPanel(nextPanel);
+  }
+
+  async function togglePracticeReminder() {
+    if (!notificationPreferences || notificationSaving) return;
+    const previous = notificationPreferences;
+    const enabled = !previous.practiceReminder.enabled;
+    setNotificationSaving(true);
+    setNotificationMessage(null);
+    setNotificationPreferences({
+      ...previous,
+      practiceReminder: { ...previous.practiceReminder, enabled },
+    });
+    writeUserClientCache(userId, cacheResources.notificationPreferences, {
+      ...previous,
+      practiceReminder: { ...previous.practiceReminder, enabled },
+    });
+    try {
+      const updated = await api.notifications.updatePreferences({
+        practiceReminder: { enabled },
+      });
+      setNotificationPreferences(updated);
+      writeUserClientCache(
+        userId,
+        cacheResources.notificationPreferences,
+        updated,
+      );
+    } catch (reason) {
+      setNotificationPreferences(previous);
+      writeUserClientCache(
+        userId,
+        cacheResources.notificationPreferences,
+        previous,
+      );
+      setNotificationMessage(
+        reason instanceof Error
+          ? reason.message
+          : "알림 설정을 변경하지 못했습니다.",
+      );
+    } finally {
+      setNotificationSaving(false);
+    }
+  }
+
+  async function submitInquiry() {
+    if (!inquirySubject.trim() || !inquiryBody.trim() || inquirySending) return;
+    setInquirySending(true);
+    setPanelError(null);
+    try {
+      await api.support.createInquiry({
+        category: "SERVICE",
+        subject: inquirySubject.trim(),
+        body: inquiryBody.trim(),
+        replyEmail: inquiryEmail.trim() || undefined,
+      });
+      setInquirySent(true);
+      setInquirySubject("");
+      setInquiryBody("");
+      setInquiryEmail("");
+    } catch (reason) {
+      setPanelError(
+        reason instanceof Error
+          ? reason.message
+          : "문의를 접수하지 못했습니다.",
+      );
+    } finally {
+      setInquirySending(false);
+    }
+  }
 
   async function accountAction(kind: "logout" | "withdraw") {
     setAction(kind);
@@ -115,23 +282,44 @@ export default function AccountSettings() {
                 연습 알림
               </span>
               <span className="mt-[3px] block text-[13px] leading-[18px] text-[#8b95a1]">
-                알림 기능 준비 중
+                {notificationPreferences
+                  ? `${notificationPreferences.practiceReminder.time} 알림`
+                  : "알림 설정 불러오는 중"}
               </span>
             </span>
-            <span
+            <button
+              type="button"
               role="switch"
-              aria-checked="false"
-              aria-disabled="true"
-              aria-label="연습 알림 기능 준비 중"
-              className="relative h-6 w-10 shrink-0 rounded-full bg-[#dfe3e7]"
+              aria-checked={
+                notificationPreferences?.practiceReminder.enabled ?? false
+              }
+              aria-label="연습 알림"
+              disabled={!notificationPreferences || notificationSaving}
+              onClick={() => void togglePracticeReminder()}
+              className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+                notificationPreferences?.practiceReminder.enabled
+                  ? "bg-primary"
+                  : "bg-[#dfe3e7]"
+              }`}
             >
-              <span className="absolute top-0.5 left-0.5 size-5 rounded-full bg-white" />
-            </span>
+              <span
+                className={`absolute top-0.5 size-5 rounded-full bg-white transition-[left] ${
+                  notificationPreferences?.practiceReminder.enabled
+                    ? "left-[18px]"
+                    : "left-0.5"
+                }`}
+              />
+            </button>
           </div>
+          {notificationMessage ? (
+            <p role="alert" className="px-5 pb-2 text-xs text-destructive">
+              {notificationMessage}
+            </p>
+          ) : null}
           <SettingsItem
             label={GROUPS[0].items[0].label}
             icon={GROUPS[0].items[0].icon}
-            onClick={() => setPanel(GROUPS[0].items[0].label)}
+            onClick={() => openPanel(GROUPS[0].items[0].label)}
           />
         </section>
 
@@ -145,7 +333,7 @@ export default function AccountSettings() {
                 key={item.label}
                 label={item.label}
                 icon={item.icon}
-                onClick={() => setPanel(item.label)}
+                onClick={() => openPanel(item.label)}
               />
             ))}
           </section>
@@ -155,11 +343,11 @@ export default function AccountSettings() {
         <div className="bg-white pt-2">
           <FooterButton
             label="개인정보 처리방침"
-            onClick={() => setPanel("개인정보 처리방침")}
+            onClick={() => openPanel("개인정보 처리방침")}
           />
           <FooterButton
             label="서비스 이용약관"
-            onClick={() => setPanel("서비스 이용약관")}
+            onClick={() => openPanel("서비스 이용약관")}
           />
           <FooterButton
             label={action === "logout" ? "로그아웃 중…" : "로그아웃"}
@@ -209,13 +397,101 @@ export default function AccountSettings() {
                 ))}
               </section>
             ))
+          ) : panel === "공지사항" ? (
+            panelError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {panelError}
+              </p>
+            ) : notices === null ? (
+              <p className="text-sm text-[#8b95a1]">공지사항을 불러오는 중…</p>
+            ) : notices.length ? (
+              <div className="space-y-3">
+                {notices.map((notice) => (
+                  <article
+                    key={String(notice.id)}
+                    className="rounded-2xl bg-[#f7f8fa] p-4"
+                  >
+                    <div className="flex items-center gap-2">
+                      {notice.pinned ? (
+                        <span className="rounded-full bg-[#edf2ff] px-2 py-0.5 text-xs font-medium text-primary">
+                          중요
+                        </span>
+                      ) : null}
+                      <h2 className="text-sm font-bold">{notice.title}</h2>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[#6b7684]">
+                      {notice.summary}
+                    </p>
+                    <time className="mt-2 block text-xs text-[#8b95a1]">
+                      {new Date(notice.publishedAt).toLocaleDateString("ko-KR")}
+                    </time>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-[#6b7684]">
+                등록된 공지사항이 없습니다.
+              </p>
+            )
+          ) : panel === "1:1 문의하기" ? (
+            inquirySent ? (
+              <div className="rounded-2xl bg-[#edf2ff] p-4 text-sm leading-6 text-primary">
+                문의가 접수되었습니다. 답변이 등록되면 알려드릴게요.
+              </div>
+            ) : (
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitInquiry();
+                }}
+              >
+                <input
+                  value={inquirySubject}
+                  onChange={(event) => setInquirySubject(event.target.value)}
+                  placeholder="문의 제목"
+                  maxLength={100}
+                  required
+                  className="h-11 w-full rounded-xl border border-[#e5e8eb] px-3 text-sm outline-none focus:border-primary"
+                />
+                <textarea
+                  value={inquiryBody}
+                  onChange={(event) => setInquiryBody(event.target.value)}
+                  placeholder="문의 내용을 입력해 주세요."
+                  maxLength={2_000}
+                  required
+                  className="min-h-32 w-full resize-y rounded-xl border border-[#e5e8eb] p-3 text-sm leading-6 outline-none focus:border-primary"
+                />
+                <input
+                  type="email"
+                  value={inquiryEmail}
+                  onChange={(event) => setInquiryEmail(event.target.value)}
+                  placeholder="답변 받을 이메일 (선택)"
+                  className="h-11 w-full rounded-xl border border-[#e5e8eb] px-3 text-sm outline-none focus:border-primary"
+                />
+                {panelError ? (
+                  <p role="alert" className="text-xs text-destructive">
+                    {panelError}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={
+                    inquirySending ||
+                    !inquirySubject.trim() ||
+                    !inquiryBody.trim()
+                  }
+                  className="h-11 w-full rounded-xl bg-primary text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {inquirySending ? "접수 중…" : "문의 접수"}
+                </button>
+              </form>
+            )
           ) : (
             <p className="text-sm leading-6 text-[#6b7684]">
               {panel === "마이크와 음성"
                 ? "녹음 화면에서 마이크 사용을 허용해 주세요."
-                : panel === "공지사항"
-                  ? "등록된 공지사항이 없습니다."
-                  : "문의 접수 기능은 준비 중이에요."}
+                : "설정을 확인해 주세요."}
             </p>
           )}
         </DialogContent>

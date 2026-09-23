@@ -14,6 +14,10 @@ import {
 } from "@/lib/api";
 import { getCachedUser } from "@/lib/auth-session";
 import {
+  readMyPageOverviewCache,
+  updateMyPageOverviewCache,
+} from "@/lib/my-page-cache";
+import {
   IMPROVEMENT_OPTIONS,
   METHOD_OPTIONS,
   PURPOSE_OPTIONS,
@@ -26,10 +30,13 @@ import { getUserTitleProgress } from "@/lib/user-title";
 export default function PracticePlan() {
   const router = useRouter();
   const { profile, hydrated, error: loadError, updatePlan } = useProfile();
+  const [initialOverview] = useState(readMyPageOverviewCache);
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialOverview?.statistics ?? null,
+  );
   const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
-    null,
+    initialOverview?.titleProgress ?? null,
   );
   const [draft, setDraft] = useState<OnboardingAnswers | null>(null);
   const [editing, setEditing] = useState<EditSection | null>(null);
@@ -46,33 +53,39 @@ export default function PracticePlan() {
   useEffect(() => {
     let active = true;
     const cached = getCachedUser();
-    Promise.all([
+    void Promise.allSettled([
       cached ? Promise.resolve(cached) : api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
-      api.users.getTitle().catch(() => null),
-    ])
-      .then(([user, stats, userTitle]) => {
-        if (!active) return;
-        setAccount(user);
-        setStatistics(stats);
-        setTitleProgress(
-          userTitle ??
-            getUserTitleProgress("ABSOLUTE_BEGINNER", stats.totalSessionCount),
+      api.users.getTitle(),
+    ]).then(([userResult, statsResult, titleResult]) => {
+      if (!active) return;
+      if (userResult.status === "fulfilled") {
+        setAccount(userResult.value);
+        updateMyPageOverviewCache({ nickname: userResult.value.nickname });
+      }
+      if (statsResult.status === "fulfilled") {
+        setStatistics(statsResult.value);
+        updateMyPageOverviewCache({ statistics: statsResult.value });
+      }
+      if (titleResult.status === "fulfilled") {
+        setTitleProgress(titleResult.value);
+        updateMyPageOverviewCache({ titleProgress: titleResult.value });
+      } else if (
+        statsResult.status === "fulfilled" &&
+        !initialOverview?.titleProgress
+      ) {
+        const fallback = getUserTitleProgress(
+          "ABSOLUTE_BEGINNER",
+          statsResult.value.totalSessionCount,
         );
-      })
-      .catch((reason) => {
-        if (active) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "프로필을 불러오지 못했습니다.",
-          );
-        }
-      });
+        setTitleProgress(fallback);
+        updateMyPageOverviewCache({ titleProgress: fallback });
+      }
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialOverview]);
 
   useEffect(() => {
     if (editing) dialog.current?.showModal();

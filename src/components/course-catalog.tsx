@@ -18,6 +18,18 @@ import {
   type UserCourseProgress,
 } from "@/lib/api";
 import type { PracticeExample } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+
+type CourseCatalogCache = {
+  items: CourseSummary[];
+  page: number;
+  hasNext: boolean;
+  progressByCourse: Record<string, UserCourseProgress>;
+  detailsByCourse: Record<string, CourseDetail>;
+  stepsByCourse: Record<string, CourseStep[]>;
+};
 
 function progressMap(items: UserCourseProgress[]) {
   return Object.fromEntries(items.map((item) => [String(item.courseId), item]));
@@ -46,31 +58,38 @@ export function CourseCatalog({
   description: string;
 }) {
   const router = useRouter();
+  const userId = getAuthenticatedUserId();
   const [lesson, setLesson] = useState<{
     course: CourseSummary;
     step: CourseStep;
     count: number;
   } | null>(null);
   const activeType = type ?? "PRONUNCIATION";
+  const cacheResource = cacheResources.courseCatalog(activeType);
+  const [initialCache] = useState(() =>
+    readUserClientCache<CourseCatalogCache>(userId, cacheResource),
+  );
   const [indicatorType, setIndicatorType] = useState<CourseType>(activeType);
   const tabNavigationTimer = useRef<number | null>(null);
   const [stepsByCourse, setStepsByCourse] = useState<
     Record<string, CourseStep[]>
-  >({});
-  const [items, setItems] = useState<CourseSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  >(initialCache?.stepsByCourse ?? {});
+  const [items, setItems] = useState<CourseSummary[]>(
+    initialCache?.items ?? [],
+  );
+  const [loading, setLoading] = useState(initialCache === null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const [page, setPage] = useState(initialCache?.page ?? 0);
+  const [hasNext, setHasNext] = useState(initialCache?.hasNext ?? false);
   const [progressByCourse, setProgressByCourse] = useState<
     Record<string, UserCourseProgress>
-  >({});
+  >(initialCache?.progressByCourse ?? {});
   const [startingId, setStartingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailsByCourse, setDetailsByCourse] = useState<
     Record<string, CourseDetail>
-  >({});
+  >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -119,7 +138,27 @@ export function CourseCatalog({
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const cached = readUserClientCache<CourseCatalogCache>(
+      userId,
+      cacheResource,
+    );
+    if (cached) {
+      setItems(cached.items);
+      setPage(cached.page);
+      setHasNext(cached.hasNext);
+      setProgressByCourse(cached.progressByCourse);
+      setDetailsByCourse(cached.detailsByCourse);
+      setStepsByCourse(cached.stepsByCourse);
+      setLoading(false);
+    } else {
+      setItems([]);
+      setPage(0);
+      setHasNext(false);
+      setProgressByCourse({});
+      setDetailsByCourse({});
+      setStepsByCourse({});
+      setLoading(true);
+    }
     setError(null);
     Promise.all([
       api.courses.list({
@@ -133,31 +172,48 @@ export function CourseCatalog({
       .then(([result, userProgress]) => {
         if (!active) return;
         const byCourse = progressMap(userProgress);
+        const nextItems = mergeProgress(result.items, byCourse);
+        const nextHasNext =
+          result.hasNext ?? result.page + 1 < (result.totalPages ?? 0);
         setProgressByCourse(byCourse);
-        setItems(mergeProgress(result.items, byCourse));
+        setItems(nextItems);
+        setPage(result.page);
+        setHasNext(nextHasNext);
+        updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+          items: nextItems,
+          page: result.page,
+          hasNext: nextHasNext,
+          progressByCourse: byCourse,
+          detailsByCourse: cached?.detailsByCourse ?? {},
+          stepsByCourse: cached?.stepsByCourse ?? {},
+        });
         void Promise.allSettled(
-          result.items.map((course) => api.courses.get(course.id)),
+          result.items
+            .filter((course) => !cached?.detailsByCourse[String(course.id)])
+            .map((course) => api.courses.get(course.id)),
         ).then((results) => {
           if (!active) return;
-          setDetailsByCourse((current) => ({
-            ...current,
-            ...Object.fromEntries(
-              results.flatMap((result) =>
-                result.status === "fulfilled"
-                  ? [[String(result.value.id), result.value]]
-                  : [],
-              ),
+          const loadedDetails = Object.fromEntries(
+            results.flatMap((detailResult) =>
+              detailResult.status === "fulfilled"
+                ? [[String(detailResult.value.id), detailResult.value]]
+                : [],
             ),
-          }));
+          );
+          const nextDetails = {
+            ...(cached?.detailsByCourse ?? {}),
+            ...loadedDetails,
+          };
+          setDetailsByCourse(nextDetails);
+          updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+            detailsByCourse: nextDetails,
+          });
         });
-        setPage(result.page);
-        setHasNext(
-          result.hasNext ?? result.page + 1 < (result.totalPages ?? 0),
-        );
       })
       .catch(
         (reason) =>
           active &&
+          !cached &&
           setError(
             reason instanceof Error
               ? reason.message
@@ -168,7 +224,7 @@ export function CourseCatalog({
     return () => {
       active = false;
     };
-  }, [activeType]);
+  }, [activeType, cacheResource, userId]);
 
   async function loadMore() {
     setLoadingMore(true);
@@ -184,8 +240,19 @@ export function CourseCatalog({
         ...current,
         ...mergeProgress(result.items, progressByCourse),
       ]);
+      const nextItems = [
+        ...items,
+        ...mergeProgress(result.items, progressByCourse),
+      ];
+      const nextHasNext =
+        result.hasNext ?? result.page + 1 < (result.totalPages ?? 0);
       setPage(result.page);
-      setHasNext(result.hasNext ?? result.page + 1 < (result.totalPages ?? 0));
+      setHasNext(nextHasNext);
+      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+        items: nextItems,
+        page: result.page,
+        hasNext: nextHasNext,
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -229,9 +296,18 @@ export function CourseCatalog({
       replayFromStart =
         replayFromStart || currentProgress?.status === "COMPLETED";
 
-      const steps = (await api.courses.getSteps(course.id)).sort(
-        (a, b) => a.stepOrder - b.stepOrder,
-      );
+      const steps = [
+        ...(stepsByCourse[String(course.id)] ??
+          (await api.courses.getSteps(course.id))),
+      ].sort((a, b) => a.stepOrder - b.stepOrder);
+      const nextSteps = {
+        ...stepsByCourse,
+        [String(course.id)]: steps,
+      };
+      setStepsByCourse(nextSteps);
+      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+        stepsByCourse: nextSteps,
+      });
       const lastStepIndex = steps.findIndex(
         (step) => String(step.id) === String(currentProgress?.lastStepId),
       );
@@ -297,11 +373,17 @@ export function CourseCatalog({
           ? Promise.resolve(cachedSteps)
           : api.courses.getSteps(course.id),
       ]);
-      setStepsByCourse((current) => ({
-        ...current,
-        [key]: steps.sort((a, b) => a.stepOrder - b.stepOrder),
-      }));
-      setDetailsByCourse((current) => ({ ...current, [key]: detail }));
+      const nextSteps = {
+        ...stepsByCourse,
+        [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
+      };
+      const nextDetails = { ...detailsByCourse, [key]: detail };
+      setStepsByCourse(nextSteps);
+      setDetailsByCourse(nextDetails);
+      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+        stepsByCourse: nextSteps,
+        detailsByCourse: nextDetails,
+      });
     } catch (reason) {
       setExpandedId(null);
       setError(

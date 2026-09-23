@@ -7,15 +7,14 @@ import { PracticeDetail } from "@/components/practice-detail";
 import { PracticeSession } from "@/components/practice-session";
 import { TopBar } from "@/components/top-bar";
 import { api, type PracticeContent } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { safeInternalPath } from "@/lib/navigation";
 import { loadPracticeContent } from "@/lib/practice-examples";
 
 export default function Practice({ contentId }: { contentId: string }) {
   const searchParams = useSearchParams();
-  const [started, setStarted] = useState(false);
-  const [sessionTitle, setSessionTitle] = useState("연습하기");
-  const [content, setContent] = useState<PracticeContent | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const requestedReturnTo = searchParams.get("returnTo");
   const returnTo = safeInternalPath(requestedReturnTo, "/home");
   const exampleId = searchParams.get("exampleId");
@@ -24,10 +23,28 @@ export default function Practice({ contentId }: { contentId: string }) {
   const revision = searchParams.get("exampleRevision");
   const sessionId = searchParams.get("sessionId");
   const startImmediately = searchParams.get("start") === "1";
+  const userId = getAuthenticatedUserId();
+  const cacheResource = cacheResources.practiceSelection(
+    contentId,
+    exampleId,
+    revision,
+  );
+  const [initialContent] = useState(() =>
+    readUserClientCache<PracticeContent>(userId, cacheResource),
+  );
+  const [started, setStarted] = useState(
+    Boolean(exampleId) || startImmediately,
+  );
+  const [sessionTitle, setSessionTitle] = useState("연습하기");
+  const [content, setContent] = useState<PracticeContent | null>(
+    initialContent,
+  );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    setContent(null);
+    const cached = readUserClientCache<PracticeContent>(userId, cacheResource);
+    setContent(cached);
     setError(null);
     setStarted(Boolean(exampleId) || startImmediately);
     loadPracticeContent(api, contentId, {
@@ -37,10 +54,15 @@ export default function Practice({ contentId }: { contentId: string }) {
       revision,
       sessionId,
     })
-      .then((value) => active && setContent(value))
+      .then((value) => {
+        if (!active) return;
+        setContent(value);
+        writeUserClientCache(userId, cacheResource, value);
+      })
       .catch(
         (reason) =>
           active &&
+          !cached &&
           setError(
             reason instanceof Error
               ? reason.message
@@ -58,6 +80,8 @@ export default function Practice({ contentId }: { contentId: string }) {
     revision,
     sessionId,
     startImmediately,
+    userId,
+    cacheResource,
   ]);
 
   return (

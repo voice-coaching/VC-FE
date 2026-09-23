@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ReferencePlayer } from "@/components/reference-player";
-import { api, type PracticeContent } from "@/lib/api";
+import {
+  api,
+  type AdjacentPracticeContent,
+  type PracticeContent,
+} from "@/lib/api";
 import { categoryLabel } from "@/lib/content-labels";
 import { splitSentences } from "@/lib/sentences";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 
 export function PracticeDetail({
   content,
@@ -21,25 +28,56 @@ export function PracticeDetail({
   const [navigating, setNavigating] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const previousId = search.get("previousId");
-  async function nextArticle() {
+  const userId = getAuthenticatedUserId();
+  const adjacentResource = cacheResources.adjacentContent(
+    content.id,
+    content.contentType,
+  );
+  const [initialAdjacent] = useState(() =>
+    readUserClientCache<AdjacentPracticeContent>(userId, adjacentResource),
+  );
+  const [adjacent, setAdjacent] = useState<AdjacentPracticeContent | null>(
+    initialAdjacent,
+  );
+
+  useEffect(() => {
+    if (content.contentType !== "NEWS") return;
+    let active = true;
+    const cached = readUserClientCache<AdjacentPracticeContent>(
+      userId,
+      adjacentResource,
+    );
+    setAdjacent(cached);
+    setNavigationError(null);
+    api.content
+      .getAdjacent(content.id, {
+        type: content.contentType,
+      })
+      .then((result) => {
+        if (!active) return;
+        setAdjacent(result);
+        writeUserClientCache(userId, adjacentResource, result);
+      })
+      .catch((reason: unknown) => {
+        if (!active || cached) return;
+        setNavigationError(
+          reason instanceof Error
+            ? reason.message
+            : "이전·다음 기사를 불러오지 못했습니다.",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [adjacentResource, content.contentType, content.id, userId]);
+
+  function nextArticle() {
+    if (!adjacent?.next) return;
     setNavigating(true);
     setNavigationError(null);
-    try {
-      const next = await api.content.getNext({
-        type: "NEWS",
-        excludeId: content.id,
-      });
-      router.push(
-        `/practice/${encodeURIComponent(String(next.id))}?returnTo=%2Fnews&previousId=${encodeURIComponent(String(content.id))}`,
-      );
-    } catch (reason) {
-      setNavigationError(
-        reason instanceof Error
-          ? reason.message
-          : "다음 기사를 불러오지 못했습니다.",
-      );
-      setNavigating(false);
-    }
+    router.push(
+      `/practice/${encodeURIComponent(String(adjacent.next.id))}?returnTo=%2Fnews&previousId=${encodeURIComponent(String(content.id))}`,
+    );
   }
   const announcer = content.contentType === "ANNOUNCER";
   const news = content.contentType === "NEWS";
@@ -159,10 +197,10 @@ export function PracticeDetail({
             <div className="mb-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={!previousId || navigating}
+                disabled={(!adjacent?.previous && !previousId) || navigating}
                 onClick={() =>
                   router.push(
-                    `/practice/${encodeURIComponent(previousId!)}?returnTo=%2Fnews`,
+                    `/practice/${encodeURIComponent(String(adjacent?.previous?.id ?? previousId))}?returnTo=%2Fnews`,
                   )
                 }
                 className="flex items-center justify-center gap-1 rounded-xl border border-border bg-white py-3 text-xs disabled:opacity-40"
@@ -172,8 +210,8 @@ export function PracticeDetail({
               </button>
               <button
                 type="button"
-                disabled={navigating}
-                onClick={() => void nextArticle()}
+                disabled={!adjacent?.next || navigating}
+                onClick={nextArticle}
                 className="flex items-center justify-center gap-1 rounded-xl border border-border bg-white py-3 text-xs disabled:opacity-40"
               >
                 {navigating ? "불러오는 중…" : "다음 기사"}

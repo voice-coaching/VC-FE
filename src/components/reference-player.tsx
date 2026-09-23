@@ -3,7 +3,10 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
-import { api, type Id } from "@/lib/api";
+import { api, type Id, type ReferenceAudio } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 
 type ReferencePlayerProps = {
   contentId?: Id;
@@ -75,7 +78,15 @@ function ReferencePlayerSession({
       // Preserve an in-progress pause/resume, but refresh signed URLs on replay.
       if (!player.getAttribute("src") || player.ended || player.error) {
         if (!nextUrl && contentId != null) {
-          const items = await api.content.getReferenceAudios(contentId);
+          const userId = getAuthenticatedUserId();
+          const resource = cacheResources.referenceAudios(contentId);
+          const cached = readUserClientCache<ReferenceAudio[]>(
+            userId,
+            resource,
+          );
+          const items =
+            cached ?? (await api.content.getReferenceAudios(contentId));
+          if (!cached) writeUserClientCache(userId, resource, items);
           if (attempt !== sequence.current) return;
           const selected = items.find((item) => item.primary) ?? items[0];
           if (!selected) throw new Error("등록된 기준 음성이 없습니다.");

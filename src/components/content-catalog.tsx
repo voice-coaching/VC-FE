@@ -7,10 +7,14 @@ import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import {
   api,
+  type ContentFacets,
   type ContentType,
   type Difficulty,
   type PracticeContentSummary,
 } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { categoryLabel } from "@/lib/content-labels";
 
 const DIFFICULTIES: Array<{ value: Difficulty | ""; label: string }> = [
@@ -38,6 +42,21 @@ const SENTENCE_FILTERS = [
   { label: "자음", symbol: "ㄹ", description: "첫소리를 분명하게" },
   { label: "모음", symbol: "ㅏ", description: "입모양을 정확하게" },
 ];
+
+type CatalogCache = {
+  items: PracticeContentSummary[];
+  totalElements: number;
+  page: number;
+  hasNext: boolean;
+};
+
+function catalogCacheResource(
+  type: ContentType,
+  category: string,
+  difficulty: Difficulty | "",
+) {
+  return `content-${type}-${category || "all"}-${difficulty || "all"}`;
+}
 
 function durationLabel(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -67,25 +86,101 @@ export function ContentCatalog({
         : "/announcer";
   const [category, setCategory] = useState("");
   const categoryValues = useRef<Record<string, string>>({});
-  const categories =
+  const fallbackCategories =
     type === "NEWS"
       ? ["사회", "경제", "문화", "스포츠"]
       : type === "SENTENCE"
         ? ["받침", "된소리", "자음", "모음"]
         : [];
+  const [categories, setCategories] = useState(fallbackCategories);
+  const [difficultyOptions, setDifficultyOptions] = useState(DIFFICULTIES);
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
   const [difficultySheet, setDifficultySheet] = useState(false);
-  const [items, setItems] = useState<PracticeContentSummary[]>([]);
-  const [totalElements, setTotalElements] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const userId = getAuthenticatedUserId();
+  const [initialCache] = useState(() =>
+    readUserClientCache<CatalogCache>(
+      userId,
+      catalogCacheResource(type, "", ""),
+    ),
+  );
+  const [items, setItems] = useState<PracticeContentSummary[]>(
+    initialCache?.items ?? [],
+  );
+  const [totalElements, setTotalElements] = useState(
+    initialCache?.totalElements ?? 0,
+  );
+  const [loading, setLoading] = useState(initialCache === null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const [page, setPage] = useState(initialCache?.page ?? 0);
+  const [hasNext, setHasNext] = useState(initialCache?.hasNext ?? false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const resource = cacheResources.contentFacets(type);
+    const applyFacets = (facets: ContentFacets) => {
+      categoryValues.current = {
+        ...categoryValues.current,
+        ...Object.fromEntries(
+          facets.categories.map((option) => [option.label, option.value]),
+        ),
+      };
+      if (facets.categories.length)
+        setCategories(facets.categories.map((option) => option.label));
+      if (facets.difficulties.length)
+        setDifficultyOptions([
+          DIFFICULTIES[0],
+          ...facets.difficulties.map((option) => ({
+            value: option.value,
+            label: option.label,
+          })),
+        ]);
+    };
+    const cached = readUserClientCache<ContentFacets>(userId, resource);
+    if (cached) applyFacets(cached);
+    api.content
+      .getFacets(type)
+      .then((facets) => {
+        if (!active) return;
+        applyFacets(facets);
+        writeUserClientCache(userId, resource, facets);
+      })
+      .catch(() => {
+        // Keep the bundled labels when the optional facet endpoint is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [type, userId]);
+
+  useEffect(() => {
+    let active = true;
+    const resource = catalogCacheResource(type, category, difficulty);
+    const cached = readUserClientCache<CatalogCache>(userId, resource);
+    if (cached) {
+      setItems(cached.items);
+      setTotalElements(cached.totalElements);
+      setPage(cached.page);
+      setHasNext(cached.hasNext);
+      if (!category) {
+        categoryValues.current = {
+          ...categoryValues.current,
+          ...Object.fromEntries(
+            cached.items.map((item) => [
+              categoryLabel(item.category),
+              item.category,
+            ]),
+          ),
+        };
+      }
+      setLoading(false);
+    } else {
+      setItems([]);
+      setTotalElements(0);
+      setPage(0);
+      setHasNext(false);
+      setLoading(true);
+    }
     setError(null);
     api.content
       .list({
@@ -100,18 +195,27 @@ export function ContentCatalog({
         setItems(result.items);
         setTotalElements(result.totalElements);
         if (!category) {
-          categoryValues.current = Object.fromEntries(
-            result.items.map((item) => [
-              categoryLabel(item.category),
-              item.category,
-            ]),
-          );
+          categoryValues.current = {
+            ...categoryValues.current,
+            ...Object.fromEntries(
+              result.items.map((item) => [
+                categoryLabel(item.category),
+                item.category,
+              ]),
+            ),
+          };
         }
         setPage(result.page);
         setHasNext(Boolean(result.hasNext));
+        writeUserClientCache<CatalogCache>(userId, resource, {
+          items: result.items,
+          totalElements: result.totalElements,
+          page: result.page,
+          hasNext: Boolean(result.hasNext),
+        });
       })
       .catch((reason) => {
-        if (active) {
+        if (active && !cached) {
           setError(
             reason instanceof Error
               ? reason.message
@@ -123,7 +227,7 @@ export function ContentCatalog({
     return () => {
       active = false;
     };
-  }, [category, difficulty, type]);
+  }, [category, difficulty, type, userId]);
 
   async function loadMore() {
     setLoadingMore(true);
@@ -136,10 +240,21 @@ export function ContentCatalog({
         page: page + 1,
         size: 20,
       });
-      setItems((current) => [...current, ...result.items]);
+      const nextItems = [...items, ...result.items];
+      setItems(nextItems);
       setTotalElements(result.totalElements);
       setPage(result.page);
       setHasNext(Boolean(result.hasNext));
+      writeUserClientCache<CatalogCache>(
+        userId,
+        catalogCacheResource(type, category, difficulty),
+        {
+          items: nextItems,
+          totalElements: result.totalElements,
+          page: result.page,
+          hasNext: Boolean(result.hasNext),
+        },
+      );
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -198,7 +313,10 @@ export function ContentCatalog({
               onClick={() => setDifficultySheet(true)}
               className="flex h-8 items-center gap-1 rounded-full border border-[#e5e8eb] bg-white px-3 text-[13px] font-medium text-[#6b7684]"
             >
-              {DIFFICULTIES.find((item) => item.value === difficulty)?.label}
+              {
+                difficultyOptions.find((item) => item.value === difficulty)
+                  ?.label
+              }
               <ChevronDown className="size-4" />
             </button>
           ) : null}
@@ -271,7 +389,7 @@ export function ContentCatalog({
               </button>
             </div>
             <div className="mt-2">
-              {DIFFICULTIES.map((option) => (
+              {difficultyOptions.map((option) => (
                 <button
                   key={option.value || "all"}
                   type="button"
@@ -363,7 +481,7 @@ function NewsIntro({
             이번 주 가장 많이 연습한 뉴스예요
           </p>
         </div>
-        <div className="mt-3 flex snap-x gap-2 overflow-x-auto px-5 pb-5">
+        <div className="mt-3 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-5">
           {items.map((item, index) => (
             <Link
               key={String(item.id)}

@@ -14,6 +14,8 @@ import {
   type Statistics,
   type TrainingHistoryItem,
 } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -27,6 +29,14 @@ type PracticeCard = {
   icon: string;
   iconWidth: number;
   iconHeight: number;
+};
+
+type HomeCache = {
+  dashboard?: HomeDashboard;
+  recommendations?: RecommendationCard[];
+  recentCourses?: CourseDetail[];
+  statistics?: Statistics;
+  weekSessions?: TrainingHistoryItem[];
 };
 
 const EMPTY_DASHBOARD: HomeDashboard = {
@@ -142,13 +152,26 @@ function currentWeekRange(today: Date) {
 export default function Home() {
   const now = useMemo(() => new Date(), []);
   const weekRange = useMemo(() => currentWeekRange(now), [now]);
-  const [dashboard, setDashboard] = useState<HomeDashboard | null>(null);
-  const [recommendations, setRecommendations] = useState<RecommendationCard[]>(
-    [],
+  const userId = getAuthenticatedUserId();
+  const cacheResource = `home-${localDateKey(weekRange.monday)}`;
+  const [initialCache] = useState(() =>
+    readUserClientCache<HomeCache>(userId, cacheResource),
   );
-  const [recentCourses, setRecentCourses] = useState<CourseDetail[]>([]);
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
-  const [weekSessions, setWeekSessions] = useState<TrainingHistoryItem[]>([]);
+  const [dashboard, setDashboard] = useState<HomeDashboard | null>(
+    initialCache?.dashboard ?? null,
+  );
+  const [recommendations, setRecommendations] = useState<RecommendationCard[]>(
+    initialCache?.recommendations ?? [],
+  );
+  const [recentCourses, setRecentCourses] = useState<CourseDetail[]>(
+    initialCache?.recentCourses ?? [],
+  );
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialCache?.statistics ?? null,
+  );
+  const [weekSessions, setWeekSessions] = useState<TrainingHistoryItem[]>(
+    initialCache?.weekSessions ?? [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -172,13 +195,19 @@ export default function Home() {
 
       if (statisticsResult.status === "fulfilled") {
         setStatistics(statisticsResult.value);
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          statistics: statisticsResult.value,
+        });
       }
       if (historyResult.status === "fulfilled") {
         setWeekSessions(historyResult.value.items);
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          weekSessions: historyResult.value.items,
+        });
       }
       if (courseResult.status !== "fulfilled") return;
 
-      const courses = await Promise.all(
+      const courseResults = await Promise.allSettled(
         courseResult.value
           .filter(
             (item) => item.progressPercent > 0 && item.progressPercent < 100,
@@ -189,13 +218,20 @@ export default function Home() {
             return { ...course, progressPercent: item.progressPercent };
           }),
       );
-      if (active) setRecentCourses(courses);
+      if (!active) return;
+      const courses = courseResults.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      setRecentCourses(courses);
+      updateUserClientCache<HomeCache>(userId, cacheResource, {
+        recentCourses: courses,
+      });
     });
 
     return () => {
       active = false;
     };
-  }, [reloadKey, weekRange]);
+  }, [cacheResource, reloadKey, userId, weekRange]);
 
   useEffect(() => {
     let active = true;
@@ -211,18 +247,29 @@ export default function Home() {
       const nextDashboard =
         dashboardResult.status === "fulfilled"
           ? dashboardResult.value
-          : EMPTY_DASHBOARD;
+          : (initialCache?.dashboard ?? EMPTY_DASHBOARD);
       setDashboard(nextDashboard);
+      if (dashboardResult.status === "fulfilled") {
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          dashboard: dashboardResult.value,
+        });
+      }
       if (dashboardResult.status === "rejected") {
-        setError(
-          dashboardResult.reason instanceof Error
-            ? dashboardResult.reason.message
-            : "오늘의 학습 현황을 불러오지 못했습니다.",
-        );
+        if (!initialCache?.dashboard) {
+          setError(
+            dashboardResult.reason instanceof Error
+              ? dashboardResult.reason.message
+              : "오늘의 학습 현황을 불러오지 못했습니다.",
+          );
+        }
       }
 
       if (recommendationResult.status === "fulfilled") {
-        setRecommendations(recommendationResult.value.slice(0, 3));
+        const nextRecommendations = recommendationResult.value.slice(0, 3);
+        setRecommendations(nextRecommendations);
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          recommendations: nextRecommendations,
+        });
       } else if (nextDashboard.recommendations.length === 0) {
         try {
           const fallback = await api.content.list({
@@ -231,10 +278,14 @@ export default function Home() {
             size: 3,
           });
           if (active) {
-            setRecommendations(generalRecommendations(fallback.items));
+            const nextRecommendations = generalRecommendations(fallback.items);
+            setRecommendations(nextRecommendations);
+            updateUserClientCache<HomeCache>(userId, cacheResource, {
+              recommendations: nextRecommendations,
+            });
           }
         } catch (reason) {
-          if (active) {
+          if (active && !initialCache?.recommendations?.length) {
             setError(
               reason instanceof Error
                 ? reason.message
@@ -248,7 +299,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [cacheResource, initialCache, reloadKey, userId]);
 
   const firstRecommendation = combineRecommendations(
     recommendations,

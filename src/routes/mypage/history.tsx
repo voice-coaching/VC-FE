@@ -13,7 +13,12 @@ import {
   type UserAccount,
   type UserTitleProgress,
 } from "@/lib/api";
-import { getCachedUser } from "@/lib/auth-session";
+import { getAuthenticatedUserId, getCachedUser } from "@/lib/auth-session";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
+import {
+  readMyPageOverviewCache,
+  updateMyPageOverviewCache,
+} from "@/lib/my-page-cache";
 import { getUserTitleProgress } from "@/lib/user-title";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +36,16 @@ const TYPE_LABEL: Record<ContentType, string> = {
   ANNOUNCER: "아나운서",
   CLASS_PRACTICE: "클래스",
 };
+
+type HistoryCache = {
+  items: TrainingHistoryItem[];
+  page: number;
+  hasNext: boolean;
+};
+
+function historyCacheResource(kind?: ContentType) {
+  return `mypage-history-${kind ?? "all"}`;
+}
 
 function localStartOfWeek(date: Date) {
   const start = new Date(date);
@@ -56,54 +71,81 @@ function relativeDateLabel(value: string, now = new Date()) {
 export default function LearningHistory() {
   const router = useRouter();
   const [kind, setKind] = useState<ContentType | undefined>();
-  const [items, setItems] = useState<TrainingHistoryItem[]>([]);
+  const userId = getAuthenticatedUserId();
+  const [initialOverview] = useState(readMyPageOverviewCache);
+  const [initialHistory] = useState(() =>
+    readUserClientCache<HistoryCache>(userId, historyCacheResource()),
+  );
+  const [items, setItems] = useState<TrainingHistoryItem[]>(
+    initialHistory?.items ?? [],
+  );
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialOverview?.statistics ?? null,
+  );
   const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
-    null,
+    initialOverview?.titleProgress ?? null,
   );
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialHistory === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const [page, setPage] = useState(initialHistory?.page ?? 0);
+  const [hasNext, setHasNext] = useState(initialHistory?.hasNext ?? false);
 
   useEffect(() => {
     let active = true;
     const cached = getCachedUser();
-    Promise.all([
+    void Promise.allSettled([
       cached ? Promise.resolve(cached) : api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
-      api.users.getTitle().catch(() => null),
-    ])
-      .then(([user, stats, userTitle]) => {
-        if (!active) return;
-        setAccount(user);
-        setStatistics(stats);
-        setTitleProgress(
-          userTitle ??
-            getUserTitleProgress("ABSOLUTE_BEGINNER", stats.totalSessionCount),
+      api.users.getTitle(),
+    ]).then(([userResult, statsResult, titleResult]) => {
+      if (!active) return;
+      if (userResult.status === "fulfilled") {
+        setAccount(userResult.value);
+        updateMyPageOverviewCache({ nickname: userResult.value.nickname });
+      }
+      if (statsResult.status === "fulfilled") {
+        setStatistics(statsResult.value);
+        updateMyPageOverviewCache({ statistics: statsResult.value });
+      }
+      if (titleResult.status === "fulfilled") {
+        setTitleProgress(titleResult.value);
+        updateMyPageOverviewCache({ titleProgress: titleResult.value });
+      } else if (
+        statsResult.status === "fulfilled" &&
+        !initialOverview?.titleProgress
+      ) {
+        const fallback = getUserTitleProgress(
+          "ABSOLUTE_BEGINNER",
+          statsResult.value.totalSessionCount,
         );
-      })
-      .catch((reason) => {
-        if (active) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "프로필을 불러오지 못했습니다.",
-          );
-        }
-      });
+        setTitleProgress(fallback);
+        updateMyPageOverviewCache({ titleProgress: fallback });
+      }
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialOverview]);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const resource = historyCacheResource(kind);
+    const cached = readUserClientCache<HistoryCache>(userId, resource);
+    if (cached) {
+      setItems(cached.items);
+      setPage(cached.page);
+      setHasNext(cached.hasNext);
+      setLoading(false);
+    } else {
+      setItems([]);
+      setPage(0);
+      setHasNext(false);
+      setLoading(true);
+    }
     setError(null);
     setLoadMoreError(null);
     api.myPage
@@ -118,9 +160,14 @@ export default function LearningHistory() {
         setItems(value.items);
         setPage(value.page);
         setHasNext(Boolean(value.hasNext));
+        writeUserClientCache<HistoryCache>(userId, resource, {
+          items: value.items,
+          page: value.page,
+          hasNext: Boolean(value.hasNext),
+        });
       })
       .catch((reason) => {
-        if (active) {
+        if (active && !cached) {
           setError(
             reason instanceof Error
               ? reason.message
@@ -132,7 +179,7 @@ export default function LearningHistory() {
     return () => {
       active = false;
     };
-  }, [kind]);
+  }, [kind, userId]);
 
   const groups = useMemo(() => {
     const week = localStartOfWeek(new Date());
@@ -167,9 +214,15 @@ export default function LearningHistory() {
         page: page + 1,
         size: 20,
       });
-      setItems((current) => [...current, ...value.items]);
+      const nextItems = [...items, ...value.items];
+      setItems(nextItems);
       setPage(value.page);
       setHasNext(Boolean(value.hasNext));
+      writeUserClientCache<HistoryCache>(userId, historyCacheResource(kind), {
+        items: nextItems,
+        page: value.page,
+        hasNext: Boolean(value.hasNext),
+      });
     } catch (reason) {
       setLoadMoreError(
         reason instanceof Error

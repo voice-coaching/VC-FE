@@ -6,6 +6,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { TopBar } from "@/components/top-bar";
 import { api } from "@/lib/api";
 import { getCachedUser, markAuthenticatedUser } from "@/lib/auth-session";
+import { updateMyPageOverviewCache } from "@/lib/my-page-cache";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -198,6 +199,7 @@ export default function ProfileSettings() {
               const cached = getCachedUser();
               if (cached)
                 markAuthenticatedUser({ ...cached, nickname: nickname.trim() });
+              updateMyPageOverviewCache({ nickname: nickname.trim() });
               setMessage("프로필을 저장했습니다.");
             } catch (reason) {
               setMessage(

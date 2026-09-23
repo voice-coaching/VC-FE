@@ -6,11 +6,25 @@ import { ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { api, type Statistics, type TrainingHistoryItem } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import {
+  CLIENT_CACHE_DAY_MAX_AGE_MS,
+  readUserClientCache,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 import { buildMonthCalendar, completedDays, monthRange } from "@/lib/streak";
 import { useProfile } from "@/lib/use-profile";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const GOAL_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+
+type StreakMonthCache = {
+  statistics: Statistics;
+  sessions: TrainingHistoryItem[];
+};
+
+type StreakWeekCache = { sessions: TrainingHistoryItem[] };
 
 function dateKey(value: Date) {
   const year = value.getFullYear();
@@ -32,15 +46,38 @@ export default function HomeStreak() {
   const { profile } = useProfile();
   const today = useMemo(() => new Date(), []);
   const currentWeek = useMemo(() => weekRange(today), [today]);
+  const userId = getAuthenticatedUserId();
+  const initialMonthRange = useMemo(
+    () => monthRange(today.getFullYear(), today.getMonth()),
+    [today],
+  );
+  const [initialMonthCache] = useState(() =>
+    readUserClientCache<StreakMonthCache>(
+      userId,
+      cacheResources.streakMonth(initialMonthRange.from, initialMonthRange.to),
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    ),
+  );
+  const [initialWeekCache] = useState(() =>
+    readUserClientCache<StreakWeekCache>(
+      userId,
+      cacheResources.streakWeek(currentWeek.from, currentWeek.to),
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    ),
+  );
   const [visibleMonth, setVisibleMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
-  const [sessions, setSessions] = useState<TrainingHistoryItem[]>([]);
-  const [weeklySessions, setWeeklySessions] = useState<TrainingHistoryItem[]>(
-    [],
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialMonthCache?.statistics ?? null,
   );
-  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<TrainingHistoryItem[]>(
+    initialMonthCache?.sessions ?? [],
+  );
+  const [weeklySessions, setWeeklySessions] = useState<TrainingHistoryItem[]>(
+    initialWeekCache?.sessions ?? [],
+  );
+  const [loading, setLoading] = useState(initialMonthCache === null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [goalSheet, setGoalSheet] = useState(false);
@@ -50,7 +87,21 @@ export default function HomeStreak() {
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth();
     const range = monthRange(year, month);
-    setLoading(true);
+    const resource = cacheResources.streakMonth(range.from, range.to);
+    const cached = readUserClientCache<StreakMonthCache>(
+      userId,
+      resource,
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    );
+    if (cached) {
+      setStatistics(cached.statistics);
+      setSessions(cached.sessions);
+      setLoading(false);
+    } else {
+      setStatistics(null);
+      setSessions([]);
+      setLoading(true);
+    }
     setError(null);
     void Promise.all([
       api.myPage.getStatistics({ from: range.from, to: range.to }),
@@ -66,9 +117,13 @@ export default function HomeStreak() {
         if (!active) return;
         setStatistics(stats);
         setSessions(history.items);
+        writeUserClientCache<StreakMonthCache>(userId, resource, {
+          statistics: stats,
+          sessions: history.items,
+        });
       })
       .catch((reason) => {
-        if (active) {
+        if (active && !cached) {
           setError(
             reason instanceof Error
               ? reason.message
@@ -80,12 +135,22 @@ export default function HomeStreak() {
     return () => {
       active = false;
     };
-  }, [visibleMonth]);
+  }, [userId, visibleMonth]);
 
   useEffect(load, [load, retryKey]);
 
   useEffect(() => {
     let active = true;
+    const resource = cacheResources.streakWeek(
+      currentWeek.from,
+      currentWeek.to,
+    );
+    const cached = readUserClientCache<StreakWeekCache>(
+      userId,
+      resource,
+      CLIENT_CACHE_DAY_MAX_AGE_MS,
+    );
+    if (cached) setWeeklySessions(cached.sessions);
     void api.myPage
       .listTrainingSessions({
         status: "COMPLETED",
@@ -94,12 +159,18 @@ export default function HomeStreak() {
         page: 0,
         size: 100,
       })
-      .then((history) => active && setWeeklySessions(history.items))
+      .then((history) => {
+        if (!active) return;
+        setWeeklySessions(history.items);
+        writeUserClientCache<StreakWeekCache>(userId, resource, {
+          sessions: history.items,
+        });
+      })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [currentWeek, retryKey]);
+  }, [currentWeek, retryKey, userId]);
 
   const calendar = useMemo(
     () =>

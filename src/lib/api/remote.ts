@@ -16,6 +16,7 @@ import type {
   ContentType,
   CourseStep,
   Id,
+  NextPracticeContent,
   OnboardingProfile,
   PageResult,
   PracticeContent,
@@ -45,6 +46,10 @@ function profileImageForm(input: { file: Blob; fileName: string }) {
   const form = new FormData();
   form.set("file", input.file, input.fileName);
   return form;
+}
+
+function idempotencyHeaders(idempotencyKey?: string) {
+  return idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined;
 }
 
 export function createRemoteApi(baseUrl: string): ApiContract {
@@ -168,10 +173,11 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       updateProfile: (input) =>
         request("/api/users/me", { method: "PATCH", body: input }),
       getProfileImage: () => request("/api/users/me/profile-image"),
-      createProfileImage: (input) =>
+      createProfileImage: (input, idempotencyKey) =>
         request("/api/users/me/profile-image", {
           method: "POST",
           body: profileImageForm(input),
+          headers: idempotencyHeaders(idempotencyKey),
         }),
       updateProfileImage: (input) =>
         request("/api/users/me/profile-image", {
@@ -181,8 +187,11 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       deleteProfileImage: () =>
         request("/api/users/me/profile-image", { method: "DELETE" }),
       getTitle: () => request("/api/users/me/title"),
-      createTitleExam: () =>
-        request("/api/users/me/title-exams", { method: "POST" }),
+      createTitleExam: (idempotencyKey) =>
+        request("/api/users/me/title-exams", {
+          method: "POST",
+          headers: idempotencyHeaders(idempotencyKey),
+        }),
       getTitleExam: (examId) =>
         request(`/api/users/me/title-exams/${id(examId)}`),
       submitTitleExam: (examId, analysisId) =>
@@ -226,15 +235,21 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request("/api/practice-contents/custom", {
           method: "POST",
           body: input,
-          headers: { "Idempotency-Key": idempotencyKey },
+          headers: idempotencyHeaders(idempotencyKey),
         }),
+      getFacets: (type) =>
+        request(`/api/practice-contents/facets${query({ type })}`),
+      getAdjacent: (contentId, filters) =>
+        request(
+          `/api/practice-contents/${id(contentId)}/adjacent${query(filters)}`,
+        ),
       get: (contentId) =>
         request<PracticeContent>(`/api/practice-contents/${id(contentId)}`),
       getNext: (filters) =>
-        request<PracticeContent>(
+        request<NextPracticeContent>(
           `/api/practice-contents/next${query(filters)}`,
         ),
-      async getRecommendations(contentId) {
+      async getRecommendations(contentId, limit) {
         const data = await request<{
           items: Array<{
             id: Id;
@@ -242,7 +257,9 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             contentType: ContentType;
             similarityReason: string;
           }>;
-        }>(`/api/practice-contents/${id(contentId)}/recommendations`);
+        }>(
+          `/api/practice-contents/${id(contentId)}/recommendations${query({ limit })}`,
+        );
         return data.items;
       },
       async getReferenceAudios(contentId) {
@@ -284,6 +301,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         );
         return data.items;
       },
+      getStep: (courseId, stepId, sessionId) =>
+        request(
+          `/api/courses/${id(courseId)}/steps/${id(stepId)}${query({ sessionId })}`,
+        ),
       async getMyProgress(status) {
         const data = await request<{ items: UserCourseProgress[] }>(
           `/api/users/me/course-progress${query({ status })}`,
@@ -389,6 +410,45 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         }),
       getWeaknessRecommendations: (filters = {}) =>
         request(`/api/users/me/weakness-recommendations${query(filters)}`),
+    },
+    notifications: {
+      getPreferences: () => request("/api/users/me/notification-preferences"),
+      updatePreferences: (input) =>
+        request("/api/users/me/notification-preferences", {
+          method: "PATCH",
+          body: input,
+        }),
+      createPushSubscription: (input, idempotencyKey) =>
+        request("/api/users/me/push-subscriptions", {
+          method: "POST",
+          body: input,
+          headers: idempotencyHeaders(idempotencyKey),
+        }),
+      deletePushSubscription: (subscriptionId) =>
+        request(`/api/users/me/push-subscriptions/${id(subscriptionId)}`, {
+          method: "DELETE",
+        }),
+      list: (filters = {}) => request(`/api/notifications${query(filters)}`),
+      markRead: (notificationId) =>
+        request(`/api/notifications/${id(notificationId)}/read`, {
+          method: "PATCH",
+        }),
+      markAllRead: () =>
+        request("/api/notifications/read-all", { method: "POST" }),
+    },
+    support: {
+      listNotices: (filters = {}) => request(`/api/notices${query(filters)}`),
+      getNotice: (noticeId) => request(`/api/notices/${id(noticeId)}`),
+      createInquiry: (input, idempotencyKey) =>
+        request("/api/inquiries", {
+          method: "POST",
+          body: input,
+          headers: idempotencyHeaders(idempotencyKey),
+        }),
+      listInquiries: (filters = {}) =>
+        request(`/api/users/me/inquiries${query(filters)}`),
+      getInquiry: (inquiryId) =>
+        request(`/api/users/me/inquiries/${id(inquiryId)}`),
     },
   };
 }

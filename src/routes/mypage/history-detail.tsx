@@ -23,6 +23,14 @@ import {
   type PracticeContent,
   type TrainingHistoryDetail,
 } from "@/lib/api";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { cacheResources } from "@/lib/cache-resources";
+import {
+  readUserClientCache,
+  removeUserClientCache,
+  removeUserClientCacheGroup,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 import { splitSentences } from "@/lib/sentences";
 
 type DetailBundle = {
@@ -45,7 +53,12 @@ export default function LearningHistoryDetail({
   sessionId: string;
 }) {
   const router = useRouter();
-  const [bundle, setBundle] = useState<DetailBundle | null>(null);
+  const userId = getAuthenticatedUserId();
+  const cacheResource = cacheResources.historyDetail(sessionId);
+  const [initialBundle] = useState(() =>
+    readUserClientCache<DetailBundle>(userId, cacheResource),
+  );
+  const [bundle, setBundle] = useState<DetailBundle | null>(initialBundle);
   const [tab, setTab] = useState<"recording" | "report">("recording");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -53,6 +66,9 @@ export default function LearningHistoryDetail({
 
   useEffect(() => {
     let active = true;
+    const cached = readUserClientCache<DetailBundle>(userId, cacheResource);
+    setBundle(cached);
+    setError(null);
     void (async () => {
       try {
         const detail = await api.myPage.getTrainingSession(sessionId);
@@ -61,15 +77,18 @@ export default function LearningHistoryDetail({
           api.analyses.get(detail.analysis.id),
           api.analyses.getSegments(detail.analysis.id, { page: 0, size: 100 }),
         ]);
-        if (active)
-          setBundle({
+        if (active) {
+          const value = {
             detail,
             content,
             analysis,
             segments: segmentPage.items,
-          });
+          };
+          setBundle(value);
+          writeUserClientCache(userId, cacheResource, value);
+        }
       } catch (reason) {
-        if (active)
+        if (active && !cached)
           setError(
             reason instanceof Error
               ? reason.message
@@ -80,13 +99,17 @@ export default function LearningHistoryDetail({
     return () => {
       active = false;
     };
-  }, [sessionId]);
+  }, [cacheResource, sessionId, userId]);
 
   async function deleteHistory() {
     setDeleting(true);
     setError(null);
     try {
       await api.myPage.deleteTrainingSession(sessionId);
+      removeUserClientCache(userId, cacheResource);
+      removeUserClientCacheGroup(userId, "mypage-history-");
+      removeUserClientCacheGroup(userId, "home-");
+      removeUserClientCacheGroup(userId, "streak-");
       router.replace("/mypage/history");
     } catch (reason) {
       setError(

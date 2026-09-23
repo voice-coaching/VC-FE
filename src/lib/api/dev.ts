@@ -11,6 +11,11 @@ import type {
   CourseSummary,
   HomeDashboard,
   Id,
+  Inquiry,
+  NotificationItem,
+  NotificationPreferences,
+  NoticeDetail,
+  NoticeSummary,
   OnboardingProfile,
   PageResult,
   PracticeContent,
@@ -48,6 +53,9 @@ const contents: PracticeContent[] = [
     targetPronunciations: ["FORTIS", "FINAL_CONSONANT"],
     estimatedSeconds: 45,
     referenceAudioAvailable: true,
+    origin: null,
+    sentences: null,
+    createdAt: null,
   },
   {
     id: 102,
@@ -61,6 +69,9 @@ const contents: PracticeContent[] = [
     targetPronunciations: ["LIQUID_ASSIMILATION"],
     estimatedSeconds: 50,
     referenceAudioAvailable: true,
+    origin: null,
+    sentences: null,
+    createdAt: null,
   },
   {
     id: 103,
@@ -74,6 +85,9 @@ const contents: PracticeContent[] = [
     targetPronunciations: ["SENTENCE_STRESS"],
     estimatedSeconds: 40,
     referenceAudioAvailable: true,
+    origin: null,
+    sentences: null,
+    createdAt: null,
   },
   {
     id: 104,
@@ -87,6 +101,9 @@ const contents: PracticeContent[] = [
     targetPronunciations: ["BREATH", "INTONATION"],
     estimatedSeconds: 45,
     referenceAudioAvailable: true,
+    origin: null,
+    sentences: null,
+    createdAt: null,
   },
 ];
 
@@ -377,6 +394,49 @@ let history: TrainingHistoryItem[] = [
   },
 ];
 
+let notificationPreferences: NotificationPreferences = {
+  practiceReminder: {
+    enabled: true,
+    time: "20:00",
+    daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI"],
+    timezone: "Asia/Seoul",
+  },
+  marketing: { enabled: false },
+  updatedAt: NOW,
+};
+
+let notifications: NotificationItem[] = [
+  {
+    id: 801,
+    type: "PRACTICE_REMINDER",
+    title: "오늘의 연습",
+    body: "오늘 목표까지 한 번의 연습이 남았어요.",
+    deepLink: "/home",
+    readAt: null,
+    createdAt: NOW,
+  },
+];
+
+const notices: NoticeDetail[] = [
+  {
+    id: 851,
+    title: "또박 서비스 안내",
+    pinned: true,
+    publishedAt: NOW,
+    summary: "개발 환경에서 제공되는 공지입니다.",
+    sections: [
+      {
+        title: "안내",
+        paragraphs: ["또박을 이용해 주셔서 감사합니다."],
+      },
+    ],
+  },
+];
+
+let inquiries: Inquiry[] = [];
+let pushSubscriptionSequence = 881;
+let inquirySequence = 891;
+
 let currentTitleCode: UserTitleCode = "ABSOLUTE_BEGINNER";
 const titleExams = new Map<string, UserTitleExam>();
 let titleExamSequence = 901;
@@ -527,6 +587,8 @@ function getSession(sessionId: Id): TrainingSession {
       id: 101,
       title: contents[0].title,
       scriptText: contents[0].scriptText,
+      practiceExampleId: null,
+      practiceExampleRevision: null,
     },
     selectedRecordingId: null,
     recordingCount: 0,
@@ -615,6 +677,7 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
           requiredTrainingCount: progress.next.requiredTrainingCount,
           passingScore: progress.next.passingScore,
           status: "READY",
+          trainingSessionId: null,
           createdAt: new Date().toISOString(),
         };
         titleExams.set(String(exam.id), exam);
@@ -763,6 +826,55 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
         );
         return paged(filtered, filters.page, filters.size);
       },
+      getFacets: async (type) => {
+        const matching = contents.filter((item) => item.contentType === type);
+        const categoryCounts = new Map<string, number>();
+        const difficultyCounts = new Map<string, number>();
+        matching.forEach((item) => {
+          categoryCounts.set(
+            item.category,
+            (categoryCounts.get(item.category) ?? 0) + 1,
+          );
+          difficultyCounts.set(
+            item.difficulty,
+            (difficultyCounts.get(item.difficulty) ?? 0) + 1,
+          );
+        });
+        return {
+          type,
+          categories: [...categoryCounts].map(([value, count], order) => ({
+            value,
+            label: value,
+            count,
+            order,
+          })),
+          difficulties: [...difficultyCounts].map(([value, count], order) => ({
+            value: value as PracticeContent["difficulty"],
+            label: value,
+            count,
+            order,
+          })),
+          revision: "local-dev-v1",
+        };
+      },
+      getAdjacent: async (contentId, filters) => {
+        const matching = contents.filter(
+          (item) =>
+            item.contentType === filters.type &&
+            (!filters.category || item.category === filters.category) &&
+            (!filters.difficulty || item.difficulty === filters.difficulty) &&
+            (!filters.focus || item.learningFocus === filters.focus),
+        );
+        const index = matching.findIndex(
+          (item) => String(item.id) === String(contentId),
+        );
+        const summary = (item: PracticeContent | undefined) =>
+          item ? { id: item.id, title: item.title } : null;
+        return {
+          previous: summary(index > 0 ? matching[index - 1] : undefined),
+          next: summary(index >= 0 ? matching[index + 1] : undefined),
+        };
+      },
       get: async (contentId) => clone(findContent(contentId)),
       getNext: async (filters) =>
         clone(
@@ -839,6 +951,32 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
       }),
       getSteps: async (courseId) =>
         clone(courseSteps[String(courseId)] ?? courseSteps["201"]),
+      getStep: async (courseId, stepId) => {
+        const items = courseSteps[String(courseId)] ?? courseSteps["201"];
+        const step =
+          items.find((item) => String(item.id) === String(stepId)) ?? items[0];
+        return {
+          ...clone(step),
+          courseId,
+          subtitle: "개발용 단계별 교육 내용입니다.",
+          contentRevision: 1,
+          blocks: [
+            {
+              type: "TEXT" as const,
+              title: "핵심 설명",
+              body: `${step.title}의 핵심 원리를 확인합니다.`,
+            },
+            ...(step.practiceContentId
+              ? [
+                  {
+                    type: "PRACTICE_PROMPT" as const,
+                    practiceContentId: step.practiceContentId,
+                  },
+                ]
+              : []),
+          ],
+        };
+      },
       getMyProgress: async (status) => {
         const items: UserCourseProgress[] = courseSummaries.map((course) => ({
           ...progress(course.id),
@@ -880,6 +1018,8 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
             id: content.id,
             title: content.title,
             scriptText: content.scriptText,
+            practiceExampleId: null,
+            practiceExampleRevision: null,
           },
           selectedRecordingId: null,
           recordingCount: 0,
@@ -913,6 +1053,9 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
           attemptNo: (recordings.get(String(sessionId))?.length ?? 0) + 1,
           durationMs: input.durationMs,
           qualityStatus: "PASS",
+          analysisMediaType: input.mimeType.startsWith("video/")
+            ? "AUDIO_VISUAL"
+            : "AUDIO_ONLY",
           selected: false,
           createdAt: NOW,
         };
@@ -1123,6 +1266,110 @@ export function createDevApi(onSessionEnded?: () => void): ApiContract {
           ],
         };
         return data;
+      },
+    },
+    notifications: {
+      getPreferences: async () => clone(notificationPreferences),
+      updatePreferences: async (input) => {
+        notificationPreferences = {
+          practiceReminder: {
+            ...notificationPreferences.practiceReminder,
+            ...(input.practiceReminder
+              ? Object.fromEntries(
+                  Object.entries(input.practiceReminder).filter(
+                    ([, value]) => value !== null && value !== undefined,
+                  ),
+                )
+              : {}),
+          },
+          marketing: {
+            ...notificationPreferences.marketing,
+            ...(input.marketing?.enabled === null ||
+            input.marketing?.enabled === undefined
+              ? {}
+              : { enabled: input.marketing.enabled }),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+        return clone(notificationPreferences);
+      },
+      createPushSubscription: async (input) => ({
+        id: pushSubscriptionSequence++,
+        deviceName: input.deviceName ?? null,
+        active: true,
+        createdAt: new Date().toISOString(),
+      }),
+      deletePushSubscription: async () => {},
+      list: async (filters = {}) => {
+        const items = filters.unreadOnly
+          ? notifications.filter((item) => item.readAt === null)
+          : notifications;
+        return {
+          ...paged(items, filters.page, filters.size),
+          unreadCount: notifications.filter((item) => item.readAt === null)
+            .length,
+        };
+      },
+      markRead: async (notificationId) => {
+        const item = notifications.find(
+          (entry) => String(entry.id) === String(notificationId),
+        );
+        if (!item) throw new ApiError("알림을 찾지 못했습니다.", 404);
+        item.readAt ??= new Date().toISOString();
+        return clone(item);
+      },
+      markAllRead: async () => {
+        let updatedCount = 0;
+        notifications = notifications.map((item) => {
+          if (item.readAt) return item;
+          updatedCount += 1;
+          return { ...item, readAt: new Date().toISOString() };
+        });
+        return { updatedCount };
+      },
+    },
+    support: {
+      listNotices: async (filters = {}) => {
+        const items: NoticeSummary[] = notices.map(
+          ({ sections: _sections, ...notice }) => notice,
+        );
+        return paged(items, filters.page, filters.size);
+      },
+      getNotice: async (noticeId) => {
+        const notice = notices.find(
+          (item) => String(item.id) === String(noticeId),
+        );
+        if (!notice) throw new ApiError("공지를 찾지 못했습니다.", 404);
+        return clone(notice);
+      },
+      createInquiry: async (input) => {
+        const inquiry: Inquiry = {
+          id: inquirySequence++,
+          category: input.category,
+          subject: input.subject,
+          body: input.body,
+          relatedSessionId: input.relatedSessionId ?? null,
+          replyEmail: input.replyEmail ?? null,
+          status: "RECEIVED",
+          answer: null,
+          createdAt: new Date().toISOString(),
+          answeredAt: null,
+        };
+        inquiries = [inquiry, ...inquiries];
+        return {
+          id: inquiry.id,
+          status: "RECEIVED",
+          createdAt: inquiry.createdAt,
+        };
+      },
+      listInquiries: async (filters = {}) =>
+        paged(inquiries, filters.page, filters.size),
+      getInquiry: async (inquiryId) => {
+        const inquiry = inquiries.find(
+          (item) => String(item.id) === String(inquiryId),
+        );
+        if (!inquiry) throw new ApiError("문의를 찾지 못했습니다.", 404);
+        return clone(inquiry);
       },
     },
   };

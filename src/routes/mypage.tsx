@@ -13,7 +13,10 @@ import {
   type UserTitleProgress,
 } from "@/lib/api";
 import { getCachedUser } from "@/lib/auth-session";
-import { useProfile } from "@/lib/use-profile";
+import {
+  readMyPageOverviewCache,
+  updateMyPageOverviewCache,
+} from "@/lib/my-page-cache";
 import { getUserTitleProgress } from "@/lib/user-title";
 
 function titlePercent(progress: UserTitleProgress | null) {
@@ -30,12 +33,16 @@ function titlePercent(progress: UserTitleProgress | null) {
 
 export default function MyPage() {
   const router = useRouter();
-  const { profile } = useProfile();
+  const [initialOverview] = useState(readMyPageOverviewCache);
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
-  const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialOverview?.statistics ?? null,
+  );
+  const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(
+    initialOverview?.feedback ?? null,
+  );
   const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
-    null,
+    initialOverview?.titleProgress ?? null,
   );
   const [error, setError] = useState<string | null>(null);
   const [examStarting, setExamStarting] = useState(false);
@@ -43,37 +50,72 @@ export default function MyPage() {
   useEffect(() => {
     let active = true;
     const cachedUser = getCachedUser();
-    Promise.all([
+    void Promise.allSettled([
       cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
-      api.users.getTitle().catch(() => null),
-    ])
-      .then(([user, stats, strengthsWeaknesses, userTitle]) => {
-        if (!active) return;
-        setAccount(user);
-        setStatistics(stats);
-        setFeedback(strengthsWeaknesses);
-        setTitleProgress(
-          userTitle ??
-            getUserTitleProgress("ABSOLUTE_BEGINNER", stats.totalSessionCount),
+      api.users.getTitle(),
+    ]).then(([userResult, statsResult, feedbackResult, titleResult]) => {
+      if (!active) return;
+      const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
+
+      if (userResult.status === "fulfilled") {
+        setAccount(userResult.value);
+        cachePatch.nickname = userResult.value.nickname;
+      }
+      if (statsResult.status === "fulfilled") {
+        setStatistics(statsResult.value);
+        cachePatch.statistics = statsResult.value;
+      }
+      if (feedbackResult.status === "fulfilled") {
+        setFeedback(feedbackResult.value);
+        cachePatch.feedback = feedbackResult.value;
+      }
+
+      if (titleResult.status === "fulfilled") {
+        setTitleProgress(titleResult.value);
+        cachePatch.titleProgress = titleResult.value;
+      } else if (
+        statsResult.status === "fulfilled" &&
+        !initialOverview?.titleProgress
+      ) {
+        const fallback = getUserTitleProgress(
+          "ABSOLUTE_BEGINNER",
+          statsResult.value.totalSessionCount,
         );
-      })
-      .catch((reason) => {
-        if (!active) return;
+        setTitleProgress(fallback);
+        cachePatch.titleProgress = fallback;
+      }
+
+      if (Object.keys(cachePatch).length > 0) {
+        updateMyPageOverviewCache(cachePatch);
+      }
+
+      const firstUncoveredFailure =
+        userResult.status === "rejected" &&
+        !cachedUser &&
+        !initialOverview?.nickname
+          ? userResult
+          : statsResult.status === "rejected" && !initialOverview?.statistics
+            ? statsResult
+            : feedbackResult.status === "rejected" && !initialOverview?.feedback
+              ? feedbackResult
+              : null;
+      if (firstUncoveredFailure) {
         setError(
-          reason instanceof Error
-            ? reason.message
+          firstUncoveredFailure.reason instanceof Error
+            ? firstUncoveredFailure.reason.message
             : "마이페이지를 불러오지 못했습니다.",
         );
-      });
+      }
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialOverview]);
 
   const percent = titlePercent(titleProgress);
-  const displayName = account?.nickname ?? profile?.name;
+  const displayName = account?.nickname ?? initialOverview?.nickname;
   const totalSeconds = statistics?.totalLearningSeconds ?? 0;
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

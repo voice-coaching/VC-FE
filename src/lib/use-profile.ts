@@ -15,10 +15,13 @@ import {
   type AudioAccessPreference,
 } from "./accessibility-preference";
 import {
-  getAuthSessionSnapshot,
+  getAuthenticatedUserId,
   getCachedUser,
+  markAuthenticatedUser,
   markOnboardingCompleted,
 } from "./auth-session";
+import { readUserClientCache, writeUserClientCache } from "./client-cache";
+import { updateMyPageOverviewCache } from "./my-page-cache";
 
 export type OnboardingAnswers = UiProfile & {
   improvementAreas: string[];
@@ -42,12 +45,10 @@ const levelToApi: Record<Level, CurrentLevel> = {
 
 let cachedProfile: OnboardingAnswers | null = null;
 let cachedProfileUserId: string | null = null;
+const PROFILE_CACHE_RESOURCE = "onboarding-profile";
 
 function currentUserId() {
-  const session = getAuthSessionSnapshot();
-  return session.status === "authenticated" && session.userId !== undefined
-    ? String(session.userId)
-    : null;
+  return getAuthenticatedUserId();
 }
 
 function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
@@ -93,8 +94,11 @@ function toApi(profile: OnboardingAnswers): OnboardingSaveInput {
 
 export function useProfile({ loadExisting = true } = {}) {
   const userId = currentUserId();
-  const initialProfile =
-    userId !== null && cachedProfileUserId === userId ? cachedProfile : null;
+  const [initialProfile] = useState(() =>
+    userId !== null && cachedProfileUserId === userId
+      ? cachedProfile
+      : readUserClientCache<OnboardingAnswers>(userId, PROFILE_CACHE_RESOURCE),
+  );
   const [profile, setProfile] = useState<OnboardingAnswers | null>(
     initialProfile,
   );
@@ -104,15 +108,12 @@ export function useProfile({ loadExisting = true } = {}) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (
-      !loadExisting ||
-      (cachedProfile !== null && cachedProfileUserId === userId)
-    ) {
-      return;
-    }
+    if (!loadExisting) return;
 
     let active = true;
+    const hasCachedProfile = initialProfile !== null;
     const cachedUser = getCachedUser();
+    setError(null);
     Promise.all([
       api.onboarding.get(),
       cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
@@ -122,10 +123,11 @@ export function useProfile({ loadExisting = true } = {}) {
         const value = fromApi(onboarding, user.nickname);
         cachedProfile = value;
         cachedProfileUserId = String(user.id);
+        writeUserClientCache(String(user.id), PROFILE_CACHE_RESOURCE, value);
         setProfile(value);
       })
       .catch((reason) => {
-        if (active)
+        if (active && !hasCachedProfile)
           setError(
             reason instanceof Error
               ? reason.message
@@ -138,11 +140,16 @@ export function useProfile({ loadExisting = true } = {}) {
     return () => {
       active = false;
     };
-  }, [loadExisting, userId]);
+  }, [initialProfile, loadExisting, userId]);
 
   const save = useCallback(async (value: OnboardingAnswers) => {
-    if (value.name.trim())
-      await api.users.updateProfile({ nickname: value.name.trim() });
+    const nickname = value.name.trim();
+    if (nickname) {
+      await api.users.updateProfile({ nickname });
+      const user = getCachedUser();
+      if (user) markAuthenticatedUser({ ...user, nickname });
+      updateMyPageOverviewCache({ nickname });
+    }
 
     const completion = await api.onboarding.save(toApi(value));
     if (!completion.completed) {
@@ -156,6 +163,7 @@ export function useProfile({ loadExisting = true } = {}) {
     markOnboardingCompleted();
     cachedProfile = value;
     cachedProfileUserId = currentUserId();
+    writeUserClientCache(cachedProfileUserId, PROFILE_CACHE_RESOURCE, value);
     setProfile(value);
     return value;
   }, []);
@@ -177,6 +185,11 @@ export function useProfile({ loadExisting = true } = {}) {
         const updated = { ...current, ...value };
         cachedProfile = updated;
         cachedProfileUserId = currentUserId();
+        writeUserClientCache(
+          cachedProfileUserId,
+          PROFILE_CACHE_RESOURCE,
+          updated,
+        );
         return updated;
       });
     },
@@ -193,6 +206,7 @@ export function useProfile({ loadExisting = true } = {}) {
     });
     cachedProfile = value;
     cachedProfileUserId = currentUserId();
+    writeUserClientCache(cachedProfileUserId, PROFILE_CACHE_RESOURCE, value);
     setProfile(value);
   }, []);
 

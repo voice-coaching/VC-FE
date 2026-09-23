@@ -17,6 +17,9 @@ const content: PracticeContent = {
   estimatedSeconds: 10,
   targetPronunciations: [],
   referenceAudioAvailable: false,
+  origin: null,
+  sentences: null,
+  createdAt: null,
 };
 const set: PracticeExamples = {
   courseId: 1,
