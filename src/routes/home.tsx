@@ -406,7 +406,7 @@ export default function Home() {
           </section>
         </header>
 
-        <main className="relative z-10 -mt-1 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pb-8 [-webkit-overflow-scrolling:touch]">
+        <main className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-4 pb-8 [-webkit-overflow-scrolling:touch]">
           {error ? (
             <div
               role="alert"
