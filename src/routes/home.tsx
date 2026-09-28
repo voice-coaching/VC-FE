@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import {
   api,
   type CourseDetail,
@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+import styles from "./home.module.css";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -173,6 +174,13 @@ export default function Home() {
   );
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const headerVisibleRef = useRef(true);
+  const previousScrollTop = useRef(0);
+  const scrollDirection = useRef<"up" | "down" | null>(null);
+  const directionalDistance = useRef(0);
+  const pendingScrollTop = useRef(0);
+  const scrollFrame = useRef<number | null>(null);
   const scrollAreaRef = useRef<HTMLElement>(null);
   const streakCardRef = useRef<HTMLElement>(null);
 
@@ -332,24 +340,80 @@ export default function Home() {
   );
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
 
-  const handleHomeScroll = () => {
-    const scrollArea = scrollAreaRef.current;
-    const streakCard = streakCardRef.current;
-    if (!scrollArea || !streakCard) return;
+  function updateHeaderVisibility(visible: boolean) {
+    if (headerVisibleRef.current === visible) return;
+    headerVisibleRef.current = visible;
+    setHeaderVisible(visible);
+  }
 
-    const scrollTop = scrollArea.scrollTop;
+  function updateHeaderForScroll(scrollTop: number) {
+    const delta = scrollTop - previousScrollTop.current;
+    previousScrollTop.current = scrollTop;
+
+    if (scrollTop <= 12) {
+      scrollDirection.current = null;
+      directionalDistance.current = 0;
+      updateHeaderVisibility(true);
+      return;
+    }
+    if (Math.abs(delta) < 1) return;
+
+    const nextDirection = delta > 0 ? "down" : "up";
+    if (scrollDirection.current !== nextDirection) {
+      scrollDirection.current = nextDirection;
+      directionalDistance.current = 0;
+    }
+    directionalDistance.current += Math.abs(delta);
+
+    const threshold = nextDirection === "down" ? 24 : 10;
+    if (directionalDistance.current < threshold) return;
+
+    updateHeaderVisibility(nextDirection === "up");
+    directionalDistance.current = 0;
+  }
+
+  function updateStreakCard(scrollTop: number) {
+    const streakCard = streakCardRef.current;
+    if (!streakCard) return;
+
     const fadeProgress = Math.min(Math.max((scrollTop - 4) / 36, 0), 1);
     const easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
     const heldDistance = Math.min(scrollTop, 84);
 
     streakCard.style.opacity = String(1 - easedProgress);
     streakCard.style.transform = `translate3d(0, ${heldDistance}px, 0) scale(${1 - easedProgress * 0.015})`;
-  };
+  }
+
+  function handleHomeScroll(event: UIEvent<HTMLElement>) {
+    pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
+    if (scrollFrame.current !== null) return;
+
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      scrollFrame.current = null;
+      updateHeaderForScroll(pendingScrollTop.current);
+      updateStreakCard(pendingScrollTop.current);
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrame.current !== null) {
+        window.cancelAnimationFrame(scrollFrame.current);
+      }
+    };
+  }, []);
 
   return (
-    <AppShell viewportLocked chromeColor="#2f6bff">
+    <AppShell
+      viewportLocked
+      chromeColor={headerVisible ? "#2f6bff" : "#f2f4f6"}
+    >
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f2f4f6] text-[#191f28]">
-        <header className="relative z-20 flex h-16 shrink-0 items-center bg-[#2f6bff] px-5 py-2">
+        <header
+          data-state={headerVisible ? "visible" : "hidden"}
+          aria-hidden={!headerVisible}
+          className={`${styles.header} absolute inset-x-0 top-0 z-20 flex h-16 items-center bg-[#2f6bff] px-5 py-2 ${headerVisible ? "" : "pointer-events-none"}`}
+        >
           <Image
             src="/figma/home-density/brand.svg"
             alt="Speak AI"
@@ -361,6 +425,7 @@ export default function Home() {
           <Link
             href="/home/notifications"
             aria-label="알림 보기"
+            tabIndex={headerVisible ? undefined : -1}
             className="relative flex size-11 items-center justify-end"
           >
             <Image
@@ -382,18 +447,19 @@ export default function Home() {
         <main
           ref={scrollAreaRef}
           onScroll={handleHomeScroll}
+          data-scroll-container="home"
           className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="relative min-h-full pb-8">
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[141px] bg-[#2f6bff]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[205px] bg-[#2f6bff]"
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-[117px] bottom-0 rounded-t-[24px] bg-[#f2f4f6]"
+              className="pointer-events-none absolute inset-x-0 top-[181px] bottom-0 rounded-t-[24px] bg-[#f2f4f6]"
             />
-            <div className="relative snap-start snap-always px-5 pt-2">
+            <div className="relative snap-start snap-always px-5 pt-[72px]">
               <section
                 ref={streakCardRef}
                 className="relative z-10 h-[85px] origin-top rounded-2xl bg-white/15 px-[14px] py-[10px] text-white will-change-[transform,opacity] motion-reduce:transform-none motion-reduce:opacity-100"
