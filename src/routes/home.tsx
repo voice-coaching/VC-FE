@@ -179,10 +179,9 @@ export default function Home() {
   const previousScrollTop = useRef(0);
   const scrollDirection = useRef<"up" | "down" | null>(null);
   const directionalDistance = useRef(0);
+  const suppressScrollUntil = useRef(0);
   const pendingScrollTop = useRef(0);
   const scrollFrame = useRef<number | null>(null);
-  const scrollAreaRef = useRef<HTMLElement>(null);
-  const streakCardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -343,6 +342,7 @@ export default function Home() {
   function updateHeaderVisibility(visible: boolean) {
     if (headerVisibleRef.current === visible) return;
     headerVisibleRef.current = visible;
+    suppressScrollUntil.current = Date.now() + 260;
     setHeaderVisible(visible);
   }
 
@@ -357,6 +357,11 @@ export default function Home() {
       return;
     }
     if (Math.abs(delta) < 1) return;
+    if (Date.now() < suppressScrollUntil.current) {
+      scrollDirection.current = null;
+      directionalDistance.current = 0;
+      return;
+    }
 
     const nextDirection = delta > 0 ? "down" : "up";
     if (scrollDirection.current !== nextDirection) {
@@ -372,18 +377,6 @@ export default function Home() {
     directionalDistance.current = 0;
   }
 
-  function updateStreakCard(scrollTop: number) {
-    const streakCard = streakCardRef.current;
-    if (!streakCard) return;
-
-    const fadeProgress = Math.min(Math.max((scrollTop - 4) / 36, 0), 1);
-    const easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-    const heldDistance = Math.min(scrollTop, 84);
-
-    streakCard.style.opacity = String(1 - easedProgress);
-    streakCard.style.transform = `translate3d(0, ${heldDistance}px, 0) scale(${1 - easedProgress * 0.015})`;
-  }
-
   function handleHomeScroll(event: UIEvent<HTMLElement>) {
     pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
     if (scrollFrame.current !== null) return;
@@ -391,7 +384,6 @@ export default function Home() {
     scrollFrame.current = window.requestAnimationFrame(() => {
       scrollFrame.current = null;
       updateHeaderForScroll(pendingScrollTop.current);
-      updateStreakCard(pendingScrollTop.current);
     });
   }
 
@@ -408,333 +400,325 @@ export default function Home() {
       viewportLocked
       chromeColor={headerVisible ? "#2f6bff" : "#f2f4f6"}
     >
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f2f4f6] text-[#191f28]">
+      <div
+        className={`relative flex h-full min-h-0 flex-col overflow-hidden text-[#191f28] transition-colors duration-200 ${
+          headerVisible ? "bg-[#2f6bff]" : "bg-[#f2f4f6]"
+        }`}
+      >
         <header
           data-state={headerVisible ? "visible" : "hidden"}
           aria-hidden={!headerVisible}
-          className={`${styles.header} absolute inset-x-0 top-0 z-20 flex h-16 items-center bg-[#2f6bff] px-5 py-2 ${headerVisible ? "" : "pointer-events-none"}`}
+          className={`${styles.homeHeader} relative z-20 bg-[#2f6bff]`}
         >
-          <Image
-            src="/figma/home-density/brand.svg"
-            alt="Speak AI"
-            width={23.2}
-            height={32}
-            priority
-          />
-          <span className="min-w-0 flex-1" />
-          <Link
-            href="/home/notifications"
-            aria-label="알림 보기"
-            tabIndex={headerVisible ? undefined : -1}
-            className="relative flex size-11 items-center justify-end"
-          >
+          <div className="flex h-16 items-center px-5 py-2">
             <Image
-              src="/figma/home-density/bell.svg"
-              alt=""
-              width={28}
-              height={28}
+              src="/figma/home-density/brand.svg"
+              alt="Speak AI"
+              width={23.2}
+              height={32}
+              priority
             />
-            <Image
-              src="/figma/home-density/badge-dot.svg"
-              alt=""
-              width={8}
-              height={8}
-              className="absolute top-[9px] right-0"
-            />
-          </Link>
+            <span className="min-w-0 flex-1" />
+            <Link
+              href="/home/notifications"
+              aria-label="알림 보기"
+              tabIndex={headerVisible ? undefined : -1}
+              className="relative flex size-11 items-center justify-end"
+            >
+              <Image
+                src="/figma/home-density/bell.svg"
+                alt=""
+                width={28}
+                height={28}
+              />
+              <Image
+                src="/figma/home-density/badge-dot.svg"
+                alt=""
+                width={8}
+                height={8}
+                className="absolute top-[9px] right-0"
+              />
+            </Link>
+          </div>
+
+          <section className="mx-5 mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
+            <Link
+              href="/home/streak"
+              tabIndex={headerVisible ? undefined : -1}
+              className="flex h-full items-center gap-3"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline gap-1 whitespace-nowrap">
+                  <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
+                    연속 연습
+                  </span>
+                  <strong className="text-sm leading-5 tracking-[0.203px]">
+                    {streakDays}일째
+                  </strong>
+                </span>
+                <span className="mt-2 flex justify-between">
+                  {weekDates.map((day) => {
+                    const completed = completedWeekdays.has(day.key);
+                    const dot = completed
+                      ? "/figma/home-density/day-complete-dot.svg"
+                      : day.isToday
+                        ? "/figma/home-density/day-current.svg"
+                        : "/figma/home-density/day-inactive.svg";
+                    return (
+                      <span
+                        key={day.key}
+                        className="flex w-5 flex-col items-center gap-[3px]"
+                      >
+                        <span className="relative size-5">
+                          <Image src={dot} alt="" width={20} height={20} />
+                          {completed ? (
+                            <Image
+                              src="/figma/home-density/day-check.svg"
+                              alt=""
+                              width={14}
+                              height={14}
+                              className="absolute top-[3px] left-[3px]"
+                            />
+                          ) : null}
+                        </span>
+                        <span
+                          className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
+                            day.isToday
+                              ? "font-bold text-white"
+                              : day.isFuture
+                                ? "font-medium text-white/55"
+                                : "font-medium text-white/75"
+                          }`}
+                        >
+                          {day.label}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </span>
+              </span>
+              <Image
+                src="/figma/home-density/chevron-streak.svg"
+                alt=""
+                width={18}
+                height={18}
+                className="shrink-0"
+              />
+            </Link>
+          </section>
         </header>
 
         <main
-          ref={scrollAreaRef}
           onScroll={handleHomeScroll}
           data-scroll-container="home"
-          className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain rounded-t-[24px] bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          <div className="relative min-h-full pb-8">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[205px] bg-[#2f6bff]"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-[181px] bottom-0 rounded-t-[24px] bg-[#f2f4f6]"
-            />
-            <div className="relative snap-start snap-always px-5 pt-[72px]">
-              <section
-                ref={streakCardRef}
-                className="relative z-10 h-[85px] origin-top rounded-2xl bg-white/15 px-[14px] py-[10px] text-white will-change-[transform,opacity] motion-reduce:transform-none motion-reduce:opacity-100"
+          <div className="relative min-h-full snap-start snap-always px-5 pt-5 pb-8">
+            {error ? (
+              <div
+                role="alert"
+                className="mb-3 flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 text-xs text-[#d91b34]"
               >
-                <Link
-                  href="/home/streak"
-                  className="flex h-full items-center gap-3"
+                <p className="min-w-0 flex-1">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((value) => value + 1)}
+                  className="min-h-11 shrink-0 rounded-full px-3 font-bold"
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1 whitespace-nowrap">
-                      <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
-                        연속 연습
-                      </span>
-                      <strong className="text-sm leading-5 tracking-[0.203px]">
-                        {streakDays}일째
-                      </strong>
-                    </span>
-                    <span className="mt-2 flex justify-between">
-                      {weekDates.map((day) => {
-                        const completed = completedWeekdays.has(day.key);
-                        const dot = completed
-                          ? "/figma/home-density/day-complete-dot.svg"
-                          : day.isToday
-                            ? "/figma/home-density/day-current.svg"
-                            : "/figma/home-density/day-inactive.svg";
-                        return (
-                          <span
-                            key={day.key}
-                            className="flex w-5 flex-col items-center gap-[3px]"
-                          >
-                            <span className="relative size-5">
-                              <Image src={dot} alt="" width={20} height={20} />
-                              {completed ? (
-                                <Image
-                                  src="/figma/home-density/day-check.svg"
-                                  alt=""
-                                  width={14}
-                                  height={14}
-                                  className="absolute top-[3px] left-[3px]"
-                                />
-                              ) : null}
-                            </span>
-                            <span
-                              className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
-                                day.isToday
-                                  ? "font-bold text-white"
-                                  : day.isFuture
-                                    ? "font-medium text-white/55"
-                                    : "font-medium text-white/75"
-                              }`}
-                            >
-                              {day.label}
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </span>
-                  </span>
-                  <Image
-                    src="/figma/home-density/chevron-streak.svg"
-                    alt=""
-                    width={18}
-                    height={18}
-                    className="shrink-0"
-                  />
-                </Link>
-              </section>
-              <div aria-hidden="true" className="h-11" />
+                  다시 시도
+                </button>
+              </div>
+            ) : null}
 
-              {error ? (
-                <div
-                  role="alert"
-                  className="mb-3 flex items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 text-xs text-[#d91b34]"
-                >
-                  <p className="min-w-0 flex-1">{error}</p>
-                  <button
-                    type="button"
-                    onClick={() => setReloadKey((value) => value + 1)}
-                    className="min-h-11 shrink-0 rounded-full px-3 font-bold"
-                  >
-                    다시 시도
-                  </button>
-                </div>
-              ) : null}
+            <section className="relative h-[200px] scroll-mt-[34px] snap-start snap-always overflow-hidden rounded-[20px] bg-white p-5">
+              <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+                {dashboard?.courseProgress
+                  ? dashboard.courseProgress.title
+                  : "오늘의 추천"}
+              </span>
+              <h1 className="mt-3 text-xl leading-7 font-bold tracking-[-0.24px]">
+                {dailyDone ? (
+                  <>
+                    오늘 연습을 마쳤어요
+                    <br />
+                    내일 다시 만나요
+                  </>
+                ) : (
+                  <>
+                    오늘은 뉴스예요
+                    <br />
+                    {today.goalCount > 0
+                      ? `${today.goalCount}문장이면 끝나요`
+                      : "가볍게 시작해 봐요"}
+                  </>
+                )}
+              </h1>
+              <Link
+                href={dailyDone ? "/mypage/history" : todayHref}
+                className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
+              >
+                {dailyDone ? "기록 보기" : "시작하기"}
+              </Link>
+              <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
+                <Image
+                  src="/figma/home/news-character.png"
+                  alt="뉴스를 읽는 Speak AI 캐릭터"
+                  width={217}
+                  height={216}
+                  priority
+                  className="absolute top-[-15px] left-[-31px] h-[216px] w-[217px] max-w-none"
+                />
+              </span>
+            </section>
 
-              <section className="relative h-[200px] scroll-mt-[34px] snap-start snap-always overflow-hidden rounded-[20px] bg-white p-5">
-                <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
-                  {dashboard?.courseProgress
-                    ? dashboard.courseProgress.title
-                    : "오늘의 추천"}
-                </span>
-                <h1 className="mt-3 text-xl leading-7 font-bold tracking-[-0.24px]">
-                  {dailyDone ? (
-                    <>
-                      오늘 연습을 마쳤어요
-                      <br />
-                      내일 다시 만나요
-                    </>
-                  ) : (
-                    <>
-                      오늘은 뉴스예요
-                      <br />
-                      {today.goalCount > 0
-                        ? `${today.goalCount}문장이면 끝나요`
-                        : "가볍게 시작해 봐요"}
-                    </>
-                  )}
-                </h1>
-                <Link
-                  href={dailyDone ? "/mypage/history" : todayHref}
-                  className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
-                >
-                  {dailyDone ? "기록 보기" : "시작하기"}
-                </Link>
-                <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
-                  <Image
-                    src="/figma/home/news-character.png"
-                    alt="뉴스를 읽는 Speak AI 캐릭터"
-                    width={217}
-                    height={216}
-                    priority
-                    className="absolute top-[-15px] left-[-31px] h-[216px] w-[217px] max-w-none"
-                  />
-                </span>
-              </section>
-
-              <section className="mt-8">
-                <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
-                  무엇을 연습할까요?
-                </h2>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {PRACTICE_CARDS.map((card) => (
-                    <PracticeTile key={card.title} {...card} />
-                  ))}
-                </div>
-                <Link
-                  href="/lip-practice"
-                  className="mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] bg-white p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]"
-                >
-                  <Image
-                    src="/figma/home-density/lip-practice.svg"
-                    alt=""
-                    width={44}
-                    height={44}
-                    className="shrink-0"
-                  />
-                  <span className="min-w-0 flex-1 overflow-hidden">
-                    <span className="flex items-center gap-1.5 whitespace-nowrap">
-                      <strong className="text-[15px] leading-[22px]">
-                        입모양 보며 연습
-                      </strong>
-                      <span className="rounded-full bg-[#f2f4f6] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684]">
-                        카메라 사용
-                      </span>
-                    </span>
-                    <span className="mt-[3px] block truncate text-[13px] leading-[18px] text-[#4e5968]">
-                      영상으로 입모양과 소리를 함께 교정해요
+            <section className="mt-8">
+              <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
+                무엇을 연습할까요?
+              </h2>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {PRACTICE_CARDS.map((card) => (
+                  <PracticeTile key={card.title} {...card} />
+                ))}
+              </div>
+              <Link
+                href="/lip-practice"
+                className="mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] bg-white p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]"
+              >
+                <Image
+                  src="/figma/home-density/lip-practice.svg"
+                  alt=""
+                  width={44}
+                  height={44}
+                  className="shrink-0"
+                />
+                <span className="min-w-0 flex-1 overflow-hidden">
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <strong className="text-[15px] leading-[22px]">
+                      입모양 보며 연습
+                    </strong>
+                    <span className="rounded-full bg-[#f2f4f6] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684]">
+                      카메라 사용
                     </span>
                   </span>
-                  <Image
-                    src="/figma/home-density/chevron-feature.svg"
-                    alt=""
-                    width={20}
-                    height={20}
-                    className="shrink-0"
-                  />
-                </Link>
-              </section>
+                  <span className="mt-[3px] block truncate text-[13px] leading-[18px] text-[#4e5968]">
+                    영상으로 입모양과 소리를 함께 교정해요
+                  </span>
+                </span>
+                <Image
+                  src="/figma/home-density/chevron-feature.svg"
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="shrink-0"
+                />
+              </Link>
+            </section>
 
-              <section className="mt-8 pb-1">
-                <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
-                  진행 중인 연습
-                </h2>
-                <div className="mt-3 space-y-2">
-                  {dashboard?.recentTraining ? (
+            <section className="mt-8 pb-1">
+              <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
+                진행 중인 연습
+              </h2>
+              <div className="mt-3 space-y-2">
+                {dashboard?.recentTraining ? (
+                  <ContinueCard
+                    href={
+                      dashboard.recentTraining.status === "COMPLETED"
+                        ? `/mypage/history/${dashboard.recentTraining.sessionId}`
+                        : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
+                    }
+                    title={dashboard.recentTraining.title}
+                    detail={
+                      dashboard.recentTraining.status === "COMPLETED"
+                        ? "최근 완료한 연습"
+                        : "멈춘 지점부터 이어서 시작해요"
+                    }
+                    badge="최근"
+                    ring="/figma/home-density/progress-announcer-ring.svg"
+                    icon="/figma/home-density/progress-announcer.svg"
+                    iconWidth={10.462}
+                    iconHeight={23.538}
+                    badgeColor="#bfceff"
+                    count={
+                      dashboard.recentTraining.status === "COMPLETED"
+                        ? "완료"
+                        : "계속"
+                    }
+                  />
+                ) : null}
+                {recentCourses.map((course) => (
+                  <ContinueCard
+                    key={String(course.id)}
+                    href={`/class/${course.courseType.toLowerCase()}`}
+                    title={
+                      course.courseType === "INTONATION"
+                        ? "억양 클래스"
+                        : "발음 클래스"
+                    }
+                    detail={course.title}
+                    ring={
+                      course.courseType === "INTONATION"
+                        ? "/figma/home-density/progress-intonation-ring.svg"
+                        : "/figma/home-density/progress-pronunciation-ring.svg"
+                    }
+                    icon={
+                      course.courseType === "INTONATION"
+                        ? "/figma/home-density/progress-intonation.svg"
+                        : "/figma/home-density/progress-pronunciation.svg"
+                    }
+                    iconWidth={
+                      course.courseType === "INTONATION" ? 28.333 : 20.778
+                    }
+                    iconHeight={17}
+                    badgeColor="#e2eaff"
+                    chevron={
+                      course.courseType === "INTONATION"
+                        ? "/figma/home-density/chevron-intonation.svg"
+                        : undefined
+                    }
+                    count={`${Math.round(course.progressPercent)}%`}
+                  />
+                ))}
+                {!dashboard?.recentTraining && recentCourses.length === 0 ? (
+                  <>
                     <ContinueCard
-                      href={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? `/mypage/history/${dashboard.recentTraining.sessionId}`
-                          : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
-                      }
-                      title={dashboard.recentTraining.title}
-                      detail={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? "최근 완료한 연습"
-                          : "멈춘 지점부터 이어서 시작해요"
-                      }
+                      href="/announcer"
+                      title="아나운서 따라 읽기"
+                      detail="4번째 문장부터"
                       badge="최근"
                       ring="/figma/home-density/progress-announcer-ring.svg"
                       icon="/figma/home-density/progress-announcer.svg"
                       iconWidth={10.462}
                       iconHeight={23.538}
                       badgeColor="#bfceff"
-                      count={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? "완료"
-                          : "계속"
-                      }
+                      count="3/5"
                     />
-                  ) : null}
-                  {recentCourses.map((course) => (
                     <ContinueCard
-                      key={String(course.id)}
-                      href={`/class/${course.courseType.toLowerCase()}`}
-                      title={
-                        course.courseType === "INTONATION"
-                          ? "억양 클래스"
-                          : "발음 클래스"
-                      }
-                      detail={course.title}
-                      ring={
-                        course.courseType === "INTONATION"
-                          ? "/figma/home-density/progress-intonation-ring.svg"
-                          : "/figma/home-density/progress-pronunciation-ring.svg"
-                      }
-                      icon={
-                        course.courseType === "INTONATION"
-                          ? "/figma/home-density/progress-intonation.svg"
-                          : "/figma/home-density/progress-pronunciation.svg"
-                      }
-                      iconWidth={
-                        course.courseType === "INTONATION" ? 28.333 : 20.778
-                      }
+                      href="/class/pronunciation"
+                      title="발음 클래스"
+                      detail="5단계 받침 ㄹ 소리"
+                      ring="/figma/home-density/progress-pronunciation-ring.svg"
+                      icon="/figma/home-density/progress-pronunciation.svg"
+                      iconWidth={20.778}
                       iconHeight={17}
                       badgeColor="#e2eaff"
-                      chevron={
-                        course.courseType === "INTONATION"
-                          ? "/figma/home-density/chevron-intonation.svg"
-                          : undefined
-                      }
-                      count={`${Math.round(course.progressPercent)}%`}
+                      count="4/12"
                     />
-                  ))}
-                  {!dashboard?.recentTraining && recentCourses.length === 0 ? (
-                    <>
-                      <ContinueCard
-                        href="/announcer"
-                        title="아나운서 따라 읽기"
-                        detail="4번째 문장부터"
-                        badge="최근"
-                        ring="/figma/home-density/progress-announcer-ring.svg"
-                        icon="/figma/home-density/progress-announcer.svg"
-                        iconWidth={10.462}
-                        iconHeight={23.538}
-                        badgeColor="#bfceff"
-                        count="3/5"
-                      />
-                      <ContinueCard
-                        href="/class/pronunciation"
-                        title="발음 클래스"
-                        detail="5단계 받침 ㄹ 소리"
-                        ring="/figma/home-density/progress-pronunciation-ring.svg"
-                        icon="/figma/home-density/progress-pronunciation.svg"
-                        iconWidth={20.778}
-                        iconHeight={17}
-                        badgeColor="#e2eaff"
-                        count="4/12"
-                      />
-                      <ContinueCard
-                        href="/class/intonation"
-                        title="억양 클래스"
-                        detail="3단계 문장 끝 내리기"
-                        ring="/figma/home-density/progress-intonation-ring.svg"
-                        icon="/figma/home-density/progress-intonation.svg"
-                        iconWidth={28.333}
-                        iconHeight={17}
-                        badgeColor="#e2eaff"
-                        chevron="/figma/home-density/chevron-intonation.svg"
-                        count="2/10"
-                      />
-                    </>
-                  ) : null}
-                </div>
-              </section>
-            </div>
+                    <ContinueCard
+                      href="/class/intonation"
+                      title="억양 클래스"
+                      detail="3단계 문장 끝 내리기"
+                      ring="/figma/home-density/progress-intonation-ring.svg"
+                      icon="/figma/home-density/progress-intonation.svg"
+                      iconWidth={28.333}
+                      iconHeight={17}
+                      badgeColor="#e2eaff"
+                      chevron="/figma/home-density/chevron-intonation.svg"
+                      count="2/10"
+                    />
+                  </>
+                ) : null}
+              </div>
+            </section>
           </div>
         </main>
       </div>
