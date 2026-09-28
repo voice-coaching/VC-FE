@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Ring" clip-path="url(#clip0_0_69)">
+<path id="Ellipse" d="M48 24C48 37.2548 37.2548 48 24 48C10.7452 48 0 37.2548 0 24C0 10.7452 10.7452 0 24 0C37.2548 0 48 10.7452 48 24ZM2.88 24C2.88 35.6643 12.3357 45.12 24 45.12C35.6643 45.12 45.12 35.6643 45.12 24C45.12 12.3357 35.6643 2.88 24 2.88C12.3357 2.88 2.88 12.3357 2.88 24Z" fill="#EDF0F3"/>
+<path id="Ellipse_2" d="M24 0C29.0683 -2.21543e-07 34.0065 1.60452 38.1068 4.58359C42.2072 7.56266 45.2592 11.7634 46.8254 16.5836L44.0863 17.4736C42.7081 13.2317 40.0223 9.53515 36.414 6.91356C32.8057 4.29198 28.4601 2.88 24 2.88L24 0Z" fill="#2F6BFF"/>
+</g>
+<defs>
+<clipPath id="clip0_0_69">
+<rect width="48" height="48" fill="white"/>
+</clipPath>
+</defs>
+</svg>

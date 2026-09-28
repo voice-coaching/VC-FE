@@ -6,9 +6,21 @@ import { setTabTransitionDirection } from "@/lib/tab-transition";
 import styles from "./prototype-bottom-nav.module.css";
 
 const tabs = [
-  { href: "/home", label: "홈", icon: "tab-home" },
-  { href: "/class", label: "클래스", icon: "tab-class" },
-  { href: "/mypage", label: "마이", icon: "tab-my" },
+  {
+    href: "/home",
+    label: "홈",
+    icon: "/figma/home-density/tab-home-fill.svg",
+  },
+  {
+    href: "/class",
+    label: "클래스",
+    icon: "/figma/home-density/tab-book-fill.svg",
+  },
+  {
+    href: "/mypage",
+    label: "마이",
+    icon: "/figma/home-density/tab-person-fill.svg",
+  },
 ] as const;
 
 export function PrototypeBottomNav() {
@@ -40,8 +52,8 @@ export function PrototypeBottomNav() {
                   aria-hidden="true"
                   className={styles.icon}
                   style={{
-                    maskImage: `url(/figma/home/${icon}.svg)`,
-                    WebkitMaskImage: `url(/figma/home/${icon}.svg)`,
+                    maskImage: `url(${icon})`,
+                    WebkitMaskImage: `url(${icon})`,
                   }}
                 />
                 <span>{label}</span>
