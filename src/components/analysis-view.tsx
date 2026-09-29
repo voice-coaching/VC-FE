@@ -654,7 +654,7 @@ function ReportOverlay({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col bg-[#f2f4f6] pt-[max(44px,env(safe-area-inset-top,0px))] text-[#191f28]">
+    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28]">
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
         <button
           type="button"

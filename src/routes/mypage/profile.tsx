@@ -113,7 +113,11 @@ export default function ProfileSettings() {
   }
 
   return (
-    <AppShell nav={false} className="flex min-h-dvh flex-col !bg-white">
+    <AppShell
+      nav={false}
+      chromeColor="#ffffff"
+      className="flex min-h-dvh flex-col !bg-white"
+    >
       <TopBar to="/mypage/settings" title="프로필 수정" />
       <div className="flex-1 space-y-6 px-6 pt-8">
         <section

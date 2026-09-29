@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { preferredVideoMimeType, releaseLipResources } from "./lip-practice";
+import {
+  prepareVideoForAnalysis,
+  preferredVideoMimeType,
+  releaseLipResources,
+} from "./lip-practice";
 
 test("video mime selection uses the first supported format", () => {
   assert.equal(
@@ -10,6 +14,24 @@ test("video mime selection uses the first supported format", () => {
   assert.equal(
     preferredVideoMimeType(() => false),
     undefined,
+  );
+});
+
+test("video preparation normalizes codecs and keeps an accepted MP4", () => {
+  const source = new Blob(["video"], { type: "video/mp4;codecs=h264,aac" });
+  const prepared = prepareVideoForAnalysis(source, ["video/mp4"]);
+
+  assert.equal(prepared.mimeType, "video/mp4");
+  assert.equal(prepared.extension, "mp4");
+  assert.equal(prepared.blob.size, source.size);
+});
+
+test("video preparation rejects a format the server does not accept", () => {
+  const source = new Blob(["video"], { type: "video/webm" });
+
+  assert.throws(
+    () => prepareVideoForAnalysis(source, ["video/mp4"]),
+    /서버가 지원하지 않습니다/,
   );
 });
 

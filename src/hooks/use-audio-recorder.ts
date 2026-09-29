@@ -6,12 +6,14 @@ export type RecorderStatus =
   | "idle"
   | "requesting"
   | "recording"
+  | "stopping"
   | "recorded"
   | "denied"
   | "unsupported"
   | "error";
 
 const MAX_RECORDING_MS = 60_000;
+const RECORDING_TAIL_PADDING_MS = 250;
 const SUPPORTED_MIME_TYPES = [
   "audio/webm;codecs=opus",
   "audio/mp4",
@@ -126,12 +128,15 @@ export function useAudioRecorder() {
   const startedAtRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimers = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (stopDelayRef.current) clearTimeout(stopDelayRef.current);
     intervalRef.current = null;
     timeoutRef.current = null;
+    stopDelayRef.current = null;
   }, []);
 
   const stopTracks = useCallback(() => {
@@ -141,12 +146,26 @@ export function useAudioRecorder() {
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
-    if (recorder?.state === "recording") recorder.stop();
+    if (recorder?.state !== "recording" || stopDelayRef.current) return;
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    intervalRef.current = null;
+    timeoutRef.current = null;
+    setElapsedMs(Date.now() - startedAtRef.current);
+    setStatus("stopping");
+
+    // Preserve the final syllable while the recorder flushes its encoder.
+    stopDelayRef.current = setTimeout(() => {
+      stopDelayRef.current = null;
+      if (recorder.state === "recording") recorder.stop();
+    }, RECORDING_TAIL_PADDING_MS);
   }, []);
 
   const getStream = useCallback(() => streamRef.current, []);
 
   const start = useCallback(async () => {
+    clearTimers();
     setError(null);
     setBlob(null);
     setElapsedMs(0);
@@ -211,7 +230,10 @@ export function useAudioRecorder() {
         () => setElapsedMs(Date.now() - startedAtRef.current),
         200,
       );
-      timeoutRef.current = setTimeout(stop, MAX_RECORDING_MS);
+      timeoutRef.current = setTimeout(
+        stop,
+        MAX_RECORDING_MS - RECORDING_TAIL_PADDING_MS,
+      );
       return true;
     } catch (reason) {
       stopTracks();
@@ -229,23 +251,37 @@ export function useAudioRecorder() {
   }, [clearTimers, stop, stopTracks]);
 
   const reset = useCallback(() => {
-    stop();
     clearTimers();
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") {
+      recorder.ondataavailable = null;
+      recorder.onerror = null;
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
     stopTracks();
     setBlob(null);
     setDurationMs(0);
     setElapsedMs(0);
     setError(null);
     setStatus("idle");
-  }, [clearTimers, stop, stopTracks]);
+  }, [clearTimers, stopTracks]);
 
   useEffect(
     () => () => {
-      stop();
       clearTimers();
+      const recorder = recorderRef.current;
+      if (recorder?.state === "recording") {
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+        recorder.onstop = null;
+        recorder.stop();
+      }
       stopTracks();
     },
-    [clearTimers, stop, stopTracks],
+    [clearTimers, stopTracks],
   );
 
   const previewUrl = useMemo(
