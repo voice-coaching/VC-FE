@@ -19,7 +19,10 @@ import {
   readMyPageOverviewCache,
   updateMyPageOverviewCache,
 } from "@/lib/my-page-cache";
-import { getUserTitleProgress } from "@/lib/user-title";
+import {
+  getTitleTrainingCountDisplay,
+  getUserTitleProgress,
+} from "@/lib/user-title";
 import { cn } from "@/lib/utils";
 
 const FILTERS: Array<{ value?: ContentType; label: string }> = [
@@ -469,6 +472,10 @@ function MyPageHead({
   examStarting: boolean;
   onExam: () => void;
 }) {
+  const trainingCount = titleProgress
+    ? getTitleTrainingCountDisplay(titleProgress)
+    : null;
+
   return (
     <div className="bg-white px-5 pt-4">
       {titleProgress ? (
@@ -485,14 +492,9 @@ function MyPageHead({
               {titleProgress.next
                 ? `다음 칭호  ${titleProgress.next.label}  `
                 : "누적 연습  "}
-              <b className="text-primary">
-                {titleProgress.completedTrainingCount}
-              </b>
+              <b className="text-primary">{trainingCount?.completed}</b>
               <span className="text-[#8b95a1]">
-                /
-                {titleProgress.next?.requiredTrainingCount ??
-                  titleProgress.completedTrainingCount}
-                회
+                /{trainingCount?.required}회
               </span>
             </p>
           </div>

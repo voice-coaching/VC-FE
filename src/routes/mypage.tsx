@@ -17,7 +17,10 @@ import {
   readMyPageOverviewCache,
   updateMyPageOverviewCache,
 } from "@/lib/my-page-cache";
-import { getUserTitleProgress } from "@/lib/user-title";
+import {
+  getTitleTrainingCountDisplay,
+  getUserTitleProgress,
+} from "@/lib/user-title";
 
 function titlePercent(progress: UserTitleProgress | null) {
   if (!progress) return 0;
@@ -115,6 +118,9 @@ export default function MyPage() {
   }, [initialOverview]);
 
   const percent = titlePercent(titleProgress);
+  const titleTrainingCount = titleProgress
+    ? getTitleTrainingCountDisplay(titleProgress)
+    : null;
   const displayName = account?.nickname ?? initialOverview?.nickname;
   const totalSeconds = statistics?.totalLearningSeconds ?? 0;
   const hours = Math.floor(totalSeconds / 3600);
@@ -229,13 +235,10 @@ export default function MyPage() {
                     ? `다음 칭호  ${titleProgress.next.label}  `
                     : "최고 칭호"}
                   <b className="text-primary">
-                    {titleProgress.completedTrainingCount}
+                    {titleTrainingCount?.completed}
                   </b>
                   <span className="text-[#8b95a1]">
-                    /
-                    {titleProgress.next?.requiredTrainingCount ??
-                      titleProgress.completedTrainingCount}
-                    회
+                    /{titleTrainingCount?.required}회
                   </span>
                 </span>
               </span>

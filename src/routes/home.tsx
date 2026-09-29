@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
   type CourseDetail,
@@ -172,16 +172,9 @@ export default function Home() {
   const [weekSessions, setWeekSessions] = useState<TrainingHistoryItem[]>(
     initialCache?.weekSessions ?? [],
   );
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const headerVisibleRef = useRef(true);
-  const previousScrollTop = useRef(0);
-  const scrollDirection = useRef<"up" | "down" | null>(null);
-  const directionalDistance = useRef(0);
-  const suppressScrollUntil = useRef(0);
-  const pendingScrollTop = useRef(0);
-  const scrollFrame = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -309,6 +302,25 @@ export default function Home() {
     };
   }, [cacheResource, initialCache, reloadKey, userId]);
 
+  useEffect(() => {
+    let active = true;
+    api.notifications
+      .list({ page: 0, size: 1, unreadOnly: true })
+      .then((result) => {
+        if (active) {
+          setHasUnreadNotifications(
+            result.unreadCount > 0 && result.items.length > 0,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) setHasUnreadNotifications(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
   const firstRecommendation = combineRecommendations(
     recommendations,
     dashboard?.recommendations ?? [],
@@ -339,77 +351,13 @@ export default function Home() {
   );
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
 
-  function updateHeaderVisibility(visible: boolean) {
-    if (headerVisibleRef.current === visible) return;
-    headerVisibleRef.current = visible;
-    suppressScrollUntil.current = Date.now() + 260;
-    setHeaderVisible(visible);
-  }
-
-  function updateHeaderForScroll(scrollTop: number) {
-    const delta = scrollTop - previousScrollTop.current;
-    previousScrollTop.current = scrollTop;
-
-    if (scrollTop <= 12) {
-      scrollDirection.current = null;
-      directionalDistance.current = 0;
-      updateHeaderVisibility(true);
-      return;
-    }
-    if (Math.abs(delta) < 1) return;
-    if (Date.now() < suppressScrollUntil.current) {
-      scrollDirection.current = null;
-      directionalDistance.current = 0;
-      return;
-    }
-
-    const nextDirection = delta > 0 ? "down" : "up";
-    if (scrollDirection.current !== nextDirection) {
-      scrollDirection.current = nextDirection;
-      directionalDistance.current = 0;
-    }
-    directionalDistance.current += Math.abs(delta);
-
-    const threshold = nextDirection === "down" ? 24 : 10;
-    if (directionalDistance.current < threshold) return;
-
-    updateHeaderVisibility(nextDirection === "up");
-    directionalDistance.current = 0;
-  }
-
-  function handleHomeScroll(event: UIEvent<HTMLElement>) {
-    pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
-    if (scrollFrame.current !== null) return;
-
-    scrollFrame.current = window.requestAnimationFrame(() => {
-      scrollFrame.current = null;
-      updateHeaderForScroll(pendingScrollTop.current);
-    });
-  }
-
-  useEffect(() => {
-    return () => {
-      if (scrollFrame.current !== null) {
-        window.cancelAnimationFrame(scrollFrame.current);
-      }
-    };
-  }, []);
-
   return (
-    <AppShell
-      viewportLocked
-      chromeColor={headerVisible ? "#2f6bff" : "#f2f4f6"}
-    >
+    <AppShell viewportLocked chromeColor="#2f6bff">
       <div
-        className={`relative flex h-full min-h-0 flex-col overflow-hidden text-[#191f28] transition-colors duration-200 ${
-          headerVisible ? "bg-[#2f6bff]" : "bg-[#f2f4f6]"
-        }`}
+        data-scroll-container="home"
+        className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#2f6bff] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <header
-          data-state={headerVisible ? "visible" : "hidden"}
-          aria-hidden={!headerVisible}
-          className={`${styles.homeHeader} relative z-20 bg-[#2f6bff]`}
-        >
+        <header className={`${styles.homeHeader} relative z-20 bg-[#2f6bff]`}>
           <div className="flex h-16 items-center px-5">
             <Image
               src="/figma/home-density/brand.svg"
@@ -422,7 +370,6 @@ export default function Home() {
             <Link
               href="/home/notifications"
               aria-label="알림 보기"
-              tabIndex={headerVisible ? undefined : -1}
               className="relative flex size-11 items-center justify-end"
             >
               <Image
@@ -431,20 +378,21 @@ export default function Home() {
                 width={28}
                 height={28}
               />
-              <Image
-                src="/figma/home-density/badge-dot.svg"
-                alt=""
-                width={8}
-                height={8}
-                className="absolute top-[9px] right-0"
-              />
+              {hasUnreadNotifications ? (
+                <Image
+                  src="/figma/home-density/badge-dot.svg"
+                  alt=""
+                  width={8}
+                  height={8}
+                  className="absolute top-[9px] right-0"
+                />
+              ) : null}
             </Link>
           </div>
 
           <section className="mx-5 mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
             <Link
               href="/home/streak"
-              tabIndex={headerVisible ? undefined : -1}
               className="flex h-full items-center gap-3"
             >
               <span className="min-w-0 flex-1">
@@ -508,13 +456,9 @@ export default function Home() {
           </section>
         </header>
 
-        <main
-          onScroll={handleHomeScroll}
-          data-scroll-container="home"
-          className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain rounded-t-[24px] bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
+        <main className="relative z-10 min-h-full rounded-t-[24px] bg-[#f2f4f6]">
           <div className="relative min-h-full pb-8">
-            <div className="relative snap-start snap-always px-5 pt-5">
+            <div className="relative px-5 pt-5">
               {error ? (
                 <div
                   role="alert"
@@ -531,7 +475,7 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <section className="relative h-[200px] scroll-mt-[34px] snap-start snap-always overflow-hidden rounded-[20px] bg-white p-5">
+              <section className="relative h-[200px] overflow-hidden rounded-[20px] bg-white p-5">
                 <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
                   {dashboard?.courseProgress
                     ? dashboard.courseProgress.title

@@ -75,3 +75,18 @@ export function getUserTitleProgress(
     updatedAt,
   };
 }
+
+export function getTitleTrainingCountDisplay(progress: UserTitleProgress) {
+  const required = progress.next?.requiredTrainingCount;
+  if (required === undefined) {
+    return {
+      completed: progress.completedTrainingCount,
+      required: progress.completedTrainingCount,
+    };
+  }
+
+  return {
+    completed: Math.min(progress.completedTrainingCount, required),
+    required,
+  };
+}
