@@ -308,13 +308,17 @@ export function createHttpClient(baseUrl: string) {
     audio: Blob,
     headers: Record<string, string>,
     onProgress?: (percent: number) => void,
+    authorize = false,
   ) {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
-      Object.entries(headers).forEach(([key, value]) =>
-        xhr.setRequestHeader(key, value),
-      );
+      const requestHeaders = new Headers(headers);
+      const token = getAccessToken();
+      if (authorize && token && !requestHeaders.has("Authorization")) {
+        requestHeaders.set("Authorization", `Bearer ${token}`);
+      }
+      requestHeaders.forEach((value, key) => xhr.setRequestHeader(key, value));
       xhr.timeout = 60_000;
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable)
@@ -325,11 +329,17 @@ export function createHttpClient(baseUrl: string) {
           onProgress?.(100);
           resolve();
         } else {
+          const uploadAuthorizationFailed =
+            xhr.status === 401 || xhr.status === 403;
           reject(
             new ApiError(
-              "음성 파일 업로드에 실패했습니다.",
+              uploadAuthorizationFailed
+                ? "녹음 파일 업로드 승인이 만료되었거나 올바르지 않습니다."
+                : "음성 파일 업로드에 실패했습니다.",
               xhr.status,
-              "UPLOAD_FAILED",
+              uploadAuthorizationFailed
+                ? "UPLOAD_AUTHORIZATION_FAILED"
+                : "UPLOAD_FAILED",
             ),
           );
         }

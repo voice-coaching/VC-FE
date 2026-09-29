@@ -35,6 +35,7 @@ import {
   type LipClip,
   type LipPracticeStep,
 } from "@/lib/lip-practice";
+import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
 
 const MAX_RECORDING_MS = 12_000;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -321,16 +322,21 @@ export default function LipPractice() {
       if (sessionId == null) throw new Error("학습 세션을 만들지 못했어요.");
 
       setAnalysisPhase("uploading");
-      const uploadInfo = await api.training.getUploadUrl(sessionId, {
+      const uploadInput = {
         fileName: `lip-practice-${Date.now()}.${prepared.extension}`,
         mimeType: prepared.mimeType,
         fileSizeBytes: prepared.blob.size,
+      };
+      const uploadInfo = await uploadRecordingWithFreshUrl({
+        issueUploadUrl: () => api.training.getUploadUrl(sessionId, uploadInput),
+        upload: (currentUpload) =>
+          api.training.uploadRecording(
+            currentUpload,
+            prepared.blob,
+            setUploadProgress,
+          ),
+        onRetry: () => setUploadProgress(0),
       });
-      await api.training.uploadRecording(
-        uploadInfo,
-        prepared.blob,
-        setUploadProgress,
-      );
       const recording = await api.training.registerRecording(sessionId, {
         objectKey: uploadInfo.objectKey,
         mimeType: prepared.mimeType,

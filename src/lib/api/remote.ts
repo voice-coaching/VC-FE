@@ -42,6 +42,38 @@ function query(params: Record<string, QueryValue>) {
 
 const id = (value: Id) => encodeURIComponent(String(value));
 
+function uploadTarget(baseUrl: string, uploadUrl: string) {
+  const url = uploadUrl.trim();
+  const external = /^(?:https?:)?\/\//i.test(url);
+  if (!external) {
+    return {
+      url: `${baseUrl.replace(/\/$/, "")}${url.startsWith("/") ? url : `/${url}`}`,
+      authorize: true,
+    };
+  }
+
+  let authorize = false;
+  try {
+    const fallbackOrigin =
+      typeof window === "undefined"
+        ? "https://frontend.invalid"
+        : window.location.origin;
+    const backend = new URL(baseUrl, fallbackOrigin);
+    const target = new URL(url, fallbackOrigin);
+    const backendPath = backend.pathname.replace(/\/$/, "");
+    authorize =
+      target.origin === backend.origin &&
+      (!backendPath ||
+        target.pathname === backendPath ||
+        target.pathname.startsWith(`${backendPath}/`));
+  } catch {}
+
+  return {
+    url,
+    authorize,
+  };
+}
+
 function profileImageForm(input: { file: Blob; fileName: string }) {
   const form = new FormData();
   form.set("file", input.file, input.fileName);
@@ -329,13 +361,16 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             body: input,
           },
         ),
-      uploadRecording: (uploadInfo, audio, onProgress) =>
-        upload(
-          uploadInfo.uploadUrl,
+      uploadRecording: (uploadInfo, audio, onProgress) => {
+        const target = uploadTarget(baseUrl, uploadInfo.uploadUrl);
+        return upload(
+          target.url,
           audio,
-          uploadInfo.requiredHeaders,
+          uploadInfo.requiredHeaders ?? {},
           onProgress,
-        ),
+          target.authorize,
+        );
+      },
       registerRecording: (sessionId, input) =>
         request(`/api/training-sessions/${id(sessionId)}/recordings`, {
           method: "POST",

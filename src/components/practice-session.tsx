@@ -29,6 +29,7 @@ import {
 } from "@/lib/practice-error";
 import { splitSentences } from "@/lib/sentences";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
 import { cacheResources } from "@/lib/cache-resources";
 import {
   CLIENT_CACHE_LIVE_MAX_AGE_MS,
@@ -485,16 +486,22 @@ export function PracticeSession({
       }
       const activeSessionId = await ensureSession();
       setPhase("uploading");
-      const uploadInfo = await api.training.getUploadUrl(activeSessionId, {
+      const uploadInput = {
         fileName: `recording-${Date.now()}.${prepared.extension}`,
         mimeType: prepared.mimeType,
         fileSizeBytes: prepared.blob.size,
+      };
+      const uploadInfo = await uploadRecordingWithFreshUrl({
+        issueUploadUrl: () =>
+          api.training.getUploadUrl(activeSessionId, uploadInput),
+        upload: (currentUpload) =>
+          api.training.uploadRecording(
+            currentUpload,
+            prepared.blob,
+            setUploadProgress,
+          ),
+        onRetry: () => setUploadProgress(0),
       });
-      await api.training.uploadRecording(
-        uploadInfo,
-        prepared.blob,
-        setUploadProgress,
-      );
       const recording = await api.training.registerRecording(activeSessionId, {
         objectKey: uploadInfo.objectKey,
         mimeType: prepared.mimeType,
