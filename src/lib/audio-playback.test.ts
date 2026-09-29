@@ -12,6 +12,11 @@ test("positive media metadata replaces the fallback duration", () => {
   assert.equal(resolveAudioDuration(6.24, 6), 6.24);
 });
 
+test("implausibly short embedded metadata does not replace the recording clock", () => {
+  assert.equal(resolveAudioDuration(0.04, 7), 7);
+  assert.equal(resolveAudioDuration(3, 7), 3);
+});
+
 test("remaining playback time starts at the full duration and clamps at zero", () => {
   assert.equal(remainingAudioDuration(6, 0), 6);
   assert.equal(remainingAudioDuration(6, 1.5), 4.5);

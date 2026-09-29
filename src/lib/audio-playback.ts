@@ -2,12 +2,15 @@ export function resolveAudioDuration(
   mediaDuration: number,
   fallbackDuration: number,
 ) {
+  const fallback =
+    Number.isFinite(fallbackDuration) && fallbackDuration > 0
+      ? fallbackDuration
+      : 0;
   if (Number.isFinite(mediaDuration) && mediaDuration > 0) {
+    if (fallback >= 1 && mediaDuration < 0.5) return fallback;
     return mediaDuration;
   }
-  return Number.isFinite(fallbackDuration) && fallbackDuration > 0
-    ? fallbackDuration
-    : 0;
+  return fallback;
 }
 
 export function remainingAudioDuration(duration: number, elapsed: number) {

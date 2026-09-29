@@ -74,7 +74,10 @@ async function convertToMonoWav(source: Blob) {
       );
     }
 
-    return new Blob([buffer], { type: "audio/wav" });
+    return {
+      blob: new Blob([buffer], { type: "audio/wav" }),
+      durationMs: Math.round(decoded.duration * 1_000),
+    };
   } catch {
     throw new Error("녹음 파일을 AI 분석용 형식으로 변환하지 못했습니다.");
   } finally {
@@ -104,8 +107,9 @@ export async function prepareAudioForAnalysis(
   }
 
   if (accepted.includes("audio/wav")) {
+    const converted = await convertToMonoWav(source);
     return {
-      blob: await convertToMonoWav(source),
+      blob: converted.blob,
       mimeType: "audio/wav",
       extension: "wav",
     };
@@ -119,6 +123,7 @@ export async function prepareAudioForAnalysis(
 export function useAudioRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [durationMs, setDurationMs] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +134,7 @@ export function useAudioRecorder() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recordingGenerationRef = useRef(0);
 
   const clearTimers = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -166,8 +172,10 @@ export function useAudioRecorder() {
 
   const start = useCallback(async () => {
     clearTimers();
+    const recordingGeneration = ++recordingGenerationRef.current;
     setError(null);
     setBlob(null);
+    setPreviewBlob(null);
     setElapsedMs(0);
     if (
       typeof navigator === "undefined" ||
@@ -187,6 +195,10 @@ export function useAudioRecorder() {
           autoGainControl: true,
         },
       });
+      if (recordingGeneration !== recordingGenerationRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return false;
+      }
       streamRef.current = stream;
       chunksRef.current = [];
       const mimeType = SUPPORTED_MIME_TYPES.find((type) =>
@@ -207,18 +219,44 @@ export function useAudioRecorder() {
         setError("녹음 중 오류가 발생했습니다.");
       };
       recorder.onstop = () => {
-        const duration = Date.now() - startedAtRef.current;
+        const measuredDuration = Date.now() - startedAtRef.current;
         const recorded = new Blob(chunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
         clearTimers();
         stopTracks();
-        setDurationMs(duration);
-        setElapsedMs(duration);
-        setBlob(recorded);
-        setStatus(recorded.size > 0 ? "recorded" : "error");
-        if (!recorded.size)
+        recorderRef.current = null;
+
+        if (!recorded.size) {
+          setStatus("error");
           setError("녹음된 음성이 없습니다. 다시 시도해 주세요.");
+          return;
+        }
+
+        // MediaRecorder WebM/MP4 blobs can expose a zero or truncated duration
+        // in embedded WebViews. Decode once and use a WAV copy for local
+        // playback; keep the original blob for the server upload.
+        void (async () => {
+          let playable = recorded;
+          let playableDuration = measuredDuration;
+          try {
+            const converted = await convertToMonoWav(recorded);
+            playable = converted.blob;
+            if (converted.durationMs > 0) {
+              playableDuration = converted.durationMs;
+            }
+          } catch {
+            // The original recording remains uploadable and is a safe fallback
+            // on browsers that cannot decode their own MediaRecorder output.
+          }
+
+          if (recordingGeneration !== recordingGenerationRef.current) return;
+          setDurationMs(playableDuration);
+          setElapsedMs(playableDuration);
+          setBlob(recorded);
+          setPreviewBlob(playable);
+          setStatus("recorded");
+        })();
       };
       startedAtRef.current = Date.now();
       // A timeslice produces fragmented MP4 chunks in Safari/iOS. Joining those
@@ -251,6 +289,7 @@ export function useAudioRecorder() {
   }, [clearTimers, stop, stopTracks]);
 
   const reset = useCallback(() => {
+    recordingGenerationRef.current += 1;
     clearTimers();
     const recorder = recorderRef.current;
     if (recorder?.state === "recording") {
@@ -263,6 +302,7 @@ export function useAudioRecorder() {
     chunksRef.current = [];
     stopTracks();
     setBlob(null);
+    setPreviewBlob(null);
     setDurationMs(0);
     setElapsedMs(0);
     setError(null);
@@ -271,6 +311,7 @@ export function useAudioRecorder() {
 
   useEffect(
     () => () => {
+      recordingGenerationRef.current += 1;
       clearTimers();
       const recorder = recorderRef.current;
       if (recorder?.state === "recording") {
@@ -285,8 +326,8 @@ export function useAudioRecorder() {
   );
 
   const previewUrl = useMemo(
-    () => (blob ? URL.createObjectURL(blob) : null),
-    [blob],
+    () => (previewBlob ? URL.createObjectURL(previewBlob) : null),
+    [previewBlob],
   );
   useEffect(
     () => () => {
