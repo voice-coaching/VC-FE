@@ -884,18 +884,20 @@ export function PracticeSession({
                 <button
                   type="button"
                   onClick={recorder.stop}
-                  className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff]"
+                  disabled={recorder.status === "stopping"}
+                  className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-55"
                   aria-label="녹음 종료"
                 >
                   <span className="size-6 rounded-md bg-white" />
                 </button>
                 <button
                   type="button"
+                  disabled={recorder.status === "stopping"}
                   onClick={() => {
                     if (activeSentence >= sentences.length - 1) recorder.stop();
                     else setActiveSentence((current) => current + 1);
                   }}
-                  className="flex flex-col items-center gap-1.5 pt-2.5"
+                  className="flex flex-col items-center gap-1.5 pt-2.5 disabled:opacity-55"
                 >
                   <span className="flex size-14 items-center justify-center rounded-full bg-[#191f28]">
                     <Image

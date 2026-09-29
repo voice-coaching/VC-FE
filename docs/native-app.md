@@ -36,7 +36,7 @@ Xcode 열기:
 npm run native:ios
 ```
 
-앱 아이콘이나 스플래시 이미지를 바꿀 때는 `assets/logo.png`를 교체한 뒤 `npm run native:assets`와 `npm run native:sync`를 순서대로 실행합니다. 에셋 생성기는 상시 의존성으로 두지 않고 이 명령에서 일회성으로 실행됩니다.
+앱 아이콘은 `public/favicon.svg`에서 생성됩니다. `npm run native:assets`가 이 파일을 iOS용 `assets/icon-only.svg`와 Android 적응형 아이콘용 `assets/icon-foreground.svg`로 먼저 동기화합니다. 네이티브 스플래시 에셋의 원본은 `assets/logo.png`입니다. 원본을 바꾼 뒤 `npm run native:assets`와 `npm run native:sync`를 순서대로 실행합니다. iOS의 첫 LaunchScreen은 이미지 없이 브랜드 파란색만 표시하고, 실제 스플래시 이미지는 웹 앱에서 한 번만 표시합니다. 에셋 생성기는 상시 의존성으로 두지 않고 이 명령에서 일회성으로 실행됩니다.
 
 ## 배포 전 확인
 

@@ -4,6 +4,10 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
 import { api, type Id, type ReferenceAudio } from "@/lib/api";
+import {
+  remainingAudioDuration,
+  resolveAudioDuration,
+} from "@/lib/audio-playback";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
@@ -51,6 +55,15 @@ function ReferencePlayerSession({
     durationSeconds && Number.isFinite(durationSeconds) ? durationSeconds : 0;
   const [duration, setDuration] = useState(fallbackDuration);
   const [error, setError] = useState<string | null>(null);
+
+  function syncDuration(player: HTMLAudioElement) {
+    setDuration((current) =>
+      resolveAudioDuration(
+        player.duration,
+        Math.max(current, fallbackDuration),
+      ),
+    );
+  }
 
   useEffect(() => {
     const player = audio.current;
@@ -128,6 +141,7 @@ function ReferencePlayerSession({
       .padStart(2, "0")}:${Math.floor(seconds % 60)
       .toString()
       .padStart(2, "0")}`;
+  const remainingTime = () => time(remainingAudioDuration(duration, elapsed));
   if (variant === "guide")
     return (
       <section className="flex flex-col items-center gap-1.5">
@@ -170,15 +184,13 @@ function ReferencePlayerSession({
           ref={audio}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
+          onEnded={() => {
+            setPlaying(false);
+            setElapsed(0);
+          }}
           onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
-          onLoadedMetadata={(event) =>
-            setDuration(
-              Number.isFinite(event.currentTarget.duration)
-                ? event.currentTarget.duration
-                : fallbackDuration,
-            )
-          }
+          onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
+          onDurationChange={(event) => syncDuration(event.currentTarget)}
           onError={() => setError("녹음 음성을 불러오지 못했습니다.")}
         />
         <div className="flex h-14 items-center gap-3 rounded-full bg-white py-2 pr-[18px] pl-2 shadow-[0_2px_4px_rgba(26,33,48,0.06)]">
@@ -203,9 +215,7 @@ function ReferencePlayerSession({
           <div className="min-w-0 flex-1 pb-1">
             <div className="flex text-[12px] leading-4 font-medium text-[#4e5968]">
               <span className="flex-1">{title}</span>
-              <span className="text-[#6b7684]">
-                {time(elapsed)} / {time(duration)}
-              </span>
+              <span className="text-[#6b7684]">{remainingTime()} 남음</span>
             </div>
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#dfe3e8]">
               <div
@@ -243,24 +253,20 @@ function ReferencePlayerSession({
         }
       >
         <h2 className="text-sm font-semibold">{title}</h2>
-        <span className="text-xs text-muted-foreground">
-          {time(playing ? elapsed : duration)}
-        </span>
+        <span className="text-xs text-muted-foreground">{remainingTime()}</span>
       </div>
       <audio
         ref={audio}
         loop={repeat}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          setElapsed(0);
+        }}
         onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) =>
-          setDuration(
-            Number.isFinite(event.currentTarget.duration)
-              ? event.currentTarget.duration
-              : fallbackDuration,
-          )
-        }
+        onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
+        onDurationChange={(event) => syncDuration(event.currentTarget)}
         onError={() => {
           setPlaying(false);
           setError("음성을 불러오지 못했습니다. 다시 재생해 주세요.");
@@ -318,9 +324,7 @@ function ReferencePlayerSession({
               ),
             )}
           </div>
-          <span className="pr-3 text-xs">
-            {time(playing ? elapsed : duration)}
-          </span>
+          <span className="pr-3 text-xs">{remainingTime()}</span>
         </div>
       ) : (
         <>

@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   api,
   type CourseDetail,
@@ -15,7 +15,6 @@ import {
 } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
-import styles from "./home.module.css";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -174,15 +173,6 @@ export default function Home() {
   );
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [headerVisible, setHeaderVisible] = useState(true);
-  const headerVisibleRef = useRef(true);
-  const previousScrollTop = useRef(0);
-  const scrollDirection = useRef<"up" | "down" | null>(null);
-  const directionalDistance = useRef(0);
-  const pendingScrollTop = useRef(0);
-  const scrollFrame = useRef<number | null>(null);
-  const scrollAreaRef = useRef<HTMLElement>(null);
-  const streakCardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -340,195 +330,112 @@ export default function Home() {
   );
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
 
-  function updateHeaderVisibility(visible: boolean) {
-    if (headerVisibleRef.current === visible) return;
-    headerVisibleRef.current = visible;
-    setHeaderVisible(visible);
-  }
-
-  function updateHeaderForScroll(scrollTop: number) {
-    const delta = scrollTop - previousScrollTop.current;
-    previousScrollTop.current = scrollTop;
-
-    if (scrollTop <= 12) {
-      scrollDirection.current = null;
-      directionalDistance.current = 0;
-      updateHeaderVisibility(true);
-      return;
-    }
-    if (Math.abs(delta) < 1) return;
-
-    const nextDirection = delta > 0 ? "down" : "up";
-    if (scrollDirection.current !== nextDirection) {
-      scrollDirection.current = nextDirection;
-      directionalDistance.current = 0;
-    }
-    directionalDistance.current += Math.abs(delta);
-
-    const threshold = nextDirection === "down" ? 24 : 10;
-    if (directionalDistance.current < threshold) return;
-
-    updateHeaderVisibility(nextDirection === "up");
-    directionalDistance.current = 0;
-  }
-
-  function updateStreakCard(scrollTop: number) {
-    const streakCard = streakCardRef.current;
-    if (!streakCard) return;
-
-    const fadeProgress = Math.min(Math.max((scrollTop - 4) / 36, 0), 1);
-    const easedProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-    const heldDistance = Math.min(scrollTop, 84);
-
-    streakCard.style.opacity = String(1 - easedProgress);
-    streakCard.style.transform = `translate3d(0, ${heldDistance}px, 0) scale(${1 - easedProgress * 0.015})`;
-  }
-
-  function handleHomeScroll(event: UIEvent<HTMLElement>) {
-    pendingScrollTop.current = Math.max(0, event.currentTarget.scrollTop);
-    if (scrollFrame.current !== null) return;
-
-    scrollFrame.current = window.requestAnimationFrame(() => {
-      scrollFrame.current = null;
-      updateHeaderForScroll(pendingScrollTop.current);
-      updateStreakCard(pendingScrollTop.current);
-    });
-  }
-
-  useEffect(() => {
-    return () => {
-      if (scrollFrame.current !== null) {
-        window.cancelAnimationFrame(scrollFrame.current);
-      }
-    };
-  }, []);
-
   return (
-    <AppShell
-      viewportLocked
-      chromeColor={headerVisible ? "#2f6bff" : "#f2f4f6"}
-    >
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f2f4f6] text-[#191f28]">
-        <header
-          data-state={headerVisible ? "visible" : "hidden"}
-          aria-hidden={!headerVisible}
-          className={`${styles.header} absolute inset-x-0 top-0 z-20 flex h-16 items-center bg-[#2f6bff] px-5 py-2 ${headerVisible ? "" : "pointer-events-none"}`}
-        >
-          <Image
-            src="/figma/home-density/brand.svg"
-            alt="Speak AI"
-            width={23.2}
-            height={32}
-            priority
-          />
-          <span className="min-w-0 flex-1" />
-          <Link
-            href="/home/notifications"
-            aria-label="알림 보기"
-            tabIndex={headerVisible ? undefined : -1}
-            className="relative flex size-11 items-center justify-end"
-          >
+    <AppShell viewportLocked chromeColor="#2f6bff">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#2f6bff] text-[#191f28]">
+        <header className="relative z-20 h-[181px] shrink-0 bg-[#2f6bff] px-5">
+          <div className="flex h-16 items-center">
             <Image
-              src="/figma/home-density/bell.svg"
-              alt=""
-              width={28}
-              height={28}
+              src="/figma/home-density/brand.svg"
+              alt="Speak AI"
+              width={23.2}
+              height={32}
+              priority
             />
-            <Image
-              src="/figma/home-density/badge-dot.svg"
-              alt=""
-              width={8}
-              height={8}
-              className="absolute top-[9px] right-0"
-            />
-          </Link>
+            <span className="min-w-0 flex-1" />
+            <Link
+              href="/home/notifications"
+              aria-label="알림 보기"
+              className="relative flex size-11 items-center justify-end"
+            >
+              <Image
+                src="/figma/home-density/bell.svg"
+                alt=""
+                width={28}
+                height={28}
+              />
+              <Image
+                src="/figma/home-density/badge-dot.svg"
+                alt=""
+                width={8}
+                height={8}
+                className="absolute top-[9px] right-0"
+              />
+            </Link>
+          </div>
+
+          <section className="mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
+            <Link
+              href="/home/streak"
+              className="flex h-full items-center gap-3"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline gap-1 whitespace-nowrap">
+                  <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
+                    연속 연습
+                  </span>
+                  <strong className="text-sm leading-5 tracking-[0.203px]">
+                    {streakDays}일째
+                  </strong>
+                </span>
+                <span className="mt-2 flex justify-between">
+                  {weekDates.map((day) => {
+                    const completed = completedWeekdays.has(day.key);
+                    const dot = completed
+                      ? "/figma/home-density/day-complete-dot.svg"
+                      : day.isToday
+                        ? "/figma/home-density/day-current.svg"
+                        : "/figma/home-density/day-inactive.svg";
+                    return (
+                      <span
+                        key={day.key}
+                        className="flex w-5 flex-col items-center gap-[3px]"
+                      >
+                        <span className="relative size-5">
+                          <Image src={dot} alt="" width={20} height={20} />
+                          {completed ? (
+                            <Image
+                              src="/figma/home-density/day-check.svg"
+                              alt=""
+                              width={14}
+                              height={14}
+                              className="absolute top-[3px] left-[3px]"
+                            />
+                          ) : null}
+                        </span>
+                        <span
+                          className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
+                            day.isToday
+                              ? "font-bold text-white"
+                              : day.isFuture
+                                ? "font-medium text-white/55"
+                                : "font-medium text-white/75"
+                          }`}
+                        >
+                          {day.label}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </span>
+              </span>
+              <Image
+                src="/figma/home-density/chevron-streak.svg"
+                alt=""
+                width={18}
+                height={18}
+                className="shrink-0"
+              />
+            </Link>
+          </section>
         </header>
 
         <main
-          ref={scrollAreaRef}
-          onScroll={handleHomeScroll}
           data-scroll-container="home"
-          className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative z-10 min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-y-contain rounded-t-[24px] bg-[#f2f4f6] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <div className="relative min-h-full pb-8">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[205px] bg-[#2f6bff]"
-            />
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-[181px] bottom-0 rounded-t-[24px] bg-[#f2f4f6]"
-            />
-            <div className="relative snap-start snap-always px-5 pt-[72px]">
-              <section
-                ref={streakCardRef}
-                className="relative z-10 h-[85px] origin-top rounded-2xl bg-white/15 px-[14px] py-[10px] text-white will-change-[transform,opacity] motion-reduce:transform-none motion-reduce:opacity-100"
-              >
-                <Link
-                  href="/home/streak"
-                  className="flex h-full items-center gap-3"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1 whitespace-nowrap">
-                      <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
-                        연속 연습
-                      </span>
-                      <strong className="text-sm leading-5 tracking-[0.203px]">
-                        {streakDays}일째
-                      </strong>
-                    </span>
-                    <span className="mt-2 flex justify-between">
-                      {weekDates.map((day) => {
-                        const completed = completedWeekdays.has(day.key);
-                        const dot = completed
-                          ? "/figma/home-density/day-complete-dot.svg"
-                          : day.isToday
-                            ? "/figma/home-density/day-current.svg"
-                            : "/figma/home-density/day-inactive.svg";
-                        return (
-                          <span
-                            key={day.key}
-                            className="flex w-5 flex-col items-center gap-[3px]"
-                          >
-                            <span className="relative size-5">
-                              <Image src={dot} alt="" width={20} height={20} />
-                              {completed ? (
-                                <Image
-                                  src="/figma/home-density/day-check.svg"
-                                  alt=""
-                                  width={14}
-                                  height={14}
-                                  className="absolute top-[3px] left-[3px]"
-                                />
-                              ) : null}
-                            </span>
-                            <span
-                              className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
-                                day.isToday
-                                  ? "font-bold text-white"
-                                  : day.isFuture
-                                    ? "font-medium text-white/55"
-                                    : "font-medium text-white/75"
-                              }`}
-                            >
-                              {day.label}
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </span>
-                  </span>
-                  <Image
-                    src="/figma/home-density/chevron-streak.svg"
-                    alt=""
-                    width={18}
-                    height={18}
-                    className="shrink-0"
-                  />
-                </Link>
-              </section>
-              <div aria-hidden="true" className="h-11" />
-
+            <div className="relative snap-start snap-always px-5 pt-5">
               {error ? (
                 <div
                   role="alert"

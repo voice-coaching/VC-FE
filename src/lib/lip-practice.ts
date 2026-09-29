@@ -15,21 +15,51 @@ export type LipPracticeStep =
   | "countdown"
   | "recording"
   | "review"
-  | "unavailable";
+  | "complete";
 
 export type LipClip = {
   promptIndex: number;
   url: string;
   blob: Blob;
+  durationMs: number;
 };
 
 export function preferredVideoMimeType(supports: (mime: string) => boolean) {
   return [
+    "video/mp4;codecs=h264,aac",
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
-    "video/mp4",
   ].find(supports);
+}
+
+export function normalizeVideoMimeType(mimeType: string) {
+  return mimeType.split(";", 1)[0]?.trim().toLowerCase() || "video/mp4";
+}
+
+export function prepareVideoForAnalysis(
+  source: Blob,
+  acceptedMimeTypes: string[],
+) {
+  const sourceMimeType = normalizeVideoMimeType(source.type);
+  const accepted = acceptedMimeTypes.map(normalizeVideoMimeType);
+  if (!accepted.includes(sourceMimeType)) {
+    throw new Error(
+      `이 기기의 영상 형식(${sourceMimeType})을 서버가 지원하지 않습니다.`,
+    );
+  }
+
+  const extensions: Record<string, string> = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+  };
+  return {
+    blob: source.slice(0, source.size, sourceMimeType),
+    mimeType: sourceMimeType,
+    extension: extensions[sourceMimeType] ?? "video",
+  };
 }
 
 export function releaseLipResources(

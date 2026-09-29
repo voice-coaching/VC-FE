@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   CircleAlert,
-  Mic,
   RotateCcw,
   ShieldCheck,
   Square,
@@ -19,9 +18,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
+import { pollAnalysis } from "@/lib/analysis-polling";
+import {
+  api,
+  type AnalysisResult,
+  type AnalysisSegment,
+  type PracticeContent,
+} from "@/lib/api";
 import {
   LIP_PRACTICE_PROMPTS,
+  prepareVideoForAnalysis,
   preferredVideoMimeType,
   releaseLipResources,
   type LipClip,
@@ -29,6 +37,15 @@ import {
 } from "@/lib/lip-practice";
 
 const MAX_RECORDING_MS = 12_000;
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type LipAnalysisPhase = "idle" | "uploading" | "analyzing" | "result" | "error";
+
+type LipAnalysisBundle = {
+  content: PracticeContent;
+  analysis: AnalysisResult;
+  segments: AnalysisSegment[];
+};
 
 export default function LipPractice() {
   const router = useRouter();
@@ -39,12 +56,23 @@ export default function LipPractice() {
   const [selectedClip, setSelectedClip] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [mirrored, setMirrored] = useState(true);
+  const [videoConsentAccepted, setVideoConsentAccepted] = useState(false);
+  const [analysisPhase, setAnalysisPhase] = useState<LipAnalysisPhase>("idle");
+  const [analysisTarget, setAnalysisTarget] = useState<number | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analyses, setAnalyses] = useState<
+    Partial<Record<number, LipAnalysisBundle>>
+  >({});
   const previewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const stopTimerRef = useRef<number | null>(null);
   const clipsRef = useRef<LipClip[]>([]);
+  const recordingStartedAtRef = useRef(0);
+  const contentByPromptRef = useRef(new Map<number, PracticeContent>());
 
   useEffect(() => {
     clipsRef.current = clips;
@@ -85,45 +113,65 @@ export default function LipPractice() {
     const mimeType = preferredVideoMimeType((value) =>
       MediaRecorder.isTypeSupported(value),
     );
-    const recorder = new MediaRecorder(
-      stream,
-      mimeType ? { mimeType } : undefined,
-    );
-    chunksRef.current = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunksRef.current.push(event.data);
-    };
-    recorder.onerror = () => {
-      setError("녹화 중 문제가 발생했어요. 다시 촬영해 주세요.");
-      setStep("align");
-    };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, {
-        type: recorder.mimeType || "video/webm",
-      });
-      if (blob.size === 0) {
-        setError("녹화된 영상이 없어요. 다시 촬영해 주세요.");
+    try {
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onerror = () => {
+        setError("녹화 중 문제가 발생했어요. 다시 촬영해 주세요.");
         setStep("align");
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      setClips((current) => {
-        const previous = current.find(
-          (clip) => clip.promptIndex === promptIndex,
+      };
+      recorder.onstop = () => {
+        const durationMs = Math.max(
+          1,
+          Date.now() - recordingStartedAtRef.current,
         );
-        if (previous) URL.revokeObjectURL(previous.url);
-        return [
-          ...current.filter((clip) => clip.promptIndex !== promptIndex),
-          { promptIndex, blob, url },
-        ].sort((a, b) => a.promptIndex - b.promptIndex);
-      });
-      setSelectedClip(promptIndex);
-      setStep("review");
-    };
-    recorderRef.current = recorder;
-    recorder.start(250);
-    setStep("recording");
-    stopTimerRef.current = window.setTimeout(stopRecording, MAX_RECORDING_MS);
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || chunksRef.current[0]?.type || "video/mp4",
+        });
+        if (blob.size === 0) {
+          setError("녹화된 영상이 없어요. 다시 촬영해 주세요.");
+          setStep("align");
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        setClips((current) => {
+          const previous = current.find(
+            (clip) => clip.promptIndex === promptIndex,
+          );
+          if (previous) URL.revokeObjectURL(previous.url);
+          return [
+            ...current.filter((clip) => clip.promptIndex !== promptIndex),
+            { promptIndex, blob, url, durationMs },
+          ].sort((a, b) => a.promptIndex - b.promptIndex);
+        });
+        setAnalyses((current) => {
+          const next = { ...current };
+          delete next[promptIndex];
+          return next;
+        });
+        contentByPromptRef.current.delete(promptIndex);
+        setSelectedClip(promptIndex);
+        setAnalysisPhase("idle");
+        setAnalysisError(null);
+        setStep("review");
+      };
+      recorderRef.current = recorder;
+      recordingStartedAtRef.current = Date.now();
+      // Safari/iOS의 MP4는 timeslice로 조각내면 첫 조각만 재생되는 파일이
+      // 만들어질 수 있으므로 stop 시점에 완성된 파일 하나를 받는다.
+      recorder.start();
+      setStep("recording");
+      stopTimerRef.current = window.setTimeout(stopRecording, MAX_RECORDING_MS);
+    } catch {
+      setError("이 기기에서 영상 녹화를 시작하지 못했어요.");
+      setStep("align");
+    }
   }, [promptIndex, stopRecording]);
 
   useEffect(() => {
@@ -158,9 +206,12 @@ export default function LipPractice() {
       streamRef.current = stream;
       setStep("align");
     } catch (reason) {
+      const denied =
+        reason instanceof DOMException &&
+        (reason.name === "NotAllowedError" || reason.name === "SecurityError");
       setError(
-        reason instanceof DOMException && reason.name === "NotAllowedError"
-          ? "카메라와 마이크 권한이 필요해요. 브라우저 설정에서 권한을 허용해 주세요."
+        denied
+          ? "카메라와 마이크 권한이 필요해요. iPhone 설정의 SPEAK AI에서 권한을 허용해 주세요."
           : "카메라와 마이크를 시작하지 못했어요.",
       );
     }
@@ -174,8 +225,11 @@ export default function LipPractice() {
 
   function continueFlow() {
     if (promptIndex >= LIP_PRACTICE_PROMPTS.length - 1) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setSelectedClip(0);
-      setStep("unavailable");
+      setAnalysisPhase(analyses[0] ? "result" : "idle");
+      setStep("complete");
       return;
     }
     setPromptIndex((value) => value + 1);
@@ -184,6 +238,163 @@ export default function LipPractice() {
 
   const currentClip = clips.find((clip) => clip.promptIndex === promptIndex);
   const reportClip = clips.find((clip) => clip.promptIndex === selectedClip);
+  const selectedAnalysis = analyses[selectedClip];
+
+  async function analyzeSelectedClip() {
+    if (
+      !reportClip ||
+      analysisPhase === "uploading" ||
+      analysisPhase === "analyzing"
+    )
+      return;
+    if (!videoConsentAccepted) {
+      setAnalysisError("영상·음성 AI 분석 및 처리에 먼저 동의해 주세요.");
+      setAnalysisPhase("error");
+      return;
+    }
+
+    setAnalysisTarget(selectedClip);
+    setAnalysisError(null);
+    setUploadProgress(0);
+    setAnalysisProgress(0);
+
+    try {
+      const capabilities = await api.training.getAnalysisCapabilities();
+      if (
+        capabilities.recordingUpload !== "CONFIGURED" ||
+        capabilities.analysisRequests !== "CONFIGURED" ||
+        !capabilities.supportedLearningFocuses.includes("PRONUNCIATION")
+      ) {
+        throw new Error("현재 서버의 영상 발음 분석 기능을 사용할 수 없어요.");
+      }
+      if (
+        capabilities.videoProcessingConsentRequired &&
+        !capabilities.videoProcessingConsentPolicyRevision
+      ) {
+        throw new Error("영상 처리 동의 정책 정보를 불러오지 못했어요.");
+      }
+      if (!capabilities.consentPolicyRevision) {
+        throw new Error("음성 처리 동의 정책 정보를 불러오지 못했어요.");
+      }
+      if (reportClip.durationMs < capabilities.minimumDurationMs) {
+        throw new Error(
+          `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 촬영해 주세요.`,
+        );
+      }
+      if (reportClip.durationMs > capabilities.maximumDurationMs) {
+        throw new Error(
+          `영상은 ${Math.floor(capabilities.maximumDurationMs / 1_000)}초 이내여야 해요.`,
+        );
+      }
+
+      const prepared = prepareVideoForAnalysis(
+        reportClip.blob,
+        capabilities.acceptedVideoMimeTypes,
+      );
+      if (prepared.blob.size > capabilities.maximumVideoUploadBytes) {
+        throw new Error("촬영 영상이 서버의 업로드 제한을 초과했어요.");
+      }
+
+      let content = contentByPromptRef.current.get(selectedClip);
+      if (!content) {
+        content = await api.content.createCustom(
+          {
+            title: `입모양 연습 ${selectedClip + 1}`,
+            scriptText: LIP_PRACTICE_PROMPTS[selectedClip],
+            learningFocus: "PRONUNCIATION",
+            retention: "SESSION_HISTORY",
+            locale: "ko-KR",
+          },
+          typeof crypto !== "undefined" &&
+            typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : undefined,
+        );
+        contentByPromptRef.current.set(selectedClip, content);
+      }
+
+      const session = await api.training.create({
+        contentId: content.id,
+        learningFocus: "PRONUNCIATION",
+      });
+      const sessionId = session.sessionId ?? session.id;
+      if (sessionId == null) throw new Error("학습 세션을 만들지 못했어요.");
+
+      setAnalysisPhase("uploading");
+      const uploadInfo = await api.training.getUploadUrl(sessionId, {
+        fileName: `lip-practice-${Date.now()}.${prepared.extension}`,
+        mimeType: prepared.mimeType,
+        fileSizeBytes: prepared.blob.size,
+      });
+      await api.training.uploadRecording(
+        uploadInfo,
+        prepared.blob,
+        setUploadProgress,
+      );
+      const recording = await api.training.registerRecording(sessionId, {
+        objectKey: uploadInfo.objectKey,
+        mimeType: prepared.mimeType,
+        fileSizeBytes: prepared.blob.size,
+        durationMs: reportClip.durationMs,
+        videoProcessingConsentAccepted: true,
+        videoProcessingConsentPolicyRevision:
+          capabilities.videoProcessingConsentPolicyRevision,
+      });
+      const recordingId = recording.recordingId ?? recording.id;
+      if (recordingId == null) throw new Error("영상 녹화 ID가 없습니다.");
+
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const recordings = await api.training.listRecordings(sessionId);
+        const current = recordings.find(
+          (item) => String(item.recordingId ?? item.id) === String(recordingId),
+        );
+        if (current?.qualityStatus === "PASS") break;
+        if (current && current.qualityStatus !== "PENDING") {
+          throw new Error(
+            `영상의 음성 품질을 확인해 주세요: ${current.qualityStatus}`,
+          );
+        }
+        if (attempt === 29) {
+          throw new Error(
+            "영상 품질 확인이 지연되고 있어요. 다시 시도해 주세요.",
+          );
+        }
+        await wait(1_000);
+      }
+
+      await api.training.selectRecording(sessionId, recordingId);
+      const requested = await api.training.analyze(sessionId, {
+        accepted: true,
+        policyRevision: capabilities.consentPolicyRevision,
+      });
+      setAnalysisPhase("analyzing");
+      const completedAnalysisId = await pollAnalysis({
+        getStatus: () => api.training.getAnalysisStatus(sessionId),
+        onProgress: setAnalysisProgress,
+      });
+      const analysisId = completedAnalysisId ?? requested.analysisId;
+      const [analysis, segmentPage] = await Promise.all([
+        api.analyses.get(analysisId),
+        api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
+      ]);
+      await api.training.complete(
+        sessionId,
+        Math.max(1, Math.round(reportClip.durationMs / 1_000)),
+      );
+      setAnalyses((current) => ({
+        ...current,
+        [selectedClip]: { content, analysis, segments: segmentPage.items },
+      }));
+      setAnalysisPhase("result");
+    } catch (reason) {
+      setAnalysisError(
+        reason instanceof Error
+          ? reason.message
+          : "영상 발음 분석을 완료하지 못했어요.",
+      );
+      setAnalysisPhase("error");
+    }
+  }
 
   return (
     <AppShell nav={false} viewportLocked>
@@ -200,7 +411,7 @@ export default function LipPractice() {
           <p className="text-sm font-bold">
             {step === "guide" || step === "tips" || step === "setup"
               ? "입모양 연습"
-              : step === "unavailable"
+              : step === "complete"
                 ? "촬영 완료"
                 : `${promptIndex + 1}/${LIP_PRACTICE_PROMPTS.length}`}
           </p>
@@ -218,7 +429,7 @@ export default function LipPractice() {
                 또박또박 말해 봐요
               </>
             }
-            description="5개의 짧은 문장을 촬영해요. 영상은 서버에 업로드하지 않고 이 기기 메모리에서만 사용합니다."
+            description="5개의 짧은 문장을 촬영하고, 원하는 영상을 선택해 AI 발음 피드백을 받아요."
             action="연습 알아보기"
             onAction={() => setStep("tips")}
           />
@@ -256,11 +467,30 @@ export default function LipPractice() {
                   className="size-6 accent-[#2f6bff]"
                 />
               </label>
+              <label className="mt-3 flex min-h-14 items-start gap-3 border-t border-border pt-4">
+                <input
+                  type="checkbox"
+                  checked={videoConsentAccepted}
+                  onChange={(event) =>
+                    setVideoConsentAccepted(event.target.checked)
+                  }
+                  className="mt-0.5 size-6 shrink-0 accent-[#2f6bff]"
+                />
+                <span>
+                  <strong className="block text-sm">
+                    영상·음성 AI 분석 및 처리 동의
+                  </strong>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    선택한 영상과 음성을 서버로 전송해 발음 피드백을 생성합니다.
+                  </span>
+                </span>
+              </label>
             </section>
             <PrivacyNote />
             <BottomAction
               label="카메라·마이크 권한 확인"
               onClick={() => void requestMedia()}
+              disabled={!videoConsentAccepted}
             />
           </div>
         ) : step === "permission" ? (
@@ -294,7 +524,7 @@ export default function LipPractice() {
               ) : null}
             </div>
           </div>
-        ) : step === "unavailable" ? (
+        ) : step === "complete" ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
             <section className="pt-5 text-center">
               <span className="mx-auto flex size-20 items-center justify-center rounded-[28px] bg-[#eaf8f3] text-[#00a878]">
@@ -304,8 +534,7 @@ export default function LipPractice() {
                 5개 문장을 모두 촬영했어요
               </h1>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                입모양 자동 분석은 준비 중이에요. 촬영한 영상은 지금 이
-                화면에서만 확인할 수 있어요.
+                문장을 선택해 촬영 영상을 확인하고 AI 발음 분석을 시작하세요.
               </p>
             </section>
             <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
@@ -313,7 +542,16 @@ export default function LipPractice() {
                 <button
                   key={index}
                   type="button"
-                  onClick={() => setSelectedClip(index)}
+                  disabled={
+                    analysisPhase === "uploading" ||
+                    analysisPhase === "analyzing"
+                  }
+                  onClick={() => {
+                    setSelectedClip(index);
+                    setAnalysisTarget(null);
+                    setAnalysisError(null);
+                    setAnalysisPhase(analyses[index] ? "result" : "idle");
+                  }}
                   className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${selectedClip === index ? "bg-primary text-white" : "bg-white text-muted-foreground"}`}
                 >
                   {index + 1}
@@ -329,25 +567,83 @@ export default function LipPractice() {
                 className="mt-3 aspect-[3/4] w-full rounded-[24px] bg-black object-cover"
               />
             ) : null}
-            <section className="mt-4 rounded-[20px] border border-dashed border-[#bfdcff] bg-[#f4f9ff] p-4">
-              <div className="flex gap-3">
-                <CircleAlert className="mt-0.5 size-5 shrink-0 text-primary" />
-                <div>
-                  <strong className="text-sm">분석 기능 준비 중</strong>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    실제 분석 데이터 계약이 제공되면 입술 움직임과 발음 피드백이
-                    이곳에 표시됩니다.
-                  </p>
+            <p className="mt-3 text-center text-sm font-bold">
+              {LIP_PRACTICE_PROMPTS[selectedClip]}
+            </p>
+
+            {analysisTarget === selectedClip &&
+            (analysisPhase === "uploading" || analysisPhase === "analyzing") ? (
+              <section
+                role="status"
+                className="mt-4 rounded-[20px] bg-[#f4f9ff] p-5 text-center"
+              >
+                <span className="mx-auto block size-7 animate-spin rounded-full border-3 border-primary/20 border-t-primary" />
+                <strong className="mt-3 block text-sm">
+                  {analysisPhase === "uploading"
+                    ? `영상을 보내고 있어요 ${uploadProgress}%`
+                    : `발음을 분석하고 있어요 ${analysisProgress}%`}
+                </strong>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  화면을 닫지 말고 잠시 기다려 주세요.
+                </p>
+              </section>
+            ) : analysisPhase === "error" && analysisError ? (
+              <section
+                role="alert"
+                className="mt-4 rounded-[20px] bg-red-50 p-4"
+              >
+                <div className="flex gap-3">
+                  <CircleAlert className="mt-0.5 size-5 shrink-0 text-red-500" />
+                  <div>
+                    <strong className="text-sm text-red-700">
+                      영상 발음 분석을 완료하지 못했어요
+                    </strong>
+                    <p className="mt-1 text-xs leading-5 text-red-600">
+                      {analysisError}
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => void analyzeSelectedClip()}
+                  className="mt-4 min-h-12 w-full rounded-full bg-primary text-sm font-bold text-white"
+                >
+                  다시 분석하기
+                </button>
+              </section>
+            ) : selectedAnalysis ? (
+              <div className="mt-5">
+                <AnalysisView
+                  analysis={selectedAnalysis.analysis}
+                  segments={selectedAnalysis.segments}
+                  content={selectedAnalysis.content}
+                  recordingUrl={reportClip?.url}
+                />
               </div>
-            </section>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void analyzeSelectedClip()}
+                disabled={!reportClip}
+                className="design-action mt-4 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                AI 발음 분석하기
+              </button>
+            )}
+
             <button
               type="button"
+              disabled={
+                analysisPhase === "uploading" || analysisPhase === "analyzing"
+              }
               onClick={() => {
                 setPromptIndex(selectedClip);
-                setStep("align");
+                setAnalysisPhase("idle");
+                setAnalysisTarget(null);
+                setAnalysisError(null);
+                void requestMedia();
               }}
-              className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-border bg-white text-sm font-bold"
+              className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-border bg-white text-sm font-bold disabled:opacity-45"
             >
               <RotateCcw className="size-4" />
               선택한 문장 다시 촬영
@@ -542,7 +838,8 @@ function PrivacyNote() {
   return (
     <p className="mt-auto flex gap-2 pt-8 text-xs leading-5 text-muted-foreground">
       <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-      영상은 업로드하지 않으며 새로고침하거나 화면을 나가면 즉시 사라져요.
+      촬영본은 기기에 임시 보관되며, 사용자가 분석을 요청한 영상만 AI 발음
+      분석을 위해 서버로 전송돼요.
     </p>
   );
 }
@@ -550,15 +847,18 @@ function PrivacyNote() {
 function BottomAction({
   label,
   onClick,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="design-action mt-5 shrink-0"
+      disabled={disabled}
+      className="design-action mt-5 shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
     >
       {label}
     </button>
