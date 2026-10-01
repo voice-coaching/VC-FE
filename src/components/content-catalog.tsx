@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
 import { Check, ChevronDown, X } from "lucide-react";
@@ -276,6 +277,7 @@ export function ContentCatalog({
 
       {type === "NEWS" ? (
         <NewsIntro
+          loading={loading}
           items={items.slice(0, 5)}
           category={category}
           categories={categories}
@@ -324,9 +326,7 @@ export function ContentCatalog({
         </div>
 
         {loading ? (
-          <p className="py-12 text-center text-sm text-[#8b95a1]">
-            콘텐츠를 불러오는 중…
-          </p>
+          <CatalogListSkeleton type={type} />
         ) : error ? (
           <p
             role="alert"
@@ -436,12 +436,14 @@ function CatalogHeader({ title }: { title: string }) {
 }
 
 function NewsIntro({
+  loading,
   items,
   category,
   categories,
   onCategory,
   returnTo,
 }: {
+  loading: boolean;
   items: PracticeContentSummary[];
   category: string;
   categories: string[];
@@ -473,15 +475,18 @@ function NewsIntro({
           <h2 className="text-[17px] leading-6 font-bold">
             {new Date().getMonth() + 1}월 {Math.ceil(new Date().getDate() / 7)}
             주차{" "}
-            <span className="text-primary">
-              TOP {Math.min(5, items.length)}
-            </span>
+            {loading ? null : (
+              <span className="text-primary">
+                TOP {Math.min(5, items.length)}
+              </span>
+            )}
           </h2>
           <p className="mt-0.5 text-xs leading-4 text-[#8b95a1]">
             이번 주 가장 많이 연습한 뉴스예요
           </p>
         </div>
         <div className="mt-3 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-5">
+          {loading ? <NewsTopSkeleton /> : null}
           {items.map((item, index) => (
             <Link
               key={String(item.id)}
@@ -715,5 +720,68 @@ function CatalogItem({
         height={20}
       />
     </Link>
+  );
+}
+
+function NewsTopSkeleton() {
+  return (
+    <>
+      {[0, 1].map((index) => (
+        <div
+          key={index}
+          aria-hidden="true"
+          className="h-44 w-[260px] shrink-0 rounded-[20px] bg-white p-[18px]"
+        >
+          <div className="flex gap-1.5">
+            <SkeletonBlock className="h-[22px] w-10" />
+            <SkeletonBlock className="h-[22px] w-12" />
+          </div>
+          <SkeletonBlock className="mt-3 h-5 w-[180px]" />
+          <SkeletonBlock className="mt-2 h-5 w-[120px]" />
+          <SkeletonBlock className="mt-12 h-3.5 w-20" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function CatalogListSkeleton({ type }: { type: ContentType }) {
+  return (
+    <div role="status" aria-busy="true" className="mt-3 flex flex-col gap-3">
+      <span className="sr-only">콘텐츠를 불러오는 중</span>
+      {[0, 1, 2, 3].map((index) =>
+        type === "ANNOUNCER" ? (
+          <div
+            key={index}
+            className="flex min-h-20 items-center gap-3.5 rounded-2xl bg-white p-4"
+          >
+            <SkeletonBlock className="size-12 shrink-0" />
+            <div className="flex-1">
+              <SkeletonBlock className="h-4 w-3/5" />
+              <SkeletonBlock className="mt-2.5 h-3 w-14" />
+            </div>
+          </div>
+        ) : type === "SENTENCE" ? (
+          <div
+            key={index}
+            className="flex min-h-[78px] items-center rounded-2xl bg-white px-4 py-3"
+          >
+            <SkeletonBlock className="h-4 w-4/5" />
+          </div>
+        ) : (
+          <div
+            key={index}
+            className="flex min-h-[116px] flex-col justify-center rounded-2xl bg-white p-4"
+          >
+            <div className="flex items-center gap-2">
+              <SkeletonBlock className="h-[22px] w-10" />
+              <SkeletonBlock className="h-3 w-12" />
+            </div>
+            <SkeletonBlock className="mt-3 h-4 w-4/5" />
+            <SkeletonBlock className="mt-3 h-3 w-24" />
+          </div>
+        ),
+      )}
+    </div>
   );
 }

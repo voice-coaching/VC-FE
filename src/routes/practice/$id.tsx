@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
@@ -126,11 +127,34 @@ export default function Practice({ contentId }: { contentId: string }) {
             />
           )
         ) : (
-          <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-            콘텐츠를 불러오는 중…
-          </p>
+          <PracticeDetailSkeleton />
         )}
       </div>
     </AppShell>
+  );
+}
+
+function PracticeDetailSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="space-y-4 px-5 pb-6">
+      <span className="sr-only">콘텐츠를 불러오는 중</span>
+      <div>
+        <SkeletonBlock className="bg-[#e5e8eb] h-6 w-20" />
+        <SkeletonBlock className="bg-[#e5e8eb] mt-4 h-7 w-4/5" />
+        <SkeletonBlock className="bg-[#e5e8eb] mt-2 h-7 w-1/2" />
+      </div>
+      <SkeletonBlock className="bg-[#e5e8eb] mt-6 h-4 w-14" />
+      <div className="design-card space-y-5">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className="flex gap-3">
+            <SkeletonBlock className="mt-0.5 size-5 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <SkeletonBlock className="h-4 w-full" />
+              <SkeletonBlock className="h-4 w-2/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

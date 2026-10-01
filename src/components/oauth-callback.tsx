@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingOverlay } from "@/components/loading-overlay";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -155,15 +156,7 @@ export function OAuthCallback({
             </Link>
           </>
         ) : (
-          <>
-            <span className="size-10 animate-spin rounded-full border-4 border-border border-t-foreground" />
-            <h1 className="mt-5 text-xl font-bold">
-              {providerLabel} 로그인 확인 중
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              잠시만 기다려 주세요.
-            </p>
-          </>
+          <LoadingOverlay label={`${providerLabel} 로그인 확인 중`} />
         )}
       </div>
     </AppShell>

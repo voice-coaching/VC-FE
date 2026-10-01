@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -320,9 +321,7 @@ export default function LearningHistory() {
             </div>
           ) : null}
           {loading ? (
-            <p className="py-12 text-center text-[13px] text-[#8b95a1]">
-              기록을 불러오는 중…
-            </p>
+            <HistoryListSkeleton />
           ) : error ? null : groups.length ? (
             <div className="mt-3 space-y-3">
               {groups.map((group) => (
@@ -568,6 +567,31 @@ function MyPageHead({
           </Link>
         ))}
       </nav>
+    </div>
+  );
+}
+
+function HistoryListSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="mt-3">
+      <span className="sr-only">기록을 불러오는 중</span>
+      <div className="px-1 pt-2 pb-2">
+        <SkeletonBlock className="h-3 w-14 bg-[#e5e8eb]" />
+      </div>
+      <div className="space-y-2.5">
+        {[0, 1, 2, 3].map((index) => (
+          <div
+            key={index}
+            className="flex min-h-[68px] flex-col justify-center rounded-2xl bg-white py-3.5 pr-3.5 pl-4"
+          >
+            <div className="flex items-center gap-1.5">
+              <SkeletonBlock className="h-[18px] w-9" />
+              <SkeletonBlock className="h-4 w-2/5" />
+            </div>
+            <SkeletonBlock className="mt-2 h-3 w-14" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

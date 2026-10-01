@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
 import { Check, ChevronRight } from "lucide-react";
@@ -619,9 +620,7 @@ export function CourseCatalog({
               </ol>
             </>
           ) : loading ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              클래스를 불러오는 중…
-            </p>
+            <CourseListSkeleton />
           ) : (
             <div className="space-y-3 px-5">
               {items.map((course) => {
@@ -724,5 +723,30 @@ export function CourseCatalog({
         )}
       </div>
     </AppShell>
+  );
+}
+
+function CourseListSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="space-y-3 px-5">
+      <span className="sr-only">클래스를 불러오는 중</span>
+      {[0, 1, 2].map((index) => (
+        <div
+          key={index}
+          className="flex min-h-[118px] items-start gap-3.5 rounded-2xl bg-white p-[18px]"
+        >
+          <SkeletonBlock className="size-12 shrink-0 rounded-xl" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <SkeletonBlock className="h-4 w-2/5" />
+              <SkeletonBlock className="h-3 w-8" />
+            </div>
+            <SkeletonBlock className="mt-2 h-3 w-3/5" />
+            <SkeletonBlock className="mt-4 h-2 w-full" />
+            <SkeletonBlock className="mt-2.5 h-3 w-10" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
