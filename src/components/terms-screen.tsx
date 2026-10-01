@@ -3,7 +3,7 @@ import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
 import { api, disableDeveloperApi } from "@/lib/api";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
@@ -67,6 +67,7 @@ export function TermsScreen({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailKey, setDetailKey] = useState<TermKey | null>(null);
+  const detailTrigger = useRef<HTMLButtonElement | null>(null);
 
   const allChecked = TERM_ITEMS.every((item) => terms[item.key]);
   const requiredChecked = terms.age && terms.service && terms.privacy;
@@ -131,8 +132,15 @@ export function TermsScreen({
 
   return (
     <IPhoneFrame>
-      <section className="flex h-full flex-col bg-white" aria-label="약관 동의">
-        <div className="h-11 shrink-0" aria-hidden="true" />
+      <section
+        className="flex min-h-full flex-col bg-white"
+        aria-label="약관 동의"
+      >
+        <div
+          style={{ height: "max(44px, env(safe-area-inset-top, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
 
         <header className="flex h-12 shrink-0 items-center px-4 py-3">
           <button
@@ -151,7 +159,7 @@ export function TermsScreen({
           <span className="size-6 shrink-0" aria-hidden="true" />
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col px-6">
+        <div className="flex flex-1 flex-col px-6">
           <div className="h-[34px] shrink-0" aria-hidden="true" />
           <h2 className="terms-content-reveal text-[24px] leading-8 font-bold tracking-[-0.552px] [animation-delay:80ms]">
             반가워요!
@@ -216,7 +224,10 @@ export function TermsScreen({
                 {item.hasDetails ? (
                   <button
                     type="button"
-                    onClick={() => setDetailKey(item.key)}
+                    onClick={(event) => {
+                      detailTrigger.current = event.currentTarget;
+                      setDetailKey(item.key);
+                    }}
                     aria-label={`${item.label} 내용 보기`}
                     className="flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
                   >
@@ -242,7 +253,7 @@ export function TermsScreen({
             </p>
           )}
 
-          <div className="min-h-0 flex-1" />
+          <div className="min-h-6 flex-1" />
           <button
             type="button"
             onClick={() => void handleNext()}
@@ -254,9 +265,17 @@ export function TermsScreen({
           <div className="h-6 shrink-0" aria-hidden="true" />
         </div>
 
-        <div className="h-[34px] shrink-0" aria-hidden="true" />
+        <div
+          style={{ height: "max(34px, env(safe-area-inset-bottom, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
       </section>
-      <TermDetailDialog value={detailKey} onClose={() => setDetailKey(null)} />
+      <TermDetailDialog
+        value={detailKey}
+        onClose={() => setDetailKey(null)}
+        onRestoreFocus={() => detailTrigger.current?.focus()}
+      />
     </IPhoneFrame>
   );
 }
@@ -264,9 +283,11 @@ export function TermsScreen({
 function TermDetailDialog({
   value,
   onClose,
+  onRestoreFocus,
 }: {
   value: TermKey | null;
   onClose: () => void;
+  onRestoreFocus: () => void;
 }) {
   const details: Partial<
     Record<
@@ -290,12 +311,18 @@ function TermDetailDialog({
   const detail = value ? details[value] : undefined;
   return (
     <Dialog open={Boolean(value)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[82dvh] w-[calc(100%-40px)] max-w-[362px] overflow-hidden rounded-[24px] border-0 p-0">
-        <DialogHeader className="border-b border-border px-5 py-5 text-left">
+      <DialogContent
+        className="flex max-h-[82dvh] w-[calc(100%-40px)] max-w-[362px] flex-col gap-0 overflow-hidden rounded-[24px] border-0 p-0"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onRestoreFocus();
+        }}
+      >
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-5 pr-12 text-left">
           <DialogTitle>{detail?.title}</DialogTitle>
           <DialogDescription>시행일 {TERMS_EFFECTIVE_DATE}</DialogDescription>
         </DialogHeader>
-        <article className="min-h-0 overflow-y-auto px-5 py-4">
+        <article className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 py-4">
           {detail?.sections ? (
             detail.sections.map((section) => (
               <section key={section.title} className="mb-5">
@@ -316,7 +343,7 @@ function TermDetailDialog({
             </p>
           )}
         </article>
-        <div className="border-t border-border p-4">
+        <div className="shrink-0 border-t border-border p-4">
           <button type="button" onClick={onClose} className="design-action">
             확인
           </button>
