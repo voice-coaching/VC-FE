@@ -116,6 +116,11 @@ export function ContentCatalog({
   const [page, setPage] = useState(initialCache?.page ?? 0);
   const [hasNext, setHasNext] = useState(initialCache?.hasNext ?? false);
   const [error, setError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const generation = useRef(0);
+  const loadMoreBusy = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -158,6 +163,11 @@ export function ContentCatalog({
   useEffect(() => {
     let active = true;
     const resource = catalogCacheResource(type, category, difficulty);
+    generation.current += 1;
+    loadMoreBusy.current = false;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+    setRefreshing(true);
     const cached = readUserClientCache<CatalogCache>(userId, resource);
     if (cached) {
       setItems(cached.items);
@@ -225,15 +235,23 @@ export function ContentCatalog({
           );
         }
       })
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
     return () => {
       active = false;
+      generation.current += 1;
     };
-  }, [category, difficulty, type, userId]);
+  }, [category, difficulty, type, userId, retry]);
 
   async function loadMore() {
+    if (loadMoreBusy.current || refreshing || !hasNext) return;
+    loadMoreBusy.current = true;
+    const requestGeneration = generation.current;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const result = await api.content.list({
         type,
@@ -242,7 +260,10 @@ export function ContentCatalog({
         page: page + 1,
         size: 20,
       });
-      const nextItems = [...items, ...result.items];
+      if (requestGeneration !== generation.current) return;
+      const merged = new Map(items.map((item) => [String(item.id), item]));
+      for (const item of result.items) merged.set(String(item.id), item);
+      const nextItems = [...merged.values()];
       setItems(nextItems);
       setTotalElements(result.totalElements);
       setPage(result.page);
@@ -258,13 +279,17 @@ export function ContentCatalog({
         },
       );
     } catch (reason) {
-      setError(
+      if (requestGeneration !== generation.current) return;
+      setLoadMoreError(
         reason instanceof Error
           ? reason.message
           : "콘텐츠를 더 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingMore(false);
+      if (requestGeneration === generation.current) {
+        loadMoreBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -328,12 +353,16 @@ export function ContentCatalog({
         {loading ? (
           <CatalogListSkeleton type={type} />
         ) : error ? (
-          <p
-            role="alert"
-            className="mt-4 rounded-2xl bg-[#fff0f2] p-4 text-sm text-[#d91b34]"
-          >
-            {error}
-          </p>
+          <div className="mt-4 rounded-2xl bg-[#fff0f2] p-4 text-sm text-[#d91b34] [overflow-wrap:anywhere]">
+            <p role="alert">{error}</p>
+            <button
+              type="button"
+              className="mt-2 min-h-11 font-semibold text-primary"
+              onClick={() => setRetry((value) => value + 1)}
+            >
+              다시 시도
+            </button>
+          </div>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {items.map((item) => (
@@ -350,14 +379,28 @@ export function ContentCatalog({
               </p>
             ) : null}
             {hasNext ? (
-              <button
-                type="button"
-                disabled={loadingMore}
-                onClick={() => void loadMore()}
-                className="mt-1 h-12 rounded-full border border-[#e5e8eb] bg-white text-sm font-bold disabled:opacity-50"
-              >
-                {loadingMore ? "불러오는 중…" : "더 보기"}
-              </button>
+              <>
+                {loadMoreError ? (
+                  <p
+                    role="alert"
+                    className="rounded-2xl bg-[#fff0f2] p-4 text-sm text-[#d91b34] [overflow-wrap:anywhere]"
+                  >
+                    {loadMoreError}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={loadingMore || refreshing}
+                  onClick={() => void loadMore()}
+                  className="mt-1 h-12 rounded-full border border-[#e5e8eb] bg-white text-sm font-bold disabled:opacity-50"
+                >
+                  {loadingMore
+                    ? "불러오는 중…"
+                    : loadMoreError
+                      ? "더 보기 다시 시도"
+                      : "더 보기"}
+                </button>
+              </>
             ) : null}
           </div>
         )}
