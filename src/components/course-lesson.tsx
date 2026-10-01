@@ -156,7 +156,7 @@ export function CourseLesson({
   }, [practiceContentId, userId]);
   const selectedExample = examples?.items[selectedExampleIndex];
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-y-contain">
       <header className="flex items-center justify-between px-5 pt-8 pb-5">
         <button type="button" aria-label="학습 닫기" onClick={onClose}>
           <X className="size-5" />

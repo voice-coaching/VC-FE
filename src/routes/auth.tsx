@@ -11,9 +11,9 @@ export default function Auth() {
   const returnTo = safeInternalPath(searchParams.get("next"), "/home");
 
   return (
-    <AppShell nav={false}>
+    <AppShell nav={false} viewportLocked className="flex min-h-0 flex-col">
       <TopBar to="/" title="로그인" />
-      <div className="flex min-h-[calc(100dvh-4.5rem)] flex-col px-6 pt-10 pb-12">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pt-10 pb-12">
         <div className="flex flex-1 flex-col justify-center">
           <h1 className="text-3xl leading-tight font-bold tracking-tight whitespace-pre-line">
             {"다시 만나서\n반가워요"}

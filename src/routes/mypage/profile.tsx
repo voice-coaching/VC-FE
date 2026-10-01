@@ -115,109 +115,115 @@ export default function ProfileSettings() {
   return (
     <AppShell
       nav={false}
+      viewportLocked
       chromeColor="#ffffff"
-      className="flex min-h-dvh flex-col !bg-white"
+      className="flex min-h-0 flex-col !bg-white"
     >
       <TopBar to="/mypage/settings" title="프로필 수정" />
-      <div className="flex-1 space-y-6 px-6 pt-8">
-        <section
-          className="flex flex-col items-center"
-          aria-label="프로필 사진"
-        >
-          <ProfileAvatar src={profileImageUrl} size={96} />
-          <div className="mt-4 flex items-center gap-2">
-            <input
-              ref={imageInput}
-              type="file"
-              accept={PROFILE_IMAGE_TYPES.join(",")}
-              className="sr-only"
-              aria-label="프로필 사진 파일 선택"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadProfileImage(file);
-              }}
-            />
-            <button
-              type="button"
-              disabled={imageAction !== null}
-              onClick={() => imageInput.current?.click()}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#edf2ff] px-4 text-sm font-semibold text-primary disabled:opacity-50"
-            >
-              <Camera className="size-4" />
-              {imageAction === "upload"
-                ? "저장 중…"
-                : profileImageUrl
-                  ? "사진 변경"
-                  : "사진 추가"}
-            </button>
-            {profileImageUrl && (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="space-y-6 px-6 pt-8">
+          <section
+            className="flex flex-col items-center"
+            aria-label="프로필 사진"
+          >
+            <ProfileAvatar src={profileImageUrl} size={96} />
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                ref={imageInput}
+                type="file"
+                accept={PROFILE_IMAGE_TYPES.join(",")}
+                className="sr-only"
+                aria-label="프로필 사진 파일 선택"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadProfileImage(file);
+                }}
+              />
               <button
                 type="button"
                 disabled={imageAction !== null}
-                onClick={() => setConfirmDelete(true)}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#f7f8fa] px-4 text-sm font-semibold text-[#6b7684] disabled:opacity-50"
+                onClick={() => imageInput.current?.click()}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#edf2ff] px-4 text-sm font-semibold text-primary disabled:opacity-50"
               >
-                <Trash2 className="size-4" />
-                {imageAction === "delete" ? "삭제 중…" : "사진 삭제"}
+                <Camera className="size-4" />
+                {imageAction === "upload"
+                  ? "저장 중…"
+                  : profileImageUrl
+                    ? "사진 변경"
+                    : "사진 추가"}
               </button>
-            )}
-          </div>
-          <p className="mt-2 text-xs text-[#8b95a1]">
-            JPG, PNG, WebP · 최대 5MB
-          </p>
-        </section>
-        <label className="block text-sm text-[#6b7684]">
-          이메일
-          <input
-            value={email}
-            disabled
-            className="mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#8b95a1]"
-          />
-        </label>
-        <label className="block text-sm text-[#6b7684]">
-          닉네임
-          <input
-            value={nickname}
-            onChange={(event) => setNickname(event.target.value)}
-            maxLength={10}
-            className="mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#191f28] outline-none focus:ring-2 focus:ring-primary"
-          />
-          <span className="mt-2 block text-right text-xs text-[#8b95a1]">
-            {nickname.length}/10
-          </span>
-        </label>
-        {message && (
-          <p role="status" className="text-sm text-[#6b7684]">
-            {message}
-          </p>
-        )}
-      </div>
-      <div className="p-6 pb-10">
-        <button
-          className="design-action"
-          disabled={saving || !nickname.trim() || nickname.length > 10}
-          onClick={async () => {
-            setSaving(true);
-            try {
-              await api.users.updateProfile({ nickname: nickname.trim() });
-              const cached = getCachedUser();
-              if (cached)
-                markAuthenticatedUser({ ...cached, nickname: nickname.trim() });
-              updateMyPageOverviewCache({ nickname: nickname.trim() });
-              setMessage("프로필을 저장했습니다.");
-            } catch (reason) {
-              setMessage(
-                reason instanceof Error
-                  ? reason.message
-                  : "저장하지 못했습니다.",
-              );
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          {saving ? "저장 중…" : "저장하기"}
-        </button>
+              {profileImageUrl && (
+                <button
+                  type="button"
+                  disabled={imageAction !== null}
+                  onClick={() => setConfirmDelete(true)}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-[#f7f8fa] px-4 text-sm font-semibold text-[#6b7684] disabled:opacity-50"
+                >
+                  <Trash2 className="size-4" />
+                  {imageAction === "delete" ? "삭제 중…" : "사진 삭제"}
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-[#8b95a1]">
+              JPG, PNG, WebP · 최대 5MB
+            </p>
+          </section>
+          <label className="block text-sm text-[#6b7684]">
+            이메일
+            <input
+              value={email}
+              disabled
+              className="mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#8b95a1]"
+            />
+          </label>
+          <label className="block text-sm text-[#6b7684]">
+            닉네임
+            <input
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              maxLength={10}
+              className="mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#191f28] outline-none focus:ring-2 focus:ring-primary"
+            />
+            <span className="mt-2 block text-right text-xs text-[#8b95a1]">
+              {nickname.length}/10
+            </span>
+          </label>
+          {message && (
+            <p role="status" className="text-sm text-[#6b7684]">
+              {message}
+            </p>
+          )}
+        </div>
+        <div className="p-6 pb-10">
+          <button
+            className="design-action"
+            disabled={saving || !nickname.trim() || nickname.length > 10}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await api.users.updateProfile({ nickname: nickname.trim() });
+                const cached = getCachedUser();
+                if (cached)
+                  markAuthenticatedUser({
+                    ...cached,
+                    nickname: nickname.trim(),
+                  });
+                updateMyPageOverviewCache({ nickname: nickname.trim() });
+                setMessage("프로필을 저장했습니다.");
+              } catch (reason) {
+                setMessage(
+                  reason instanceof Error
+                    ? reason.message
+                    : "저장하지 못했습니다.",
+                );
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {saving ? "저장 중…" : "저장하기"}
+          </button>
+        </div>
       </div>
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">

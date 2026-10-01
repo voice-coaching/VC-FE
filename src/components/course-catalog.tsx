@@ -404,7 +404,12 @@ export function CourseCatalog({
 
   if (lesson)
     return (
-      <AppShell nav={false}>
+      <AppShell
+        nav={false}
+        viewportLocked
+        chromeColor="#f2f4f6"
+        className="min-h-0 bg-[#f2f4f6]"
+      >
         <CourseLesson
           key={`${lesson.course.id}:${lesson.step.id}`}
           course={lesson.course}
@@ -431,8 +436,9 @@ export function CourseCatalog({
   return (
     <AppShell
       nav={!selectedCourse}
+      viewportLocked
       chromeColor="#f2f4f6"
-      className="bg-[#f2f4f6]"
+      className="flex min-h-0 flex-col bg-[#f2f4f6]"
     >
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
         {selectedCourse ? (
@@ -467,7 +473,7 @@ export function CourseCatalog({
           {selectedCourse?.title ?? "클래스"}
         </h1>
       </header>
-      <div className="flex min-h-[calc(100dvh-80px)] flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
         <div className={selectedCourse ? "px-5 pb-6" : "pb-6"}>
           <p className="sr-only">
             {title} · {description}

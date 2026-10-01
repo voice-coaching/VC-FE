@@ -88,7 +88,7 @@ export function PracticeDetail({
     ADVANCED: "고급",
   }[content.difficulty];
   return (
-    <div className="flex min-h-[calc(100dvh-80px)] flex-col">
+    <div className="flex min-h-full flex-col">
       <div className="space-y-4 px-5 pb-6">
         {announcer ? (
           <>

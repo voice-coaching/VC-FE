@@ -47,6 +47,7 @@ const EMPTY_DASHBOARD: HomeDashboard = {
 };
 
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const HOME_HEADER_HEIGHT = 181;
 
 const PRACTICE_CARDS: PracticeCard[] = [
   {
@@ -173,6 +174,7 @@ export default function Home() {
     initialCache?.weekSessions ?? [],
   );
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -352,10 +354,18 @@ export default function Home() {
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
 
   return (
-    <AppShell viewportLocked chromeColor="#2f6bff">
+    <AppShell
+      viewportLocked
+      chromeColor={headerCollapsed ? "#f2f4f6" : "#2f6bff"}
+    >
       <div
         data-scroll-container="home"
-        className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#2f6bff] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onScroll={(event) =>
+          setHeaderCollapsed(
+            event.currentTarget.scrollTop >= HOME_HEADER_HEIGHT,
+          )
+        }
+        className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <header className={`${styles.homeHeader} relative z-20 bg-[#2f6bff]`}>
           <div className="flex h-16 items-center px-5">

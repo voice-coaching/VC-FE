@@ -612,7 +612,7 @@ export function PracticeSession({
     const rerecord =
       quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
-      <div className="flex min-h-[calc(100dvh-92px)] flex-col px-5 pb-8">
+      <div className="flex min-h-full flex-col px-5 pb-8">
         <div className="my-auto py-10 text-center">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
             <CircleAlert className="size-9" />
@@ -689,7 +689,7 @@ export function PracticeSession({
 
   if (showCompletion)
     return (
-      <div className="flex min-h-[calc(100dvh-80px)] flex-col px-5 text-center">
+      <div className="flex min-h-full flex-col px-5 text-center">
         <div className="my-auto py-12">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-primary text-white">
             <Check className="size-10" />
@@ -1007,7 +1007,7 @@ export function PracticeSession({
           )}
 
           {(phase === "uploading" || phase === "analyzing") && (
-            <div className="flex min-h-[650px] flex-1 flex-col items-center">
+            <div className="flex min-h-0 flex-1 flex-col items-center">
               <div className="flex-1" />
               <div className="h-[169px] w-[140px] overflow-hidden">
                 <Image

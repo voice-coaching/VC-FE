@@ -16,6 +16,11 @@ export class ApiError extends Error {
 const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
 let accessToken: string | null = null;
 let sessionVersion = 0;
+let nativeSessionRecoveryEnabled = false;
+
+export function enableNativeSessionRecovery() {
+  nativeSessionRecoveryEnabled = true;
+}
 
 export function getAuthSessionVersion() {
   return sessionVersion;
@@ -96,15 +101,24 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   timeoutMs?: number;
   skipAuth?: boolean;
   skipRefresh?: boolean;
+  deferAuthFailure?: boolean;
   responseType?: "json" | "audio";
 }
+
+type HttpClientOptions = {
+  native?: boolean;
+  refreshRetryDelayMs?: number;
+};
 
 function joinUrl(baseUrl: string, path: string) {
   if (/^https?:\/\//.test(path)) return path;
   return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-export function createHttpClient(baseUrl: string) {
+export function createHttpClient(
+  baseUrl: string,
+  { native, refreshRetryDelayMs = 500 }: HttpClientOptions = {},
+) {
   type RefreshResult = {
     accessToken: string;
     tokenType: string;
@@ -118,11 +132,33 @@ export function createHttpClient(baseUrl: string) {
   async function refreshAccessToken() {
     const version = sessionVersion;
     if (!refreshFlight || refreshFlight.version !== version) {
-      const promise = request<RefreshResult>("/api/auth/token/refresh", {
-        method: "POST",
-        skipAuth: true,
-        skipRefresh: true,
-      })
+      const recoverNativeSession = native ?? nativeSessionRecoveryEnabled;
+      const requestRefresh = (deferAuthFailure: boolean) =>
+        request<RefreshResult>("/api/auth/token/refresh", {
+          method: "POST",
+          skipAuth: true,
+          skipRefresh: true,
+          deferAuthFailure,
+        });
+      const promise = (async () => {
+        try {
+          return await requestRefresh(recoverNativeSession);
+        } catch (reason) {
+          const retryable =
+            reason instanceof ApiError && [0, 401, 408].includes(reason.status);
+          if (!recoverNativeSession || !retryable) throw reason;
+
+          // A resumed WKWebView can briefly make its cookie jar or network
+          // unavailable. Give it one short grace attempt before treating the
+          // refresh session as expired and signing the user out.
+          assertCurrentSession(version);
+          await new Promise((resolve) =>
+            setTimeout(resolve, refreshRetryDelayMs),
+          );
+          assertCurrentSession(version);
+          return requestRefresh(false);
+        }
+      })()
         .then((data) => {
           assertCurrentSession(version);
           return { ...data, accessToken: storeAccessToken(data.accessToken) };
@@ -144,6 +180,7 @@ export function createHttpClient(baseUrl: string) {
       timeoutMs = 20_000,
       skipAuth = false,
       skipRefresh = false,
+      deferAuthFailure = false,
       responseType = "json",
       signal,
       ...fetchOptions
@@ -253,6 +290,7 @@ export function createHttpClient(baseUrl: string) {
         if (
           response.status === 401 &&
           (!skipAuth || path === "/api/auth/token/refresh") &&
+          !deferAuthFailure &&
           getAccessToken() === token
         ) {
           clearAccessToken();

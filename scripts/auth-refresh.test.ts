@@ -174,6 +174,51 @@ test("expired refresh cookie clears the current session and does not loop", asyn
   assert.equal(getAuthSessionSnapshot().status, "anonymous");
 });
 
+test("native resume gives a transient refresh failure one grace attempt", async () => {
+  login();
+  let refreshes = 0;
+  globalThis.fetch = (async (url, init) => {
+    if (String(url).endsWith("/token/refresh")) {
+      refreshes++;
+      return refreshes === 1 ? response(401) : response(200, refreshed);
+    }
+    return new Headers(init?.headers).get("authorization") === "Bearer expired"
+      ? response(401)
+      : response();
+  }) as typeof fetch;
+
+  const client = createHttpClient("", {
+    native: true,
+    refreshRetryDelayMs: 0,
+  });
+  await client.request("/private");
+
+  assert.equal(refreshes, 2);
+  assert.equal(getAccessToken(), "renewed");
+  assert.equal(getAuthSessionSnapshot().status, "authenticated");
+});
+
+test("native resume clears an expired refresh session after its grace attempt", async () => {
+  login();
+  let refreshes = 0;
+  globalThis.fetch = (async () => {
+    refreshes++;
+    return response(401);
+  }) as typeof fetch;
+
+  await assert.rejects(
+    createHttpClient("", {
+      native: true,
+      refreshRetryDelayMs: 0,
+    }).request("/private"),
+    (error: unknown) => error instanceof ApiError && error.status === 401,
+  );
+
+  assert.equal(refreshes, 3);
+  assert.equal(getAccessToken(), null);
+  assert.equal(getAuthSessionSnapshot().status, "anonymous");
+});
+
 test("refresh network failure keeps the session available for retry", async () => {
   login();
   globalThis.fetch = (async (url) => {

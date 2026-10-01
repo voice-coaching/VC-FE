@@ -46,6 +46,7 @@ OAuth 공급자 콘솔에는 위 리다이렉트 URI를 정확히 등록해야 �
   동일 오리진 HttpOnly Refresh Cookie로 새 Access Token을 자동 발급받습니다.
 - Refresh Token은 JavaScript에서 읽거나 저장하지 않습니다.
 - 인증 API가 401을 반환하면 `POST /api/auth/token/refresh`를 한 번 호출하고 원 요청을 한 번 재시도합니다.
+- 네이티브 앱은 5분 이상 백그라운드에 머문 뒤 활성화될 때 사용자 동작 전에 Access Token을 조용히 갱신합니다. WebView의 네트워크 또는 쿠키 저장소 복구가 잠시 늦는 경우에는 500ms 뒤 refresh를 한 번 더 시도한 후에만 세션 만료로 판정합니다.
 - 여러 요청의 토큰 갱신이 겹치면 하나의 refresh 요청을 공유합니다.
 - `x-new-access-token` 헤더 또는 `{ data: { newAccessToken } }` 형태도 처리합니다.
 - refresh 실패, 로그아웃, 회원 탈퇴 시 Access Token을 제거합니다.
