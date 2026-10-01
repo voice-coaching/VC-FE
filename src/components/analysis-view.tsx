@@ -314,7 +314,7 @@ export function AnalysisView({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
       <section className="flex flex-col items-center gap-4 pt-2">
         <p className="flex items-center gap-2 text-[13px] leading-[18px]">
           <b className="text-primary">{sourceLabel}</b>
@@ -641,7 +641,7 @@ function ReportOverlay({
           </span>
         ) : null}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain [overflow-wrap:anywhere]">
         {children}
       </div>
       {footer ? (

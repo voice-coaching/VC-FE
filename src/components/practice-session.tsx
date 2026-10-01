@@ -1166,7 +1166,7 @@ export function PracticeSession({
               {requestError}
             </p>
           )}
-          <div className="sticky bottom-0 -mx-5 border-t border-[#e5e8eb] bg-white px-5 py-3">
+          <div className="sticky bottom-0 border-t border-[#e5e8eb] bg-white px-5 py-3">
             <button
               type="button"
               disabled={loadingNext}
