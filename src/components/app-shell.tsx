@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -36,12 +42,14 @@ export function AppShell({
   className,
   viewportLocked = false,
   chromeColor,
+  mainRef,
 }: {
   children: ReactNode;
   nav?: boolean;
   className?: string;
   viewportLocked?: boolean;
   chromeColor?: string;
+  mainRef?: Ref<HTMLElement>;
 }) {
   const pathname = usePathname();
   const lockViewport = nav || viewportLocked;
@@ -73,6 +81,7 @@ export function AppShell({
       )}
     >
       <main
+        ref={mainRef}
         key={animateTabFlow ? pathname : undefined}
         onClickCapture={
           animateTabFlow ? () => setTabTransitionDirection("right") : undefined

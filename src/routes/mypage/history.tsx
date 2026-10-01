@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { NicknameEditor } from "@/components/nickname-editor";
 import layout from "@/components/my-page-layout.module.css";
@@ -26,6 +26,9 @@ import {
   getUserTitleProgress,
 } from "@/lib/user-title";
 import { cn } from "@/lib/utils";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { installNavigationHistory } from "@/lib/navigation-history";
+import { mergeHistoryItems, refreshHistoryWindow } from "@/lib/history-pages";
 
 const FILTERS: Array<{ value?: ContentType; label: string }> = [
   { label: "전체" },
@@ -75,11 +78,14 @@ function relativeDateLabel(value: string, now = new Date()) {
 
 export default function LearningHistory() {
   const router = useRouter();
-  const [kind, setKind] = useState<ContentType | undefined>();
+  const params = useSearchParams();
+  const kind = FILTERS.find(
+    (filter) => filter.value === params.get("type"),
+  )?.value;
   const userId = getAuthenticatedUserId();
   const [initialOverview] = useState(readMyPageOverviewCache);
   const [initialHistory] = useState(() =>
-    readUserClientCache<HistoryCache>(userId, historyCacheResource()),
+    readUserClientCache<HistoryCache>(userId, historyCacheResource(kind)),
   );
   const [items, setItems] = useState<TrainingHistoryItem[]>(
     initialHistory?.items ?? [],
@@ -100,6 +106,28 @@ export default function LearningHistory() {
   const [hasNext, setHasNext] = useState(initialHistory?.hasNext ?? false);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
+  const generation = useRef(0);
+  const moreBusy = useRef(false);
+  const scope = `history:${userId}:${kind ?? "all"}`;
+  const [loadedScope, setLoadedScope] = useState(scope);
+  const loadingList = loading || loadedScope !== scope;
+  const scrollReady = userId !== null && !loadingList && !overviewLoading;
+  const mainScroll = useHistoryScroll(`${scope}:outer`, scrollReady);
+  const listScroll = useHistoryScroll(`${scope}:inner`, scrollReady);
+
+  function setKind(next?: ContentType) {
+    if (next === kind) return;
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("type", next);
+    else url.searchParams.delete("type");
+    installNavigationHistory(window.history);
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }
 
   useEffect(() => {
     let active = true;
@@ -142,6 +170,11 @@ export default function LearningHistory() {
 
   useEffect(() => {
     let active = true;
+    generation.current += 1;
+    moreBusy.current = false;
+    setLoadingMore(false);
+    setRefreshing(true);
+    setLoadedScope(scope);
     const resource = historyCacheResource(kind);
     const cached = readUserClientCache<HistoryCache>(userId, resource);
     if (cached) {
@@ -157,15 +190,27 @@ export default function LearningHistory() {
     }
     setError(null);
     setLoadMoreError(null);
-    api.myPage
-      .listTrainingSessions({
-        type: kind,
-        status: "COMPLETED",
-        page: 0,
-        size: 20,
-      })
+    // Revalidate the entire loaded window, not just page zero. Otherwise a
+    // detail round-trip removes later pages and clamps the restored scroll.
+    const lastPage = cached
+      ? Math.min(
+          cached.page,
+          Math.max(0, Math.ceil(cached.items.length / 20) - 1),
+        )
+      : 0;
+    void refreshHistoryWindow(
+      (page) =>
+        api.myPage.listTrainingSessions({
+          type: kind,
+          status: "COMPLETED",
+          page,
+          size: 20,
+        }),
+      lastPage,
+      () => active,
+    )
       .then((value) => {
-        if (!active) return;
+        if (!active || !value) return;
         setItems(value.items);
         setPage(value.page);
         setHasNext(Boolean(value.hasNext));
@@ -184,11 +229,17 @@ export default function LearningHistory() {
           );
         }
       })
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      });
     return () => {
       active = false;
+      generation.current += 1;
     };
-  }, [kind, userId, retry]);
+  }, [kind, userId, retry, scope]);
 
   const groups = useMemo(() => {
     const week = localStartOfWeek(new Date());
@@ -214,6 +265,9 @@ export default function LearningHistory() {
   }, [items]);
 
   async function loadMore() {
+    if (moreBusy.current || refreshing || loadingList || !hasNext) return;
+    moreBusy.current = true;
+    const requestGeneration = generation.current;
     setLoadingMore(true);
     setLoadMoreError(null);
     try {
@@ -223,7 +277,8 @@ export default function LearningHistory() {
         page: page + 1,
         size: 20,
       });
-      const nextItems = [...items, ...value.items];
+      if (requestGeneration !== generation.current) return;
+      const nextItems = mergeHistoryItems(items, value.items);
       setItems(nextItems);
       setPage(value.page);
       setHasNext(Boolean(value.hasNext));
@@ -233,13 +288,17 @@ export default function LearningHistory() {
         hasNext: Boolean(value.hasNext),
       });
     } catch (reason) {
+      if (requestGeneration !== generation.current) return;
       setLoadMoreError(
         reason instanceof Error
           ? reason.message
           : "기록을 더 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingMore(false);
+      if (requestGeneration === generation.current) {
+        moreBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -263,6 +322,7 @@ export default function LearningHistory() {
 
   return (
     <AppShell
+      mainRef={mainScroll}
       chromeColor="#c5d6ff"
       viewportLocked
       className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
@@ -274,6 +334,7 @@ export default function LearningHistory() {
         loading={overviewLoading}
       />
       <div
+        ref={listScroll}
         className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
       >
         <MyPageHead
@@ -291,6 +352,7 @@ export default function LearningHistory() {
                 key={filter.label}
                 type="button"
                 onClick={() => setKind(filter.value)}
+                aria-pressed={kind === filter.value}
                 className={cn(
                   "shrink-0 rounded-full px-3.5 py-[7px] text-[13px] leading-[18px] font-medium",
                   kind === filter.value
@@ -322,7 +384,7 @@ export default function LearningHistory() {
               </button>
             </div>
           ) : null}
-          {loading ? (
+          {loadingList ? (
             <p className="py-12 text-center text-[13px] text-[#8b95a1]">
               기록을 불러오는 중…
             </p>
@@ -367,7 +429,7 @@ export default function LearningHistory() {
               {hasNext ? (
                 <button
                   type="button"
-                  disabled={loadingMore}
+                  disabled={loadingMore || refreshing}
                   onClick={() => void loadMore()}
                   className="h-12 w-full rounded-full bg-white text-[14px] font-bold text-primary disabled:opacity-50"
                 >
