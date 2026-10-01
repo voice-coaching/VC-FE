@@ -50,9 +50,13 @@ export default function MyPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [examStarting, setExamStarting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setError(null);
     const cachedUser = getCachedUser();
     void Promise.allSettled([
       cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
@@ -61,6 +65,7 @@ export default function MyPage() {
       api.users.getTitle(),
     ]).then(([userResult, statsResult, feedbackResult, titleResult]) => {
       if (!active) return;
+      setLoading(false);
       const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
 
       if (userResult.status === "fulfilled") {
@@ -116,7 +121,7 @@ export default function MyPage() {
     return () => {
       active = false;
     };
-  }, [initialOverview]);
+  }, [initialOverview, retry]);
 
   const percent = titlePercent(titleProgress);
   const titleTrainingCount = titleProgress
@@ -207,7 +212,9 @@ export default function MyPage() {
           </p>
         ) : (
           <p className="mt-1 text-[13px] leading-[18px] text-[#3d4a5c]">
-            학습 기록을 불러오는 중
+            {loading
+              ? "학습 기록을 불러오는 중"
+              : "학습 기록을 확인하지 못했어요"}
           </p>
         )}
       </section>
@@ -257,8 +264,12 @@ export default function MyPage() {
                 </span>
               )}
             </button>
-          ) : (
+          ) : loading ? (
             <div className="h-[76px] animate-pulse rounded-2xl bg-[#edf2ff]" />
+          ) : (
+            <p className="flex min-h-[76px] items-center justify-center rounded-2xl bg-[#edf2ff] px-4 text-center text-[13px] text-[#6b7684]">
+              칭호 정보를 확인하지 못했어요
+            </p>
           )}
 
           <nav
@@ -289,12 +300,22 @@ export default function MyPage() {
 
         <div className="space-y-3 px-5 pt-4 pb-6">
           {error ? (
-            <p
-              role="alert"
-              className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive"
-            >
-              {error}
-            </p>
+            <div className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive">
+              <p role="alert">{error}</p>
+              {!statistics || !feedback || !titleProgress ? (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setLoading(true);
+                    setRetry((value) => value + 1);
+                  }}
+                  className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary disabled:opacity-50"
+                >
+                  다시 시도
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <section className="rounded-2xl bg-white px-4 py-[18px]">
@@ -304,9 +325,12 @@ export default function MyPage() {
             <div className="mt-4 grid grid-cols-3 divide-x divide-[#e5e8eb] text-center">
               <Metric
                 label="연습 횟수"
-                value={`${statistics?.totalSessionCount ?? 0}회`}
+                value={statistics ? `${statistics.totalSessionCount}회` : "—"}
               />
-              <Metric label="연습 시간" value={learningTime} />
+              <Metric
+                label="연습 시간"
+                value={statistics ? learningTime : "—"}
+              />
               <Metric
                 label="평균 점수"
                 value={
@@ -331,10 +355,14 @@ export default function MyPage() {
               <ReportRow
                 title="잘하는 발음"
                 items={(feedback?.strengths ?? []).map((item) => item.label)}
+                pending={loading && !feedback}
+                failed={!loading && !feedback}
               />
               <ReportRow
                 title="자주 틀리는 발음"
                 items={(feedback?.weaknesses ?? []).map((item) => item.label)}
+                pending={loading && !feedback}
+                failed={!loading && !feedback}
               />
               <ReportRow title="억양 특성" items={[]} unavailable />
             </div>
@@ -373,10 +401,14 @@ function ReportRow({
   title,
   items,
   unavailable = false,
+  pending = false,
+  failed = false,
 }: {
   title: string;
   items: string[];
   unavailable?: boolean;
+  pending?: boolean;
+  failed?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -395,7 +427,13 @@ function ReportRow({
           ))
         ) : (
           <span className="rounded-full bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 text-[#8b95a1]">
-            {unavailable ? "데이터 미제공" : "분석 기록 없음"}
+            {pending
+              ? "불러오는 중"
+              : failed
+                ? "불러오기 실패"
+                : unavailable
+                  ? "데이터 미제공"
+                  : "분석 기록 없음"}
           </span>
         )}
       </div>

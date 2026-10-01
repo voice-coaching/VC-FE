@@ -106,6 +106,11 @@ export function useProfile({ loadExisting = true } = {}) {
     () => !loadExisting || initialProfile !== null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => {
+    if (!profile) setHydrated(false);
+    setReloadKey((value) => value + 1);
+  }, [profile]);
 
   useEffect(() => {
     if (!loadExisting) return;
@@ -140,7 +145,7 @@ export function useProfile({ loadExisting = true } = {}) {
     return () => {
       active = false;
     };
-  }, [initialProfile, loadExisting, userId]);
+  }, [initialProfile, loadExisting, userId, reloadKey]);
 
   const save = useCallback(async (value: OnboardingAnswers) => {
     const nickname = value.name.trim();
@@ -210,5 +215,13 @@ export function useProfile({ loadExisting = true } = {}) {
     setProfile(value);
   }, []);
 
-  return { profile, hydrated, error, save, updateLearningGoals, updatePlan };
+  return {
+    profile,
+    hydrated,
+    error,
+    reload,
+    save,
+    updateLearningGoals,
+    updatePlan,
+  };
 }

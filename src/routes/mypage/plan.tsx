@@ -29,7 +29,13 @@ import { getUserTitleProgress } from "@/lib/user-title";
 
 export default function PracticePlan() {
   const router = useRouter();
-  const { profile, hydrated, error: loadError, updatePlan } = useProfile();
+  const {
+    profile,
+    hydrated,
+    error: loadError,
+    reload,
+    updatePlan,
+  } = useProfile();
   const [initialOverview] = useState(readMyPageOverviewCache);
   const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
   const [statistics, setStatistics] = useState<Statistics | null>(
@@ -44,6 +50,8 @@ export default function PracticePlan() {
   const [saving, setSaving] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -52,6 +60,7 @@ export default function PracticePlan() {
 
   useEffect(() => {
     let active = true;
+    setOverviewLoading(true);
     const cached = getCachedUser();
     void Promise.allSettled([
       cached ? Promise.resolve(cached) : api.users.getMe(),
@@ -59,6 +68,7 @@ export default function PracticePlan() {
       api.users.getTitle(),
     ]).then(([userResult, statsResult, titleResult]) => {
       if (!active) return;
+      setOverviewLoading(false);
       if (userResult.status === "fulfilled") {
         setAccount(userResult.value);
         updateMyPageOverviewCache({ nickname: userResult.value.nickname });
@@ -85,7 +95,7 @@ export default function PracticePlan() {
     return () => {
       active = false;
     };
-  }, [initialOverview]);
+  }, [initialOverview, retry]);
 
   useEffect(() => {
     if (editing) dialog.current?.showModal();
@@ -222,6 +232,9 @@ export default function PracticePlan() {
     }
   }
 
+  const canReload =
+    Boolean(loadError) || (!overviewLoading && (!statistics || !titleProgress));
+
   return (
     <AppShell
       chromeColor="#c5d6ff"
@@ -233,10 +246,12 @@ export default function PracticePlan() {
         fallbackName={profile?.name}
         statistics={statistics}
         titleProgress={titleProgress}
+        loading={overviewLoading}
       />
       <div className="absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6]">
         <MyPageHead
           active="plan"
+          loading={overviewLoading}
           titleProgress={titleProgress}
           examStarting={examStarting}
           onExam={() => void startTitleExam()}
@@ -249,7 +264,7 @@ export default function PracticePlan() {
             <p className="rounded-[20px] bg-white py-12 text-center text-[13px] text-[#8b95a1]">
               계획을 불러오는 중…
             </p>
-          ) : (
+          ) : rows.length ? (
             <div className="rounded-[20px] bg-white px-4 py-1">
               {rows.map((row, index) => (
                 <button
@@ -275,14 +290,27 @@ export default function PracticePlan() {
                 </button>
               ))}
             </div>
-          )}
-          {error || loadError ? (
-            <p
-              role="alert"
-              className="mt-3 rounded-2xl bg-white p-4 text-[13px] text-destructive"
-            >
-              {error || loadError}
-            </p>
+          ) : null}
+          {error || canReload ? (
+            <div className="mt-3 rounded-2xl bg-white p-4">
+              <p role="alert" className="text-[13px] text-destructive">
+                {error || loadError || "학습 정보를 모두 불러오지 못했어요."}
+              </p>
+              {canReload ? (
+                <button
+                  type="button"
+                  disabled={overviewLoading || !hydrated}
+                  onClick={() => {
+                    setOverviewLoading(true);
+                    setRetry((value) => value + 1);
+                    reload();
+                  }}
+                  className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary disabled:opacity-50"
+                >
+                  다시 시도
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

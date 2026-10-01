@@ -12,11 +12,13 @@ export function MyProfileBand({
   fallbackName,
   statistics,
   titleProgress,
+  loading,
 }: {
   account: UserAccount | null;
   fallbackName?: string;
   statistics: Statistics | null;
   titleProgress: UserTitleProgress | null;
+  loading: boolean;
 }) {
   const next = titleProgress?.next;
   const span = next
@@ -91,7 +93,9 @@ export function MyProfileBand({
           </p>
         ) : (
           <p className="mt-1 text-[13px] leading-[18px] text-[#3d4a5c]">
-            학습 기록을 불러오는 중
+            {loading
+              ? "학습 기록을 불러오는 중"
+              : "학습 기록을 확인하지 못했어요"}
           </p>
         )}
       </section>
@@ -104,11 +108,13 @@ export function MyPageHead({
   titleProgress,
   examStarting,
   onExam,
+  loading,
 }: {
   active: "summary" | "history" | "plan";
   titleProgress: UserTitleProgress | null;
   examStarting: boolean;
   onExam: () => void;
+  loading: boolean;
 }) {
   const trainingCount = titleProgress
     ? getTitleTrainingCountDisplay(titleProgress)
@@ -153,8 +159,12 @@ export function MyPageHead({
             </button>
           ) : null}
         </div>
-      ) : (
+      ) : loading ? (
         <div className="h-[72px] animate-pulse rounded-[20px] bg-[#edf2ff]" />
+      ) : (
+        <p className="flex min-h-[72px] items-center justify-center rounded-[20px] bg-[#edf2ff] px-4 text-center text-[13px] text-[#6b7684]">
+          칭호 정보를 확인하지 못했어요
+        </p>
       )}
       <nav className="mt-2.5 grid h-11 grid-cols-3 border-b border-[#e5e8eb]">
         {[
