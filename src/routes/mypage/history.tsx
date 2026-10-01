@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { installNavigationHistory } from "@/lib/navigation-history";
 import { mergeHistoryItems, refreshHistoryWindow } from "@/lib/history-pages";
+import { historyCacheResource, type HistoryCache } from "@/lib/history-cache";
 
 const FILTERS: Array<{ value?: ContentType; label: string }> = [
   { label: "전체" },
@@ -45,16 +46,6 @@ const TYPE_LABEL: Record<ContentType, string> = {
   ANNOUNCER: "아나운서",
   CLASS_PRACTICE: "클래스",
 };
-
-type HistoryCache = {
-  items: TrainingHistoryItem[];
-  page: number;
-  hasNext: boolean;
-};
-
-function historyCacheResource(kind?: ContentType) {
-  return `mypage-history-${kind ?? "all"}`;
-}
 
 function localStartOfWeek(date: Date) {
   const start = new Date(date);
@@ -193,12 +184,7 @@ export default function LearningHistory() {
     setLoadMoreError(null);
     // Revalidate the entire loaded window, not just page zero. Otherwise a
     // detail round-trip removes later pages and clamps the restored scroll.
-    const lastPage = cached
-      ? Math.min(
-          cached.page,
-          Math.max(0, Math.ceil(cached.items.length / 20) - 1),
-        )
-      : 0;
+    const lastPage = cached?.page ?? 0;
     void refreshHistoryWindow(
       (page) =>
         api.myPage.listTrainingSessions({

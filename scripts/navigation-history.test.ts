@@ -4,6 +4,7 @@ import {
   canNavigateBack,
   installNavigationHistory,
   navigationEntryId,
+  previousNavigationPath,
 } from "../src/lib/navigation-history";
 
 function fakeHistory() {
@@ -39,6 +40,44 @@ test("direct entry does not treat external browser history as an app back target
   assert.equal(canNavigateBack(history.state), false);
   assert.equal(history.state.__NA, true);
   assert.equal(history.state.tree, "initial");
+});
+
+test("previous path survives replace and distinguishes a confirmation from its detail", () => {
+  const history = fakeHistory();
+  let path = "/mypage/history";
+  installNavigationHistory(history, () => path);
+  assert.equal(previousNavigationPath(history.state), null);
+  history.pushState({});
+  path = "/mypage/history/77";
+  assert.equal(previousNavigationPath(history.state), "/mypage/history");
+  history.replaceState({});
+  assert.equal(previousNavigationPath(history.state), "/mypage/history");
+  history.pushState({});
+  assert.equal(previousNavigationPath(history.state), "/mypage/history/77");
+  history.back();
+  assert.equal(previousNavigationPath(history.state), "/mypage/history");
+});
+
+test("missing or external previous paths never authorize a contextual return", () => {
+  for (const previousPath of [
+    undefined,
+    "https://example.com",
+    "//example.com",
+    4,
+  ]) {
+    assert.equal(
+      previousNavigationPath({
+        __speakaiNavigation: { depth: 1, previousPath },
+      }),
+      null,
+    );
+  }
+  assert.equal(
+    previousNavigationPath({
+      __speakaiNavigation: { depth: 0, previousPath: "/mypage/history" },
+    }),
+    null,
+  );
 });
 
 test("push, back and forward retain the correct app depth", () => {

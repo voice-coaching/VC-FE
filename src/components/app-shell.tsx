@@ -28,6 +28,13 @@ const tabFlowPrefixes = [
   "/lip-practice",
 ];
 
+// These views share the same profile header and should switch without sliding it.
+const staticMyPageTabs = new Set([
+  "/mypage",
+  "/mypage/history",
+  "/mypage/plan",
+]);
+
 export function BottomNav() {
   return (
     <div className="relative z-20 shrink-0">
@@ -56,6 +63,7 @@ export function AppShell({
   const animateTabFlow = tabFlowPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+  const animateContent = animateTabFlow && !staticMyPageTabs.has(pathname);
   const transitionDirection = useMemo(() => {
     void pathname;
     return getTabTransitionDirection();
@@ -89,8 +97,8 @@ export function AppShell({
         className={cn(
           "flex-1",
           lockViewport && "min-h-0",
-          animateTabFlow && styles.tabContent,
-          animateTabFlow &&
+          animateContent && styles.tabContent,
+          animateContent &&
             (transitionDirection === "left"
               ? styles.fromLeft
               : styles.fromRight),

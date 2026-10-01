@@ -104,7 +104,7 @@ export default function Practice({ contentId }: { contentId: string }) {
                 : "문장 연습"
         }
       />
-      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain [touch-action:pan-y_pinch-zoom]">
         {error ? (
           <p
             role="alert"

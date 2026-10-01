@@ -319,13 +319,13 @@ export function AnalysisView({
       <div
         inert={overlay != null}
         aria-hidden={overlay != null}
-        className={`min-w-0 space-y-5 [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
+        className={`min-w-0 max-w-full space-y-5 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
         <section className="flex flex-col items-center gap-4 pt-2">
-          <p className="flex items-center gap-2 text-[13px] leading-[18px]">
-            <b className="text-primary">{sourceLabel}</b>
-            <span className="h-2.5 w-px bg-[#e5e8eb]" />
-            <span className="max-w-[240px] truncate font-medium text-[#8b95a1]">
+          <p className="flex min-w-0 max-w-full items-center gap-2 text-[13px] leading-[18px]">
+            <b className="shrink-0 text-primary">{sourceLabel}</b>
+            <span className="h-2.5 w-px shrink-0 bg-[#e5e8eb]" />
+            <span className="min-w-0 max-w-[240px] truncate font-medium text-[#8b95a1]">
               {content.title}
             </span>
           </p>
@@ -633,7 +633,7 @@ function ReportOverlay({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28]">
+    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col overflow-x-clip bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28] [touch-action:pan-y_pinch-zoom]">
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
         <button
           type="button"

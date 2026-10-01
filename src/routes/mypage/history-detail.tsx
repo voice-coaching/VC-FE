@@ -2,7 +2,7 @@
 
 import { SkeletonBlock } from "@/components/skeleton-block";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
 import { ReferencePlayer } from "@/components/reference-player";
@@ -33,6 +33,9 @@ import {
   writeUserClientCache,
 } from "@/lib/client-cache";
 import { splitSentences } from "@/lib/sentences";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { previousNavigationPath } from "@/lib/navigation-history";
+import { removeCachedHistorySession } from "@/lib/history-cache";
 
 type DetailBundle = {
   detail: TrainingHistoryDetail;
@@ -63,7 +66,39 @@ export default function LearningHistoryDetail({
   const [tab, setTab] = useState<"recording" | "report">("recording");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmation, setConfirmation] = useHistoryPanel("confirm", [
+    "delete",
+  ] as const);
+  const confirmDelete = confirmation === "delete";
+  const setConfirmDelete = (open: boolean) =>
+    setConfirmation(open ? "delete" : null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [deleted, setDeleted] = useState(false);
+  const deleteBusy = useRef(false);
+  const deletedRef = useRef(false);
+  const leaving = useRef(false);
+  const lifecycle = useRef(0);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    lifecycle.current += 1;
+    return () => {
+      lifecycle.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!deleted || confirmDelete || leaving.current) return;
+    leaving.current = true;
+    // The confirmation entry has now closed. Only go back if the detail was
+    // actually opened from our list; direct links replace the current page.
+    if (previousNavigationPath(window.history.state) === "/mypage/history") {
+      window.history.back();
+    } else {
+      router.replace("/mypage/history");
+    }
+  }, [deleted, confirmDelete, router]);
 
   useEffect(() => {
     let active = true;
@@ -78,7 +113,7 @@ export default function LearningHistoryDetail({
           api.analyses.get(detail.analysis.id),
           api.analyses.getSegments(detail.analysis.id, { page: 0, size: 100 }),
         ]);
-        if (active) {
+        if (active && !deletedRef.current) {
           const value = {
             detail,
             content,
@@ -100,24 +135,32 @@ export default function LearningHistoryDetail({
     return () => {
       active = false;
     };
-  }, [cacheResource, sessionId, userId]);
+  }, [cacheResource, sessionId, userId, retry]);
 
   async function deleteHistory() {
+    if (deleteBusy.current || !bundle) return;
+    deleteBusy.current = true;
+    const requestLifecycle = lifecycle.current;
     setDeleting(true);
-    setError(null);
+    setDeleteError(null);
     try {
       await api.myPage.deleteTrainingSession(sessionId);
+      deletedRef.current = true;
       removeUserClientCache(userId, cacheResource);
-      removeUserClientCacheGroup(userId, "mypage-history-");
+      removeCachedHistorySession(userId, sessionId);
       removeUserClientCacheGroup(userId, "home-");
       removeUserClientCacheGroup(userId, "streak-");
-      router.replace("/mypage/history");
+      if (requestLifecycle !== lifecycle.current) return;
+      setDeleted(true);
+      setConfirmDelete(false);
     } catch (reason) {
-      setError(
+      if (requestLifecycle !== lifecycle.current) return;
+      setDeleteError(
         reason instanceof Error
           ? reason.message
           : "학습 기록을 삭제하지 못했습니다.",
       );
+      deleteBusy.current = false;
       setDeleting(false);
     }
   }
@@ -158,18 +201,25 @@ export default function LearningHistoryDetail({
       </div>
 
       {error && (
-        <p
-          role="alert"
-          className="m-5 rounded-2xl bg-red-50 p-4 text-sm text-red-600"
-        >
-          {error}
-        </p>
+        <div className="m-5 min-h-0 overflow-y-auto rounded-2xl bg-red-50 p-4 text-sm text-red-600 [overflow-wrap:anywhere]">
+          <p role="alert">{error}</p>
+          <button
+            type="button"
+            className="mt-2 min-h-11 font-semibold text-primary"
+            onClick={() => {
+              setError(null);
+              setRetry((value) => value + 1);
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
       )}
       {!bundle && !error && <HistoryDetailSkeleton />}
 
       {bundle && tab === "recording" && (
         <>
-          <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-6">
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pt-4 pb-6 [overflow-wrap:anywhere]">
             <section className="space-y-3.5 rounded-[20px] bg-white p-[18px] text-[16px] leading-[1.6]">
               {sentences.map((sentence, index) => (
                 <p
@@ -185,14 +235,18 @@ export default function LearningHistoryDetail({
               ))}
             </section>
             <button
+              ref={deleteTrigger}
               type="button"
               disabled={deleting}
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmDelete(true);
+              }}
               className="mt-6 w-full py-3 text-[12px] font-medium text-[#8b95a1] underline disabled:opacity-50"
             >
               {deleting ? "삭제 중…" : "연습 기록 삭제"}
             </button>
-          </main>
+          </div>
           <div className="shrink-0 px-5 pb-4">
             <ReferencePlayer
               recordingId={bundle.detail.recording.id}
@@ -205,7 +259,7 @@ export default function LearningHistoryDetail({
       )}
 
       {bundle && tab === "report" && (
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <AnalysisView
             analysis={bundle.analysis}
             segments={bundle.segments}
@@ -213,26 +267,47 @@ export default function LearningHistoryDetail({
             recordingId={bundle.detail.recording.id}
             courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
           />
-        </main>
+        </div>
       )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">
+        <AlertDialogContent
+          className="max-h-[calc(100dvh-40px)] w-[calc(100%-40px)] max-w-[362px] overflow-y-auto rounded-[24px] border-0"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (!deleted) deleteTrigger.current?.focus({ preventScroll: true });
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>이 연습 기록을 삭제할까요?</AlertDialogTitle>
             <AlertDialogDescription>
               삭제한 기록과 분석 결과는 복구할 수 없어요.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteError ? (
+            <p
+              role="alert"
+              className="text-sm text-destructive [overflow-wrap:anywhere]"
+            >
+              {deleteError}
+            </p>
+          ) : null}
           <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
-            <AlertDialogCancel className="mt-0 min-h-12 rounded-full">
+            <AlertDialogCancel
+              disabled={deleting}
+              className="mt-0 min-h-12 rounded-full"
+            >
               취소
             </AlertDialogCancel>
             <AlertDialogAction
               className="min-h-12 rounded-full bg-red-500 text-white"
-              onClick={() => void deleteHistory()}
+              disabled={deleting || !bundle}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteHistory();
+              }}
             >
-              삭제
+              {deleting ? "삭제 중…" : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
