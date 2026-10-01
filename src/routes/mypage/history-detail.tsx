@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnalysisView } from "@/components/analysis-view";
@@ -164,11 +165,7 @@ export default function LearningHistoryDetail({
           {error}
         </p>
       )}
-      {!bundle && !error && (
-        <p className="py-12 text-center text-sm text-[#8b95a1]">
-          기록을 불러오는 중…
-        </p>
-      )}
+      {!bundle && !error && <HistoryDetailSkeleton />}
 
       {bundle && tab === "recording" && (
         <>
@@ -241,5 +238,19 @@ export default function LearningHistoryDetail({
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
+  );
+}
+
+function HistoryDetailSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="px-5 pt-4">
+      <span className="sr-only">기록을 불러오는 중</span>
+      <div className="space-y-4 rounded-[20px] bg-white p-[18px]">
+        <SkeletonBlock className="h-4 w-11/12" />
+        <SkeletonBlock className="h-4 w-4/5" />
+        <SkeletonBlock className="h-4 w-full" />
+        <SkeletonBlock className="h-4 w-3/5" />
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -285,9 +286,7 @@ export default function HomeNotifications() {
       </header>
 
       {loading ? (
-        <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-5 py-8 text-sm text-[#8b95a1]">
-          알림을 불러오는 중이에요
-        </section>
+        <NotificationListSkeleton />
       ) : error && !notifications.length ? (
         <section className="min-h-0 flex-1 overflow-y-auto px-5 py-8 text-center">
           <div className="flex min-h-full flex-col items-center justify-center gap-3">
@@ -324,5 +323,23 @@ export default function HomeNotifications() {
         </section>
       )}
     </AppShell>
+  );
+}
+
+function NotificationListSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="min-h-0 flex-1 pt-2">
+      <span className="sr-only">알림을 불러오는 중</span>
+      <div className="px-5 pt-5 pb-1.5">
+        <SkeletonBlock className="h-3.5 w-10" />
+      </div>
+      {[0, 1, 2, 3].map((index) => (
+        <div key={index} className="px-5 py-3.5">
+          <SkeletonBlock className="h-3.5 w-24" />
+          <SkeletonBlock className="mt-2.5 h-4 w-4/5" />
+          <SkeletonBlock className="mt-2.5 h-3 w-12" />
+        </div>
+      ))}
+    </div>
   );
 }

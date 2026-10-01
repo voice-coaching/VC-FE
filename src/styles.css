@@ -498,8 +498,60 @@
   animation: onboarding-scrim-exit 200ms ease-in forwards;
 }
 
+@keyframes loading-ring-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loading-ring-dash {
+  0% {
+    stroke-dasharray: 1 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90 150;
+    stroke-dashoffset: -124;
+  }
+}
+
+.loading-ring {
+  animation: loading-ring-rotate 1.4s linear infinite;
+}
+
+.loading-ring-arc {
+  animation: loading-ring-dash 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  70%,
+  100% {
+    background-position: -50% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 30%,
+    rgb(255 255 255 / 40%) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 2.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .password-mask-caret {
+  .password-mask-caret,
+  .skeleton-shimmer {
     animation: none;
   }
 

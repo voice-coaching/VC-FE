@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "@/lib/api";
@@ -138,12 +139,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
   return (
     <main className="flex min-h-dvh items-center justify-center px-6 text-center">
       {status === "checking" ? (
-        <div role="status">
-          <span className="mx-auto block size-10 animate-spin rounded-full border-4 border-border border-t-foreground" />
-          <p className="mt-4 text-sm text-muted-foreground">
-            로그인 상태를 확인하는 중…
-          </p>
-        </div>
+        <LoadingOverlay label="로그인 상태를 확인하는 중…" />
       ) : (
         <div>
           <h1 className="text-xl font-bold">서비스에 연결하지 못했어요</h1>
