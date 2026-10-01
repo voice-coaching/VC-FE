@@ -84,7 +84,7 @@ export function NotificationList({
           </h2>
           {group.items.map((item) => {
             const content = (
-              <span className="flex flex-col gap-1.5">
+              <span className="flex min-w-0 flex-col gap-1.5 break-words">
                 <span className="text-[13px] leading-[18px] font-medium text-[#6b7684]">
                   {item.title}
                 </span>
@@ -244,7 +244,12 @@ export default function HomeNotifications() {
   }
 
   return (
-    <AppShell nav={false} className="flex min-h-0 flex-col bg-white">
+    <AppShell
+      nav={false}
+      viewportLocked
+      chromeColor="#ffffff"
+      className="flex min-h-0 flex-col bg-white"
+    >
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
         <Link
           href="/home"
@@ -275,35 +280,39 @@ export default function HomeNotifications() {
       </header>
 
       {loading ? (
-        <section className="flex min-h-0 flex-1 items-center justify-center pb-[120px] text-sm text-[#8b95a1]">
+        <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-5 py-8 text-sm text-[#8b95a1]">
           알림을 불러오는 중이에요
         </section>
       ) : error && !notifications.length ? (
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-5 pb-[120px] text-center">
-          <p className="text-sm text-[#8b95a1]">{error}</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded-full bg-[#f2f4f6] px-4 py-2 text-sm font-medium text-[#4e5968]"
-          >
-            다시 시도
-          </button>
+        <section className="min-h-0 flex-1 overflow-y-auto px-5 py-8 text-center">
+          <div className="flex min-h-full flex-col items-center justify-center gap-3">
+            <p className="text-sm text-[#8b95a1]">{error}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="rounded-full bg-[#f2f4f6] px-4 py-2 text-sm font-medium text-[#4e5968]"
+            >
+              다시 시도
+            </button>
+          </div>
         </section>
       ) : notifications.length ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-5">
           <NotificationList items={notifications} onRead={markRead} />
         </div>
       ) : (
-        <section className="flex min-h-0 flex-1 flex-col items-center justify-center pb-[120px]">
-          <Image
-            src="/figma/home/inbox-empty.svg"
-            alt=""
-            width={48}
-            height={48}
-          />
-          <p className="mt-5 text-base leading-[26px] font-medium text-[#b0b8c1]">
-            받은 알림이 없어요
-          </p>
+        <section className="min-h-0 flex-1 overflow-y-auto px-5 py-8">
+          <div className="flex min-h-full flex-col items-center justify-center">
+            <Image
+              src="/figma/home/inbox-empty.svg"
+              alt=""
+              width={48}
+              height={48}
+            />
+            <p className="mt-5 text-base leading-[26px] font-medium text-[#b0b8c1]">
+              받은 알림이 없어요
+            </p>
+          </div>
         </section>
       )}
     </AppShell>
