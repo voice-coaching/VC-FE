@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { BackButton } from "@/components/back-button";
 import { api } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
@@ -251,9 +252,8 @@ export default function HomeNotifications() {
       className="flex min-h-0 flex-col bg-white"
     >
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
-        <Link
-          href="/home"
-          aria-label="뒤로가기"
+        <BackButton
+          fallback="/home"
           className="flex size-10 items-center justify-center"
         >
           <Image
@@ -262,7 +262,7 @@ export default function HomeNotifications() {
             width={24}
             height={24}
           />
-        </Link>
+        </BackButton>
         <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold text-[#191f28]">
           알림
         </h1>

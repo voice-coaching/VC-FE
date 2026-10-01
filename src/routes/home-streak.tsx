@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { BackButton } from "@/components/back-button";
 import { api, type Statistics, type TrainingHistoryItem } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
@@ -214,9 +215,8 @@ export default function HomeStreak() {
         <div className="absolute inset-x-0 top-0 h-[222px] bg-[linear-gradient(180deg,#2f6bff_0%,#3f7bff_100%)]" />
 
         <header className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-2 py-1 text-white">
-          <Link
-            href="/home"
-            aria-label="뒤로가기"
+          <BackButton
+            fallback="/home"
             className="flex size-10 items-center justify-center"
           >
             <Image
@@ -225,7 +225,7 @@ export default function HomeStreak() {
               width={24}
               height={24}
             />
-          </Link>
+          </BackButton>
           <h1 className="text-[17px] leading-6 font-bold">연속 연습</h1>
           <span className="size-10" />
         </header>

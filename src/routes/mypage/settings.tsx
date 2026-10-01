@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -251,13 +251,12 @@ export default function AccountSettings() {
       className="flex flex-col overflow-hidden bg-white"
     >
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
-        <Link
-          href="/mypage"
-          aria-label="마이로 돌아가기"
+        <BackButton
+          fallback="/mypage"
           className="flex size-10 items-center justify-center"
         >
           <Image src="/figma/settings/back.svg" alt="" width={24} height={24} />
-        </Link>
+        </BackButton>
         <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
           설정
         </h1>

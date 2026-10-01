@@ -1,7 +1,7 @@
 "use client";
 import { NavigationIcon } from "@/components/navigation-icon";
 
-import Link from "next/link";
+import { BackButton } from "@/components/back-button";
 import type { ReactNode } from "react";
 
 export function TopBar({
@@ -28,13 +28,12 @@ export function TopBar({
           <NavigationIcon />
         </button>
       ) : (
-        <Link
-          href={to}
-          aria-label="뒤로가기"
+        <BackButton
+          fallback={to}
           className="flex size-10 items-center justify-center text-foreground transition-opacity hover:opacity-60"
         >
           <NavigationIcon />
-        </Link>
+        </BackButton>
       )}
       {typeof progress === "number" ? (
         <div className="h-1.5 flex-1 rounded-full bg-muted">

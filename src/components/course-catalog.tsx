@@ -6,6 +6,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { BackButton } from "@/components/back-button";
 import { CourseLesson } from "@/components/course-lesson";
 import {
   ApiError,
@@ -456,9 +457,8 @@ export function CourseCatalog({
             />
           </button>
         ) : (
-          <Link
-            href="/home"
-            aria-label="홈으로 돌아가기"
+          <BackButton
+            fallback={type ? "/class" : "/home"}
             className="flex size-10 items-center justify-center"
           >
             <Image
@@ -467,7 +467,7 @@ export function CourseCatalog({
               width={24}
               height={24}
             />
-          </Link>
+          </BackButton>
         )}
         <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
           {selectedCourse?.title ?? "클래스"}
