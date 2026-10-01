@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { NicknameEditor } from "@/components/nickname-editor";
 import type { Statistics, UserAccount, UserTitleProgress } from "@/lib/api";
 import { getTitleTrainingCountDisplay } from "@/lib/user-title";
 import { cn } from "@/lib/utils";
@@ -59,10 +60,8 @@ export function MyProfileBand({
         </Link>
       </header>
       <section className="absolute inset-x-0 top-10 z-10 flex h-[222px] flex-col items-center pt-5">
-        <Link
-          href="/mypage/settings/profile"
+        <div
           className="relative size-[104px] rounded-[42px] p-1.5"
-          aria-label="프로필 수정"
           style={{
             background: `conic-gradient(#2f6bff ${percent * 3.6}deg, rgba(255,255,255,.58) 0deg)`,
           }}
@@ -82,10 +81,8 @@ export function MyProfileBand({
               {titleProgress.label}
             </span>
           ) : null}
-        </Link>
-        <h2 className="mt-5 text-[20px] leading-7 font-bold">
-          {account?.nickname ?? fallbackName ?? "불러오는 중…"}
-        </h2>
+        </div>
+        <NicknameEditor account={account} fallbackName={fallbackName} />
         {statistics ? (
           <p className="mt-1 flex items-center gap-2 text-[13px] leading-[18px] font-medium text-[#3d4a5c]">
             <span>연속 {statistics.consecutiveLearningDays}일</span>
