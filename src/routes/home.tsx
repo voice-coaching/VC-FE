@@ -185,11 +185,15 @@ export default function Home() {
   });
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [coursesUnavailable, setCoursesUnavailable] = useState(false);
 
   useEffect(() => {
     let active = true;
     const from = localDateKey(weekRange.monday);
     const to = localDateKey(weekRange.sunday);
+    setCoursesLoading(true);
+    setCoursesUnavailable(false);
 
     void Promise.allSettled([
       api.courses.getMyProgress(),
@@ -216,7 +220,11 @@ export default function Home() {
           weekSessions: historyResult.value.items,
         });
       }
-      if (courseResult.status !== "fulfilled") return;
+      if (courseResult.status !== "fulfilled") {
+        setCoursesLoading(false);
+        setCoursesUnavailable(true);
+        return;
+      }
 
       const courseResults = await Promise.allSettled(
         courseResult.value
@@ -234,6 +242,10 @@ export default function Home() {
         result.status === "fulfilled" ? [result.value] : [],
       );
       setRecentCourses(courses);
+      setCoursesLoading(false);
+      setCoursesUnavailable(
+        courseResults.some((result) => result.status === "rejected"),
+      );
       updateUserClientCache<HomeCache>(userId, cacheResource, {
         recentCourses: courses,
       });
@@ -651,43 +663,32 @@ export default function Home() {
                     />
                   ))}
                   {!dashboard?.recentTraining && recentCourses.length === 0 ? (
-                    <>
-                      <ContinueCard
-                        href="/announcer"
-                        title="아나운서 따라 읽기"
-                        detail="4번째 문장부터"
-                        badge="최근"
-                        ring="/figma/home-density/progress-announcer-ring.svg"
-                        icon="/figma/home-density/progress-announcer.svg"
-                        iconWidth={10.462}
-                        iconHeight={23.538}
-                        badgeColor="#bfceff"
-                        count="3/5"
-                      />
-                      <ContinueCard
-                        href="/class/pronunciation"
-                        title="발음 클래스"
-                        detail="5단계 받침 ㄹ 소리"
-                        ring="/figma/home-density/progress-pronunciation-ring.svg"
-                        icon="/figma/home-density/progress-pronunciation.svg"
-                        iconWidth={20.778}
-                        iconHeight={17}
-                        badgeColor="#e2eaff"
-                        count="4/12"
-                      />
-                      <ContinueCard
-                        href="/class/intonation"
-                        title="억양 클래스"
-                        detail="3단계 문장 끝 내리기"
-                        ring="/figma/home-density/progress-intonation-ring.svg"
-                        icon="/figma/home-density/progress-intonation.svg"
-                        iconWidth={28.333}
-                        iconHeight={17}
-                        badgeColor="#e2eaff"
-                        chevron="/figma/home-density/chevron-intonation.svg"
-                        count="2/10"
-                      />
-                    </>
+                    <div
+                      className="rounded-[18px] bg-white px-5 py-6 text-center text-sm leading-6 text-[#6b7684]"
+                      role="status"
+                    >
+                      {error || coursesUnavailable ? (
+                        <>
+                          <p>진행 중인 연습을 확인하지 못했어요.</p>
+                          <button
+                            type="button"
+                            onClick={() => setReloadKey((value) => value + 1)}
+                            className="mt-2 min-h-11 rounded-full px-4 font-bold text-primary"
+                          >
+                            다시 확인
+                          </button>
+                        </>
+                      ) : !dashboard || coursesLoading ? (
+                        <p>진행 중인 연습을 불러오고 있어요.</p>
+                      ) : (
+                        <>
+                          <p>진행 중인 연습이 없어요.</p>
+                          <p className="mt-1">
+                            위에서 원하는 연습을 시작해 보세요.
+                          </p>
+                        </>
+                      )}
+                    </div>
                   ) : null}
                 </div>
               </section>
