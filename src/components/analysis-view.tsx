@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState, type ReactNode } from "react";
 import { ReferencePlayer } from "@/components/reference-player";
+import { AnalysisSummary } from "@/components/analysis-summary";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -61,7 +62,6 @@ export function AnalysisView({
 }) {
   const [view, setView] = useState<ReportView>("summary");
   const [selected, setSelected] = useState<AnalysisSegment | null>(null);
-  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const unavailable = segments.filter(
     (segment) => segment.pronunciationScore == null,
   );
@@ -323,39 +323,7 @@ export function AnalysisView({
             {content.title}
           </span>
         </p>
-        <div className="w-full rounded-[18px] bg-primary px-4 py-3.5 text-white">
-          <div className="flex items-center gap-1">
-            <Image
-              src="/figma/report/ai-sparkle.svg"
-              alt=""
-              width={14}
-              height={14}
-            />
-            <h2 className="text-[12px] leading-4 font-bold">AI 총평</h2>
-          </div>
-          <p
-            className={`mt-1.5 text-[14px] leading-5 font-medium ${summaryExpanded ? "" : "line-clamp-3"}`}
-          >
-            {summary}
-          </p>
-          {summary.length > 80 ? (
-            <button
-              type="button"
-              aria-expanded={summaryExpanded}
-              onClick={() => setSummaryExpanded((value) => !value)}
-              className="mt-1.5 flex min-h-8 w-full items-center justify-center gap-0.5 text-[13px] font-bold"
-            >
-              {summaryExpanded ? "접기" : "더보기"}
-              <Image
-                src="/figma/report/chevron-white.svg"
-                alt=""
-                width={14}
-                height={14}
-                className={summaryExpanded ? "-rotate-90" : "rotate-90"}
-              />
-            </button>
-          ) : null}
-        </div>
+        <AnalysisSummary key={summary} text={summary} />
       </section>
 
       <section className="rounded-2xl bg-white p-4">
