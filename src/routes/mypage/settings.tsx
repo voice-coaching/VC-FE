@@ -72,6 +72,10 @@ export default function AccountSettings() {
   const [notificationPreferences, setNotificationPreferences] =
     useState<NotificationPreferences | null>(initialPreferences);
   const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(
+    initialPreferences === null,
+  );
+  const [notificationRetry, setNotificationRetry] = useState(0);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(
     null,
   );
@@ -91,6 +95,8 @@ export default function AccountSettings() {
       CLIENT_CACHE_DAY_MAX_AGE_MS,
     );
     if (cached) setNotificationPreferences(cached);
+    setNotificationLoading(!cached);
+    setNotificationMessage(null);
     api.notifications
       .getPreferences()
       .then((value) => {
@@ -109,11 +115,14 @@ export default function AccountSettings() {
               ? reason.message
               : "알림 설정을 불러오지 못했습니다.",
           );
+      })
+      .finally(() => {
+        if (active) setNotificationLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [userId, notificationRetry]);
 
   useEffect(() => {
     if (panel !== "공지사항") return;
@@ -283,7 +292,9 @@ export default function AccountSettings() {
               <span className="mt-[3px] block text-[13px] leading-[18px] text-[#8b95a1]">
                 {notificationPreferences
                   ? `${notificationPreferences.practiceReminder.time} 알림`
-                  : "알림 설정 불러오는 중"}
+                  : notificationLoading
+                    ? "알림 설정 불러오는 중"
+                    : "알림 설정을 확인하지 못했어요"}
               </span>
             </span>
             <button
@@ -311,9 +322,23 @@ export default function AccountSettings() {
             </button>
           </div>
           {notificationMessage ? (
-            <p role="alert" className="px-5 pb-2 text-xs text-destructive">
-              {notificationMessage}
-            </p>
+            <div className="px-5 pb-2">
+              <p role="alert" className="text-xs text-destructive">
+                {notificationMessage}
+              </p>
+              {!notificationPreferences && !notificationLoading ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationLoading(true);
+                    setNotificationRetry((value) => value + 1);
+                  }}
+                  className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary"
+                >
+                  다시 시도
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <SettingsItem
             label={GROUPS[0].items[0].label}

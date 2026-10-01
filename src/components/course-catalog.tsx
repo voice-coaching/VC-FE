@@ -92,6 +92,7 @@ export function CourseCatalog({
     Record<string, CourseDetail>
   >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     setIndicatorType(activeType);
@@ -225,7 +226,7 @@ export function CourseCatalog({
     return () => {
       active = false;
     };
-  }, [activeType, cacheResource, userId]);
+  }, [activeType, cacheResource, userId, retry]);
 
   async function loadMore() {
     setLoadingMore(true);
@@ -529,12 +530,21 @@ export function CourseCatalog({
             </nav>
           )}
           {error && (
-            <p
-              role="alert"
-              className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
-            >
-              {error}
-            </p>
+            <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
+              <p role="alert">{error}</p>
+              {!selectedCourse && items.length === 0 && !loading ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    setRetry((value) => value + 1);
+                  }}
+                  className="mt-1 min-h-11 px-2 font-semibold text-primary"
+                >
+                  다시 시도
+                </button>
+              ) : null}
+            </div>
           )}
           {selectedCourse ? (
             <>
@@ -673,7 +683,7 @@ export function CourseCatalog({
                   </button>
                 );
               })}
-              {items.length === 0 && (
+              {items.length === 0 && !error && (
                 <p className="py-12 text-center text-sm text-muted-foreground">
                   조건에 맞는 클래스가 없습니다.
                 </p>
