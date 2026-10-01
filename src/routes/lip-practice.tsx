@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -19,6 +20,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnalysisView } from "@/components/analysis-view";
+import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { AppShell } from "@/components/app-shell";
 import { pollAnalysis } from "@/lib/analysis-polling";
 import {
@@ -579,15 +581,25 @@ export default function LipPractice() {
 
             {analysisTarget === selectedClip &&
             (analysisPhase === "uploading" || analysisPhase === "analyzing") ? (
-              <section
-                role="status"
-                className="mt-4 rounded-[20px] bg-[#f4f9ff] p-5 text-center"
-              >
-                <span className="mx-auto block size-7 animate-spin rounded-full border-3 border-primary/20 border-t-primary" />
-                <strong className="mt-3 block text-sm">
-                  {analysisPhase === "uploading"
-                    ? `영상을 보내고 있어요 ${uploadProgress}%`
-                    : `발음을 분석하고 있어요 ${analysisProgress}%`}
+              <section className="mt-4 rounded-[20px] bg-[#f4f9ff] p-5 text-center">
+                <Image
+                  src="/newsBird.webp"
+                  alt=""
+                  width={96}
+                  height={96}
+                  className="mx-auto size-24 object-contain"
+                />
+                <strong className="mt-3 block min-h-16 text-sm">
+                  {analysisPhase === "uploading" ? (
+                    <span role="status">
+                      영상을 보내고 있어요 {uploadProgress}%
+                    </span>
+                  ) : (
+                    <>
+                      <AnalysisLoadingMessage />
+                      <span className="mt-1 block">{analysisProgress}%</span>
+                    </>
+                  )}
                 </strong>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   화면을 닫지 말고 잠시 기다려 주세요.

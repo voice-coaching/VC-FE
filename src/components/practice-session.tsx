@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
+import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
 import { AnalysisFailed, pollAnalysis } from "@/lib/analysis-polling";
 import {
@@ -1009,19 +1010,21 @@ export function PracticeSession({
           {(phase === "uploading" || phase === "analyzing") && (
             <div className="flex min-h-0 flex-1 flex-col items-center">
               <div className="flex-1" />
-              <div className="h-[169px] w-[140px] overflow-hidden">
+              <div className="size-[169px] shrink-0">
                 <Image
-                  src="/figma/practice/analysis-character.png"
+                  src="/newsBird.webp"
                   alt=""
-                  width={197}
-                  height={197}
-                  className="-ml-[29px] -mt-[14px] h-[197px] w-[197px] max-w-none"
+                  width={169}
+                  height={169}
+                  className="size-full object-contain"
                 />
               </div>
-              <p className="mt-5 text-[20px] leading-7 font-bold text-[#191f28]">
-                {phase === "uploading"
-                  ? "음성을 보내고 있어요"
-                  : "발음을 분석하고 있어요"}
+              <p className="mt-5 min-h-14 w-full shrink-0 px-5 text-center text-[20px] leading-7 font-bold text-[#191f28]">
+                {phase === "uploading" ? (
+                  "음성을 보내고 있어요"
+                ) : (
+                  <AnalysisLoadingMessage />
+                )}
               </p>
               <div className="mt-9 w-[225px] rounded-[18px] bg-white px-3 py-2 shadow-[0_3px_5px_rgba(23,23,23,0.05)]">
                 {["음성 품질 확인", "텍스트로 변환", "발음과 억양 분석"].map(
