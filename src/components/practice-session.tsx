@@ -829,11 +829,15 @@ export function PracticeSession({
           {phase === "idle" && (
             <div className="mt-auto flex flex-col items-center gap-4 px-5 pb-16">
               <div className="flex items-start gap-9">
-                <ReferencePlayer
-                  contentId={content.id}
-                  variant="guide"
-                  disabled={!content.referenceAudioAvailable}
-                />
+                {recorder.status === "requesting" ? (
+                  <span className="h-[84px] w-14" aria-hidden="true" />
+                ) : (
+                  <ReferencePlayer
+                    contentId={content.id}
+                    variant="guide"
+                    disabled={!content.referenceAudioAvailable}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => void startRecording()}
@@ -883,11 +887,7 @@ export function PracticeSession({
                 {formatElapsed(recorder.elapsedMs)}
               </p>
               <div className="flex items-start gap-9">
-                <ReferencePlayer
-                  contentId={content.id}
-                  variant="guide"
-                  disabled
-                />
+                <span className="h-[84px] w-14" aria-hidden="true" />
                 <button
                   type="button"
                   onClick={recorder.stop}

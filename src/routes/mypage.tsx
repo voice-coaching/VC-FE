@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { NicknameEditor } from "@/components/nickname-editor";
 import {
   api,
   type Statistics,
@@ -121,7 +122,6 @@ export default function MyPage() {
   const titleTrainingCount = titleProgress
     ? getTitleTrainingCountDisplay(titleProgress)
     : null;
-  const displayName = account?.nickname ?? initialOverview?.nickname;
   const totalSeconds = statistics?.totalLearningSeconds ?? 0;
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -173,9 +173,7 @@ export default function MyPage() {
       </header>
 
       <section className="absolute inset-x-0 top-10 z-10 flex h-[222px] flex-col items-center pt-5">
-        <Link
-          href="/mypage/settings/profile"
-          aria-label="프로필 수정"
+        <div
           className="relative size-[104px] rounded-[42px] p-1.5"
           style={{
             background: `conic-gradient(#2f6bff ${percent * 3.6}deg, rgba(255,255,255,.58) 0deg)`,
@@ -196,10 +194,11 @@ export default function MyPage() {
               {titleProgress.label}
             </span>
           ) : null}
-        </Link>
-        <h2 className="mt-5 text-[20px] leading-7 font-bold text-[#191f28]">
-          {displayName ?? "불러오는 중…"}
-        </h2>
+        </div>
+        <NicknameEditor
+          account={account}
+          fallbackName={initialOverview?.nickname}
+        />
         {statistics ? (
           <p className="mt-1 flex items-center gap-2 text-[13px] leading-[18px] font-medium text-[#3d4a5c]">
             <span>연속 {statistics.consecutiveLearningDays}일</span>

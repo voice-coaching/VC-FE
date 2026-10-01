@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { createPcmRecording, playRecordingCue } from "@/lib/recording-audio";
 
 export type RecorderStatus =
   | "idle"
@@ -135,6 +137,11 @@ export function useAudioRecorder() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordingGenerationRef = useRef(0);
+  const contextRef = useRef<AudioContext | null>(null);
+  const pcmRef = useRef<Awaited<ReturnType<typeof createPcmRecording>> | null>(
+    null,
+  );
+  const startingRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -146,13 +153,22 @@ export function useAudioRecorder() {
   }, []);
 
   const stopTracks = useCallback(() => {
+    pcmRef.current?.dispose();
+    pcmRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    const context = contextRef.current;
+    contextRef.current = null;
+    if (context && context.state !== "closed")
+      void context.close().catch(() => undefined);
   }, []);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
-    if (recorder?.state !== "recording" || stopDelayRef.current) return;
+    const pcm = pcmRef.current;
+    if ((!pcm && recorder?.state !== "recording") || stopDelayRef.current)
+      return;
+    const generation = recordingGenerationRef.current;
 
     if (intervalRef.current) clearInterval(intervalRef.current);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -163,31 +179,69 @@ export function useAudioRecorder() {
 
     // Preserve the final syllable while the recorder flushes its encoder.
     stopDelayRef.current = setTimeout(() => {
-      stopDelayRef.current = null;
-      if (recorder.state === "recording") recorder.stop();
+      if (pcm) {
+        void pcm
+          .stop()
+          .then((recorded) => {
+            if (generation !== recordingGenerationRef.current) return;
+            setBlob(recorded.blob);
+            setPreviewBlob(recorded.blob);
+            setDurationMs(recorded.durationMs);
+            setElapsedMs(recorded.durationMs);
+            setStatus("recorded");
+          })
+          .catch((reason: unknown) => {
+            if (generation !== recordingGenerationRef.current) return;
+            setStatus("error");
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : "녹음된 음성을 확인하지 못했습니다.",
+            );
+          })
+          .finally(() => {
+            if (generation !== recordingGenerationRef.current) return;
+            clearTimers();
+            stopTracks();
+          });
+      } else {
+        stopDelayRef.current = null;
+        if (recorder?.state === "recording") recorder.stop();
+      }
     }, RECORDING_TAIL_PADDING_MS);
-  }, []);
+  }, [clearTimers, stopTracks]);
 
   const getStream = useCallback(() => streamRef.current, []);
 
   const start = useCallback(async () => {
+    if (startingRef.current || pcmRef.current || recorderRef.current)
+      return false;
+    startingRef.current = true;
     clearTimers();
     const recordingGeneration = ++recordingGenerationRef.current;
     setError(null);
     setBlob(null);
     setPreviewBlob(null);
     setElapsedMs(0);
+    setDurationMs(0);
+    const native = Capacitor.isNativePlatform();
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === "undefined"
+      (!native && typeof MediaRecorder === "undefined") ||
+      !window.AudioContext
     ) {
       setStatus("unsupported");
       setError("이 브라우저에서는 음성 녹음을 지원하지 않습니다.");
+      startingRef.current = false;
       return false;
     }
     setStatus("requesting");
     try {
+      // Create/resume during the tap, before the asynchronous permission prompt.
+      const context = new AudioContext();
+      contextRef.current = context;
+      void context.resume().catch(() => undefined);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -200,6 +254,30 @@ export function useAudioRecorder() {
         return false;
       }
       streamRef.current = stream;
+      if (native) {
+        const pcm = await createPcmRecording(context, stream);
+        if (recordingGeneration !== recordingGenerationRef.current) {
+          pcm.dispose();
+          return false;
+        }
+        pcmRef.current = pcm;
+      }
+      await playRecordingCue(context);
+      if (recordingGeneration !== recordingGenerationRef.current) return false;
+      if (native) {
+        pcmRef.current!.start();
+        startedAtRef.current = Date.now();
+        setStatus("recording");
+        intervalRef.current = setInterval(
+          () => setElapsedMs(Date.now() - startedAtRef.current),
+          200,
+        );
+        timeoutRef.current = setTimeout(
+          stop,
+          MAX_RECORDING_MS - RECORDING_TAIL_PADDING_MS,
+        );
+        return true;
+      }
       chunksRef.current = [];
       const mimeType = SUPPORTED_MIME_TYPES.find((type) =>
         MediaRecorder.isTypeSupported(type),
@@ -219,6 +297,7 @@ export function useAudioRecorder() {
         setError("녹음 중 오류가 발생했습니다.");
       };
       recorder.onstop = () => {
+        if (recordingGeneration !== recordingGenerationRef.current) return;
         const measuredDuration = Date.now() - startedAtRef.current;
         const recorded = new Blob(chunksRef.current, {
           type: recorder.mimeType || "audio/webm",
@@ -241,8 +320,9 @@ export function useAudioRecorder() {
           let playableDuration = measuredDuration;
           try {
             const converted = await convertToMonoWav(recorded);
-            playable = converted.blob;
-            if (converted.durationMs > 0) {
+            // Do not replace a multi-second recording with a decoded fragment.
+            if (converted.durationMs >= Math.max(1, measuredDuration * 0.8)) {
+              playable = converted.blob;
               playableDuration = converted.durationMs;
             }
           } catch {
@@ -274,6 +354,7 @@ export function useAudioRecorder() {
       );
       return true;
     } catch (reason) {
+      if (recordingGeneration !== recordingGenerationRef.current) return false;
       stopTracks();
       const denied =
         reason instanceof DOMException &&
@@ -282,14 +363,20 @@ export function useAudioRecorder() {
       setError(
         denied
           ? "마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요."
-          : "마이크를 시작하지 못했습니다.",
+          : reason instanceof Error
+            ? reason.message
+            : "마이크를 시작하지 못했습니다.",
       );
       return false;
+    } finally {
+      if (recordingGeneration === recordingGenerationRef.current)
+        startingRef.current = false;
     }
   }, [clearTimers, stop, stopTracks]);
 
   const reset = useCallback(() => {
     recordingGenerationRef.current += 1;
+    startingRef.current = false;
     clearTimers();
     const recorder = recorderRef.current;
     if (recorder?.state === "recording") {
