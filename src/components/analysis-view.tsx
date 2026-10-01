@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
 import type {
@@ -10,8 +11,6 @@ import type {
   Id,
   PracticeContent,
 } from "@/lib/api";
-
-type ReportView = "summary" | "pronunciation" | "sentence";
 
 const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
   NEWS: "뉴스 읽기",
@@ -60,8 +59,15 @@ export function AnalysisView({
   recordingId?: Id;
   courseMode?: boolean;
 }) {
-  const [view, setView] = useState<ReportView>("summary");
-  const [selected, setSelected] = useState<AnalysisSegment | null>(null);
+  const [report, setReport] = useHistoryPanel("report", [
+    "pronunciation",
+    ...segments.map((segment) => `sentence:${segment.id}`),
+  ]);
+  const selected = segments.find(
+    (segment) => report === `sentence:${segment.id}`,
+  );
+  const openSentence = (segment: AnalysisSegment) =>
+    setReport(`sentence:${segment.id}`);
   const unavailable = segments.filter(
     (segment) => segment.pronunciationScore == null,
   );
@@ -104,9 +110,10 @@ export function AnalysisView({
     return [];
   }, [analysis.scoreBreakdown, analysis.scoreHierarchy]);
 
-  if (view === "pronunciation") {
-    return (
-      <ReportOverlay title="발음 분석" onBack={() => setView("summary")}>
+  let overlay: ReactNode = null;
+  if (report === "pronunciation") {
+    overlay = (
+      <ReportOverlay title="발음 분석" onBack={() => setReport(null)}>
         <div className="px-5 pt-1">
           <section className="flex min-h-[112px] items-center gap-3 rounded-[18px] bg-white px-5 py-[18px]">
             <div className="min-w-0 flex-1">
@@ -173,26 +180,20 @@ export function AnalysisView({
     );
   }
 
-  if (view === "sentence" && selected) {
+  if (selected) {
     const index = segments.findIndex(
       (segment) => String(segment.id) === String(selected.id),
     );
     const problem = selected.resultStatus !== "NORMAL";
-    return (
+    overlay = (
       <ReportOverlay
         title="문장별 피드백"
         trailing={`${Math.max(1, index + 1)} / ${Math.max(segments.length, 1)}`}
-        onBack={() => {
-          setSelected(null);
-          setView("summary");
-        }}
+        onBack={() => setReport(null)}
         footer={
           <button
             type="button"
-            onClick={() => {
-              setSelected(null);
-              setView("summary");
-            }}
+            onClick={() => setReport(null)}
             className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white"
           >
             확인하기
@@ -282,7 +283,7 @@ export function AnalysisView({
             <button
               type="button"
               disabled={index <= 0}
-              onClick={() => setSelected(segments[index - 1])}
+              onClick={() => openSentence(segments[index - 1])}
               className="flex min-h-11 items-center gap-0.5 text-[13px] font-bold text-[#4e5968] disabled:opacity-35"
             >
               <Image
@@ -296,7 +297,7 @@ export function AnalysisView({
             <button
               type="button"
               disabled={index < 0 || index >= segments.length - 1}
-              onClick={() => setSelected(segments[index + 1])}
+              onClick={() => openSentence(segments[index + 1])}
               className="flex min-h-11 items-center gap-0.5 text-[13px] font-bold text-[#4e5968] disabled:opacity-35"
             >
               다음 문장
@@ -314,158 +315,168 @@ export function AnalysisView({
   }
 
   return (
-    <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
-      <section className="flex flex-col items-center gap-4 pt-2">
-        <p className="flex items-center gap-2 text-[13px] leading-[18px]">
-          <b className="text-primary">{sourceLabel}</b>
-          <span className="h-2.5 w-px bg-[#e5e8eb]" />
-          <span className="max-w-[240px] truncate font-medium text-[#8b95a1]">
-            {content.title}
-          </span>
-        </p>
-        <AnalysisSummary key={summary} text={summary} />
-      </section>
-
-      <section className="rounded-2xl bg-white p-4">
-        <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
-          연습 문장
-        </h2>
-        <p className="mt-1.5 text-[15px] leading-[1.5] font-medium">
-          {content.scriptText}
-        </p>
-        <div className="mt-3.5 grid grid-cols-2 gap-2">
-          {recordingUrl || recordingId != null ? (
-            <ReferencePlayer
-              source={recordingUrl}
-              recordingId={recordingId}
-              title="내 녹음 전체 듣기"
-              buttonTone="primary"
-            />
-          ) : (
-            <UnavailableAudio label="내 녹음 데이터 없음" primary />
-          )}
-          {content.referenceAudioAvailable ? (
-            <ReferencePlayer
-              contentId={content.id}
-              title="가이드 전체 듣기"
-              buttonTone="neutral"
-            />
-          ) : (
-            <UnavailableAudio label="가이드 데이터 없음" />
-          )}
-        </div>
-      </section>
-
-      <button
-        type="button"
-        onClick={() => setView("pronunciation")}
-        className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
+    <>
+      <div
+        inert={overlay != null}
+        aria-hidden={overlay != null}
+        className={`min-w-0 space-y-5 [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
-        <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
-        <span className="flex items-end gap-1">
-          <b className="text-[20px] leading-7 text-primary">
-            {scoreText(overallScore)}
-          </b>
-          {overallScore != null ? (
-            <span className="text-[12px] leading-4 text-[#8b95a1]">/ 100</span>
-          ) : null}
-        </span>
-        <Image src="/figma/report/chevron.svg" alt="" width={18} height={18} />
-      </button>
+        <section className="flex flex-col items-center gap-4 pt-2">
+          <p className="flex items-center gap-2 text-[13px] leading-[18px]">
+            <b className="text-primary">{sourceLabel}</b>
+            <span className="h-2.5 w-px bg-[#e5e8eb]" />
+            <span className="max-w-[240px] truncate font-medium text-[#8b95a1]">
+              {content.title}
+            </span>
+          </p>
+          <AnalysisSummary key={summary} text={summary} />
+        </section>
 
-      {segments.length ? (
-        <div className="space-y-3">
-          <section className="rounded-[20px] bg-white px-5 py-4">
+        <section className="rounded-2xl bg-white p-4">
+          <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
+            연습 문장
+          </h2>
+          <p className="mt-1.5 text-[15px] leading-[1.5] font-medium">
+            {content.scriptText}
+          </p>
+          <div className="mt-3.5 grid grid-cols-2 gap-2">
+            {/* Stop playback and cancel pending audio loads when details open. */}
+            {recordingUrl || recordingId != null ? (
+              <ReferencePlayer
+                key={overlay ? "hidden-recording" : "summary-recording"}
+                source={recordingUrl}
+                recordingId={recordingId}
+                title="내 녹음 전체 듣기"
+                buttonTone="primary"
+              />
+            ) : (
+              <UnavailableAudio label="내 녹음 데이터 없음" primary />
+            )}
+            {content.referenceAudioAvailable ? (
+              <ReferencePlayer
+                key={overlay ? "hidden-guide" : "summary-guide"}
+                contentId={content.id}
+                title="가이드 전체 듣기"
+                buttonTone="neutral"
+              />
+            ) : (
+              <UnavailableAudio label="가이드 데이터 없음" />
+            )}
+          </div>
+        </section>
+
+        <button
+          type="button"
+          onClick={() => setReport("pronunciation")}
+          className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
+        >
+          <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
+          <span className="flex items-end gap-1">
+            <b className="text-[20px] leading-7 text-primary">
+              {scoreText(overallScore)}
+            </b>
+            {overallScore != null ? (
+              <span className="text-[12px] leading-4 text-[#8b95a1]">
+                / 100
+              </span>
+            ) : null}
+          </span>
+          <Image
+            src="/figma/report/chevron.svg"
+            alt=""
+            width={18}
+            height={18}
+          />
+        </button>
+
+        {segments.length ? (
+          <div className="space-y-3">
+            <section className="rounded-[20px] bg-white px-5 py-4">
+              <h2 className="text-[17px] leading-6 font-bold">
+                이번 연습 결과
+              </h2>
+              <p className="mt-[3px] text-[13px] leading-[18px] text-[#8b95a1]">
+                {segments.length}개 문장을 분석했어요
+              </p>
+              <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-[#eef0f3]">
+                <span
+                  className="bg-[#f04f5f]"
+                  style={{ flexGrow: needsReview.length }}
+                />
+                <span
+                  className="bg-[#10a87b]"
+                  style={{ flexGrow: good.length }}
+                />
+                <span
+                  className="bg-[#98a2b2]"
+                  style={{ flexGrow: unavailable.length }}
+                />
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <StatusChip
+                  icon="warning"
+                  label="다시 확인"
+                  count={needsReview.length}
+                  tone="warning"
+                />
+                <StatusChip
+                  icon="check"
+                  label="잘 읽음"
+                  count={good.length}
+                  tone="check"
+                />
+                <StatusChip
+                  icon="info"
+                  label="분석 어려움"
+                  count={unavailable.length}
+                  tone="info"
+                />
+              </div>
+            </section>
+
+            <SegmentSection
+              title="다시 확인해 보세요"
+              items={needsReview}
+              icon="warning"
+              tone="warning"
+              onSelect={openSentence}
+            />
+            <SegmentSection
+              title="잘 읽은 문장"
+              items={good}
+              icon="check"
+              tone="check"
+              onSelect={openSentence}
+            />
+            <SegmentSection
+              title="분석이 어려운 문장"
+              items={unavailable}
+              icon="info"
+              tone="info"
+              defaultOpen={false}
+              onSelect={openSentence}
+            />
+          </div>
+        ) : (
+          <section className="rounded-[20px] bg-white p-5">
             <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
-            <p className="mt-[3px] text-[13px] leading-[18px] text-[#8b95a1]">
-              {segments.length}개 문장을 분석했어요
+            <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
+              문장별 분석 데이터가 제공되지 않았어요.
             </p>
-            <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-[#eef0f3]">
-              <span
-                className="bg-[#f04f5f]"
-                style={{ flexGrow: needsReview.length }}
-              />
-              <span
-                className="bg-[#10a87b]"
-                style={{ flexGrow: good.length }}
-              />
-              <span
-                className="bg-[#98a2b2]"
-                style={{ flexGrow: unavailable.length }}
-              />
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <StatusChip
-                icon="warning"
-                label="다시 확인"
-                count={needsReview.length}
-                tone="warning"
-              />
-              <StatusChip
-                icon="check"
-                label="잘 읽음"
-                count={good.length}
-                tone="check"
-              />
-              <StatusChip
-                icon="info"
-                label="분석 어려움"
-                count={unavailable.length}
-                tone="info"
-              />
-            </div>
           </section>
+        )}
 
-          <SegmentSection
-            title="다시 확인해 보세요"
-            items={needsReview}
-            icon="warning"
-            tone="warning"
-            onSelect={(segment) => {
-              setSelected(segment);
-              setView("sentence");
-            }}
-          />
-          <SegmentSection
-            title="잘 읽은 문장"
-            items={good}
-            icon="check"
-            tone="check"
-            onSelect={(segment) => {
-              setSelected(segment);
-              setView("sentence");
-            }}
-          />
-          <SegmentSection
-            title="분석이 어려운 문장"
-            items={unavailable}
-            icon="info"
-            tone="info"
-            defaultOpen={false}
-            onSelect={(segment) => {
-              setSelected(segment);
-              setView("sentence");
-            }}
-          />
-        </div>
-      ) : (
-        <section className="rounded-[20px] bg-white p-5">
-          <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
-          <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
-            문장별 분석 데이터가 제공되지 않았어요.
-          </p>
-        </section>
-      )}
-
-      {analysis.pronunciationEvidence ? (
-        <section className="rounded-[20px] bg-white p-5">
-          <h2 className="text-[15px] leading-[22px] font-bold">교정 근거</h2>
-          <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
-            선택된 발음 단위: {analysis.pronunciationEvidence.selectedPhone}
-          </p>
-        </section>
-      ) : null}
-    </div>
+        {analysis.pronunciationEvidence ? (
+          <section className="rounded-[20px] bg-white p-5">
+            <h2 className="text-[15px] leading-[22px] font-bold">교정 근거</h2>
+            <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
+              선택된 발음 단위: {analysis.pronunciationEvidence.selectedPhone}
+            </p>
+          </section>
+        ) : null}
+      </div>
+      {overlay}
+    </>
   );
 }
 

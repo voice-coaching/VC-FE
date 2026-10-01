@@ -70,3 +70,30 @@ test("unrelated history metadata cannot send close back to another page", () => 
     "replace",
   );
 });
+
+test("sentence report navigation preserves session resume parameters", () => {
+  const feedback =
+    "https://app.test/practice/1?sessionId=77&resumeType=ANALYSIS_RESULT";
+  const open = dialogNavigation(feedback, null, "report", "sentence:1");
+  if (open.type !== "push") throw new Error("Expected push");
+  const next = dialogNavigation(
+    new URL(open.url, feedback).href,
+    open.state,
+    "report",
+    "sentence:2",
+  );
+  if (next.type !== "replace") throw new Error("Expected replace");
+  const url = new URL(next.url, feedback);
+  assert.equal(url.searchParams.get("sessionId"), "77");
+  assert.equal(url.searchParams.get("resumeType"), "ANALYSIS_RESULT");
+  assert.equal(url.searchParams.get("report"), "sentence:2");
+  assert.equal(
+    dialogNavigation(url.href, next.state, "report", null).type,
+    "back",
+  );
+  assert.deepEqual(dialogNavigation(url.href, null, "report", null), {
+    type: "replace",
+    url: "/practice/1?sessionId=77&resumeType=ANALYSIS_RESULT",
+    state: null,
+  });
+});
