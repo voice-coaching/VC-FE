@@ -8,6 +8,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { IPhoneFrame } from "@/components/iphone-frame";
 import { api, disableDeveloperApi } from "@/lib/api";
 import { getPostLoginDestination } from "@/lib/terms-flow";
+import { loginErrorMessage } from "@/lib/login-error";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -45,8 +46,8 @@ export function EmailLoginScreen() {
         password,
       });
       router.replace(getPostLoginDestination(session));
-    } catch {
-      setError("비밀번호가 일치하지 않아요");
+    } catch (reason) {
+      setError(loginErrorMessage(reason));
     } finally {
       setSubmitting(false);
     }
@@ -56,10 +57,14 @@ export function EmailLoginScreen() {
     <IPhoneFrame>
       <form
         onSubmit={handleSubmit}
-        className="flex h-full flex-col bg-white"
+        className="flex min-h-full flex-col bg-white"
         aria-label="이메일 로그인"
       >
-        <div className="h-11 shrink-0" aria-hidden="true" />
+        <div
+          style={{ height: "max(44px, env(safe-area-inset-top, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
 
         <header className="flex h-12 shrink-0 items-center px-4 py-3">
           <button
@@ -76,7 +81,7 @@ export function EmailLoginScreen() {
           <span className="size-6 shrink-0" aria-hidden="true" />
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col px-6">
+        <div className="flex flex-1 flex-col px-6">
           <div className="h-[34px] shrink-0" aria-hidden="true" />
 
           <div className="flex flex-col gap-2.5">
@@ -182,29 +187,8 @@ export function EmailLoginScreen() {
                 }}
                 placeholder="비밀번호를 입력해 주세요"
                 autoComplete="current-password"
-                className={`relative z-10 h-[30px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] leading-6 font-normal outline-none placeholder:text-[#8b95a1] ${
-                  passwordVisible
-                    ? "text-[#191f28]"
-                    : "text-transparent caret-transparent"
-                }`}
+                className="h-[30px] min-w-0 flex-1 border-0 bg-transparent p-0 text-[17px] leading-6 font-normal text-[#191f28] outline-none placeholder:text-[#8b95a1]"
               />
-              {!passwordVisible &&
-                (password.length > 0 || focusedField === "password") && (
-                  <span
-                    className="pointer-events-none absolute top-1/2 left-0 flex max-w-[310px] -translate-y-1/2 items-center gap-1 overflow-hidden"
-                    aria-hidden="true"
-                  >
-                    {Array.from(password).map((_, index) => (
-                      <span
-                        key={index}
-                        className="size-[15px] shrink-0 rounded-full bg-[#191f28]"
-                      />
-                    ))}
-                    {focusedField === "password" && (
-                      <span className="password-mask-caret h-[22px] w-[1.5px] shrink-0 bg-[#191f28]" />
-                    )}
-                  </span>
-                )}
               <button
                 type="button"
                 aria-label={
@@ -265,7 +249,7 @@ export function EmailLoginScreen() {
             <span>비밀번호 재설정</span>
           </nav>
 
-          <div className="min-h-0 flex-1" />
+          <div className="min-h-6 flex-1" />
 
           <button
             type="submit"
@@ -277,7 +261,11 @@ export function EmailLoginScreen() {
           <div className="h-6 shrink-0" aria-hidden="true" />
         </div>
 
-        <div className="h-[34px] shrink-0" aria-hidden="true" />
+        <div
+          style={{ height: "max(34px, env(safe-area-inset-bottom, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
       </form>
     </IPhoneFrame>
   );
