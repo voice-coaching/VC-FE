@@ -3,8 +3,9 @@
 import Image from "next/image";
 import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEventHandler } from "react";
 import { AppShell } from "@/components/app-shell";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,15 @@ type Panel =
   | "1:1 문의하기"
   | "개인정보 처리방침"
   | "서비스 이용약관";
+
+const SETTINGS_PANELS = [
+  "마이크와 음성",
+  "공지사항",
+  "1:1 문의하기",
+  "개인정보 처리방침",
+  "서비스 이용약관",
+  "withdraw",
+] as const;
 
 const GROUPS: Array<{
   title: string;
@@ -65,8 +75,13 @@ export default function AccountSettings() {
       CLIENT_CACHE_DAY_MAX_AGE_MS,
     ),
   );
-  const [panel, setPanel] = useState<Panel | null>(null);
-  const [withdrawConfirm, setWithdrawConfirm] = useState(false);
+  const [dialog, setDialog] = useHistoryPanel("panel", SETTINGS_PANELS);
+  const dialogTrigger = useRef<HTMLButtonElement | null>(null);
+  const panel = dialog === "withdraw" ? null : dialog;
+  const withdrawConfirm = dialog === "withdraw";
+  const setPanel = (value: Panel | null) => setDialog(value);
+  const setWithdrawConfirm = (open: boolean) =>
+    setDialog(open ? "withdraw" : null);
   const [message, setMessage] = useState<string | null>(null);
   const [action, setAction] = useState<"logout" | "withdraw" | null>(null);
   const [notificationPreferences, setNotificationPreferences] =
@@ -154,10 +169,18 @@ export default function AccountSettings() {
     };
   }, [panel, userId]);
 
-  function openPanel(nextPanel: Panel) {
+  function openPanel(nextPanel: Panel, trigger: HTMLButtonElement) {
+    dialogTrigger.current = trigger;
     setPanelError(null);
     if (nextPanel === "1:1 문의하기") setInquirySent(false);
     setPanel(nextPanel);
+  }
+
+  function restoreDialogFocus(event: Event) {
+    if (dialogTrigger.current?.isConnected) {
+      event.preventDefault();
+      dialogTrigger.current.focus({ preventScroll: true });
+    }
   }
 
   async function togglePracticeReminder() {
@@ -343,7 +366,9 @@ export default function AccountSettings() {
           <SettingsItem
             label={GROUPS[0].items[0].label}
             icon={GROUPS[0].items[0].icon}
-            onClick={() => openPanel(GROUPS[0].items[0].label)}
+            onClick={(event) =>
+              openPanel(GROUPS[0].items[0].label, event.currentTarget)
+            }
           />
         </section>
 
@@ -357,7 +382,7 @@ export default function AccountSettings() {
                 key={item.label}
                 label={item.label}
                 icon={item.icon}
-                onClick={() => openPanel(item.label)}
+                onClick={(event) => openPanel(item.label, event.currentTarget)}
               />
             ))}
           </section>
@@ -367,11 +392,15 @@ export default function AccountSettings() {
         <div className="bg-white pt-2">
           <FooterButton
             label="개인정보 처리방침"
-            onClick={() => openPanel("개인정보 처리방침")}
+            onClick={(event) =>
+              openPanel("개인정보 처리방침", event.currentTarget)
+            }
           />
           <FooterButton
             label="서비스 이용약관"
-            onClick={() => openPanel("서비스 이용약관")}
+            onClick={(event) =>
+              openPanel("서비스 이용약관", event.currentTarget)
+            }
           />
           <FooterButton
             label={action === "logout" ? "로그아웃 중…" : "로그아웃"}
@@ -381,7 +410,10 @@ export default function AccountSettings() {
           <FooterButton
             label={action === "withdraw" ? "탈퇴 처리 중…" : "회원 탈퇴"}
             disabled={action !== null}
-            onClick={() => setWithdrawConfirm(true)}
+            onClick={(event) => {
+              dialogTrigger.current = event.currentTarget;
+              setWithdrawConfirm(true);
+            }}
           />
           {message ? (
             <p role="alert" className="px-5 py-2 text-[12px] text-destructive">
@@ -400,7 +432,10 @@ export default function AccountSettings() {
           if (!open) setPanel(null);
         }}
       >
-        <DialogContent className="max-h-[80dvh] max-w-[370px] overflow-y-auto rounded-3xl border-[#e5e8eb] bg-white text-[#191f28]">
+        <DialogContent
+          onCloseAutoFocus={restoreDialogFocus}
+          className="max-h-[80dvh] max-w-[370px] overflow-y-auto rounded-3xl border-[#e5e8eb] bg-white text-[#191f28]"
+        >
           <DialogHeader>
             <DialogTitle>{panel}</DialogTitle>
             <DialogDescription className="text-[#8b95a1]">
@@ -522,7 +557,10 @@ export default function AccountSettings() {
       </Dialog>
 
       <Dialog open={withdrawConfirm} onOpenChange={setWithdrawConfirm}>
-        <DialogContent className="max-w-[350px] rounded-3xl border-0 bg-white p-6 text-[#191f28]">
+        <DialogContent
+          onCloseAutoFocus={restoreDialogFocus}
+          className="max-w-[350px] rounded-3xl border-0 bg-white p-6 text-[#191f28]"
+        >
           <DialogHeader>
             <DialogTitle>회원 탈퇴</DialogTitle>
             <DialogDescription className="text-[#6b7684]">
@@ -560,7 +598,7 @@ function SettingsItem({
 }: {
   label: string;
   icon: string;
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
 }) {
   return (
     <button
@@ -590,7 +628,7 @@ function FooterButton({
   disabled = false,
 }: {
   label: string;
-  onClick: () => void;
+  onClick: MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
 }) {
   return (
