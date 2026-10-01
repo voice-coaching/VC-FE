@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type CourseDetail,
@@ -16,6 +16,10 @@ import {
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import styles from "./home.module.css";
+import {
+  updateHomeHeader,
+  type HeaderScrollState,
+} from "@/lib/home-header-scroll";
 
 type RecommendationCard = Pick<
   Recommendation,
@@ -47,7 +51,6 @@ const EMPTY_DASHBOARD: HomeDashboard = {
 };
 
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
-const HOME_HEADER_HEIGHT = 181;
 
 const PRACTICE_CARDS: PracticeCard[] = [
   {
@@ -175,6 +178,11 @@ export default function Home() {
   );
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const headerScroll = useRef<HeaderScrollState>({
+    top: 0,
+    travel: 0,
+    hidden: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -360,14 +368,23 @@ export default function Home() {
     >
       <div
         data-scroll-container="home"
-        onScroll={(event) =>
-          setHeaderCollapsed(
-            event.currentTarget.scrollTop >= HOME_HEADER_HEIGHT,
-          )
-        }
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          const next = updateHomeHeader(
+            headerScroll.current,
+            element.scrollTop,
+            element.scrollHeight - element.clientHeight,
+          );
+          headerScroll.current = next;
+          setHeaderCollapsed(next.hidden);
+        }}
         className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <header className={`${styles.homeHeader} relative z-20 bg-[#2f6bff]`}>
+        <header
+          className={`${styles.homeHeader} z-20 bg-[#2f6bff]`}
+          data-state={headerCollapsed ? "hidden" : "visible"}
+          inert={headerCollapsed}
+        >
           <div className="flex h-16 items-center px-5">
             <Image
               src="/figma/home-density/brand.svg"
