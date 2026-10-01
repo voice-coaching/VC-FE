@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { NicknameEditor } from "@/components/nickname-editor";
+import layout from "@/components/my-page-layout.module.css";
 import {
   api,
   type Statistics,
@@ -154,7 +155,7 @@ export default function MyPage() {
     <AppShell
       chromeColor="#c5d6ff"
       viewportLocked
-      className="relative overflow-hidden bg-[#f2f4f6]"
+      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
     >
       <div className="absolute inset-x-0 top-0 h-[262px] bg-[#c5d6ff]" />
 
@@ -219,7 +220,9 @@ export default function MyPage() {
         )}
       </section>
 
-      <div className="absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6]">
+      <div
+        className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
+      >
         <div className="bg-white px-5 pt-4">
           {titleProgress ? (
             <button

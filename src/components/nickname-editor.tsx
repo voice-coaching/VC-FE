@@ -13,6 +13,8 @@ import {
 import { api, type UserAccount } from "@/lib/api";
 import { getCachedUser, markAuthenticatedUser } from "@/lib/auth-session";
 import { updateMyPageOverviewCache } from "@/lib/my-page-cache";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { navigationEntryId } from "@/lib/navigation-history";
 
 export function NicknameEditor({
   account,
@@ -22,13 +24,16 @@ export function NicknameEditor({
   fallbackName?: string;
 }) {
   const inputId = useId();
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useHistoryPanel("edit", ["nickname"] as const);
+  const open = panel === "nickname";
+  const setOpen = (next: boolean) => setPanel(next ? "nickname" : null);
   const [savedName, setSavedName] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [editedDraft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const busy = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const displayName = savedName ?? account?.nickname ?? fallbackName;
+  const draft = editedDraft ?? displayName ?? "";
   const nickname = draft.trim();
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
@@ -37,13 +42,21 @@ export function NicknameEditor({
     busy.current = true;
     setSaving(true);
     setError(null);
+    const entry = navigationEntryId(window.history.state);
+    const href = window.location.href;
     try {
       const updated = await api.users.updateProfile({ nickname });
       const user = getCachedUser() ?? account;
       if (user) markAuthenticatedUser({ ...user, nickname: updated.nickname });
       updateMyPageOverviewCache({ nickname: updated.nickname });
       setSavedName(updated.nickname);
-      setOpen(false);
+      // A completed request must not close a newer dialog or navigate elsewhere.
+      if (
+        href === window.location.href &&
+        entry === navigationEntryId(window.history.state)
+      ) {
+        setOpen(false);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -86,7 +99,7 @@ export function NicknameEditor({
           </button>
         </DialogTrigger>
       </div>
-      <DialogContent className="w-[calc(100%-40px)] max-w-[362px] rounded-[24px] border-0">
+      <DialogContent className="max-h-[calc(100dvh-40px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[calc(100%-40px)] max-w-[362px] overflow-y-auto rounded-[24px] border-0">
         <DialogHeader>
           <DialogTitle>닉네임 변경</DialogTitle>
           <DialogDescription>

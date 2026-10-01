@@ -1,0 +1,15 @@
+/* Keep content reachable when the fixed profile band would consume the screen. */
+@media (max-height: 600px) {
+  .shell {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+
+  .content {
+    position: relative;
+    inset: auto;
+    margin-top: 262px;
+    overflow: visible;
+  }
+}

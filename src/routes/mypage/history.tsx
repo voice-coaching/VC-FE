@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { NicknameEditor } from "@/components/nickname-editor";
+import layout from "@/components/my-page-layout.module.css";
 import {
   api,
   type ContentType,
@@ -264,7 +265,7 @@ export default function LearningHistory() {
     <AppShell
       chromeColor="#c5d6ff"
       viewportLocked
-      className="relative overflow-hidden bg-[#f2f4f6]"
+      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
     >
       <ProfileBand
         account={account}
@@ -272,7 +273,9 @@ export default function LearningHistory() {
         titleProgress={titleProgress}
         loading={overviewLoading}
       />
-      <div className="absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6]">
+      <div
+        className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
+      >
         <MyPageHead
           active="history"
           loading={overviewLoading}

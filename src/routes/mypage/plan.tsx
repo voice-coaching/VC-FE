@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { MyPageHead, MyProfileBand } from "@/components/my-page-frame";
+import layout from "@/components/my-page-layout.module.css";
 import {
   api,
   type Statistics,
@@ -26,6 +27,23 @@ import {
 } from "@/lib/onboarding-options";
 import { useProfile, type OnboardingAnswers } from "@/lib/use-profile";
 import { getUserTitleProgress } from "@/lib/user-title";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { navigationEntryId } from "@/lib/navigation-history";
+
+function planSelection(draft: OnboardingAnswers | null, key: EditSection) {
+  if (!draft) return [];
+  return key === "purpose"
+    ? draft.goals
+    : key === "improvements"
+      ? draft.improvementAreas
+      : key === "methods"
+        ? draft.learningSituations
+        : [
+            SCHEDULE_OPTIONS.find(
+              (item) => item.weeklySessions === draft.weeklySessions,
+            )?.value ?? "relaxed",
+          ];
+}
 
 export default function PracticePlan() {
   const router = useRouter();
@@ -45,8 +63,19 @@ export default function PracticePlan() {
     initialOverview?.titleProgress ?? null,
   );
   const [draft, setDraft] = useState<OnboardingAnswers | null>(null);
-  const [editing, setEditing] = useState<EditSection | null>(null);
-  const [selection, setSelection] = useState<string[]>([]);
+  const [editing, setEditing] = useHistoryPanel<EditSection>("edit", [
+    "purpose",
+    "improvements",
+    "methods",
+    "schedule",
+  ]);
+  const [selections, setSelections] = useState<
+    Partial<Record<EditSection, string[]>>
+  >({});
+  const selection = editing
+    ? (selections[editing] ?? planSelection(draft, editing))
+    : [];
+  const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,25 +178,20 @@ export default function PracticePlan() {
     : [];
 
   function open(key: EditSection) {
-    if (!draft) return;
-    setSelection(
-      key === "purpose"
-        ? draft.goals
-        : key === "improvements"
-          ? draft.improvementAreas
-          : key === "methods"
-            ? draft.learningSituations
-            : [
-                SCHEDULE_OPTIONS.find(
-                  (item) => item.weeklySessions === draft.weeklySessions,
-                )?.value ?? "relaxed",
-              ],
-    );
+    if (!draft || busy.current) return;
+    setSelections((current) => ({
+      ...current,
+      [key]: planSelection(draft, key),
+    }));
+    setError(null);
     setEditing(key);
   }
 
   async function apply() {
-    if (!draft || !selection.length) return;
+    if (!draft || !editing || !selection.length || busy.current) return;
+    busy.current = true;
+    const entry = navigationEntryId(window.history.state);
+    const href = window.location.href;
     let value = { ...draft };
     if (editing === "purpose") {
       value = {
@@ -202,7 +226,12 @@ export default function PracticePlan() {
     try {
       await updatePlan(value);
       setDraft(value);
-      setEditing(null);
+      if (
+        href === window.location.href &&
+        entry === navigationEntryId(window.history.state)
+      ) {
+        setEditing(null);
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -210,6 +239,7 @@ export default function PracticePlan() {
           : "계획을 저장하지 못했습니다.",
       );
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   }
@@ -239,7 +269,7 @@ export default function PracticePlan() {
     <AppShell
       chromeColor="#c5d6ff"
       viewportLocked
-      className="relative overflow-hidden bg-[#f2f4f6]"
+      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
     >
       <MyProfileBand
         account={account}
@@ -248,7 +278,9 @@ export default function PracticePlan() {
         titleProgress={titleProgress}
         loading={overviewLoading}
       />
-      <div className="absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6]">
+      <div
+        className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
+      >
         <MyPageHead
           active="plan"
           loading={overviewLoading}
@@ -318,11 +350,23 @@ export default function PracticePlan() {
       <dialog
         aria-labelledby="plan-sheet-title"
         ref={dialog}
-        onCancel={() => setEditing(null)}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) setEditing(null);
+        onCancel={(event) => {
+          event.preventDefault();
+          setEditing(null);
         }}
-        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto rounded-t-[28px] bg-white p-5 text-[#191f28] backdrop:bg-black/40"
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          if (
+            event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom
+          ) {
+            setEditing(null);
+          }
+        }}
+        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto rounded-t-[28px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-black/40"
       >
         <div className="mb-5 flex min-h-10 items-center justify-between">
           <h2 id="plan-sheet-title" className="text-[20px] leading-7 font-bold">
@@ -351,18 +395,23 @@ export default function PracticePlan() {
                 key={option.value}
                 type="button"
                 aria-pressed={selected}
+                disabled={saving}
                 onClick={() => {
+                  if (!editing || busy.current) return;
                   const multi =
                     editing === "improvements" || editing === "methods";
-                  setSelection((current) =>
-                    multi
+                  setSelections((all) => {
+                    const current =
+                      all[editing] ?? planSelection(draft, editing);
+                    const next = multi
                       ? current.includes(option.value)
                         ? current.filter((value) => value !== option.value)
                         : editing === "improvements" && current.length >= 3
                           ? current
                           : [...current, option.value]
-                      : [option.value],
-                  );
+                      : [option.value];
+                    return { ...all, [editing]: next };
+                  });
                 }}
                 className={`flex min-h-[64px] w-full items-center gap-3 rounded-2xl border-2 p-4 text-left ${selected ? "border-primary bg-[#edf2ff]" : "border-transparent bg-[#f7f8fa]"}`}
               >
@@ -381,6 +430,11 @@ export default function PracticePlan() {
             );
           })}
         </div>
+        {error ? (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
         <button
           type="button"
           disabled={!selection.length || saving}
