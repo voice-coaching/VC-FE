@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   canNavigateBack,
   installNavigationHistory,
+  navigationEntryId,
 } from "../src/lib/navigation-history";
 
 function fakeHistory() {
@@ -83,4 +84,22 @@ test("missing or invalid metadata cannot authorize back", () => {
   ]) {
     assert.equal(canNavigateBack(state), false);
   }
+});
+
+test("entry IDs survive replace/back and do not leak state to a new visit", () => {
+  const history = fakeHistory();
+  installNavigationHistory(history);
+  const first = navigationEntryId(history.state);
+  assert.ok(first);
+  history.pushState({ tree: "notifications" });
+  const notificationEntry = navigationEntryId(history.state);
+  assert.notEqual(notificationEntry, first);
+  history.replaceState({ tree: "notifications-updated" });
+  assert.equal(navigationEntryId(history.state), notificationEntry);
+  history.pushState({ tree: "practice" });
+  history.back();
+  assert.equal(navigationEntryId(history.state), notificationEntry);
+  history.back();
+  history.pushState({ tree: "notifications" });
+  assert.notEqual(navigationEntryId(history.state), notificationEntry);
 });

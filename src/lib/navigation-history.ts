@@ -2,7 +2,7 @@ const KEY = "__speakaiNavigation";
 const installed = new WeakSet<object>();
 
 type HistoryState = Record<string, unknown>;
-type AppEntry = { depth: number };
+type AppEntry = { depth: number; id?: string };
 type HistoryPort = Pick<History, "state" | "pushState" | "replaceState">;
 
 function asState(value: unknown): HistoryState {
@@ -15,12 +15,26 @@ function readEntry(value: unknown): AppEntry | null {
   const entry = asState(value)[KEY];
   if (!entry || typeof entry !== "object" || !("depth" in entry)) return null;
   return Number.isSafeInteger(entry.depth) && Number(entry.depth) >= 0
-    ? { depth: Number(entry.depth) }
+    ? {
+        depth: Number(entry.depth),
+        ...("id" in entry && typeof entry.id === "string"
+          ? { id: entry.id }
+          : {}),
+      }
     : null;
 }
 
 export function canNavigateBack(state: unknown): boolean {
   return (readEntry(state)?.depth ?? 0) > 0;
+}
+
+export function navigationEntryId(state: unknown): string | null {
+  return readEntry(state)?.id ?? null;
+}
+
+function currentEntry(state: unknown): AppEntry {
+  const entry = readEntry(state) ?? { depth: 0 };
+  return { ...entry, id: entry.id ?? crypto.randomUUID() };
 }
 
 /** Track only same-document entries made after entering the app.
@@ -35,7 +49,7 @@ export function installNavigationHistory(history: HistoryPort) {
   replace(
     {
       ...asState(history.state),
-      [KEY]: readEntry(history.state) ?? { depth: 0 },
+      [KEY]: currentEntry(history.state),
     },
     "",
   );
@@ -48,7 +62,10 @@ export function installNavigationHistory(history: HistoryPort) {
     push(
       {
         ...asState(data),
-        [KEY]: { depth: (readEntry(history.state)?.depth ?? 0) + 1 },
+        [KEY]: {
+          depth: (readEntry(history.state)?.depth ?? 0) + 1,
+          id: crypto.randomUUID(),
+        },
       },
       unused,
       url,
@@ -60,7 +77,7 @@ export function installNavigationHistory(history: HistoryPort) {
     url?: string | URL | null,
   ) => {
     replace(
-      { ...asState(data), [KEY]: readEntry(history.state) ?? { depth: 0 } },
+      { ...asState(data), [KEY]: currentEntry(history.state) },
       unused,
       url,
     );

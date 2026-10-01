@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { api } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
@@ -141,6 +142,10 @@ export default function HomeNotifications() {
   );
   const [loading, setLoading] = useState(initialCache === null);
   const [error, setError] = useState<string | null>(null);
+  const listRef = useHistoryScroll(
+    `notifications:${userId}`,
+    !loading && notifications.length > 0,
+  );
 
   useEffect(() => {
     let active = true;
@@ -297,7 +302,10 @@ export default function HomeNotifications() {
           </div>
         </section>
       ) : notifications.length ? (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-5">
+        <div
+          ref={listRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-5"
+        >
           <NotificationList items={notifications} onRead={markRead} />
         </div>
       ) : (
