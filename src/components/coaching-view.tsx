@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { coachingSentence } from "@/lib/coaching-sentence";
 import {
   coachingSeekTime,
   visualMeasurementLabel,
@@ -13,13 +12,9 @@ const roles = { onset: "초성", nucleus: "모음", coda: "받침" };
 export function CoachingView({
   coaching,
   recordingUrl,
-  scriptText,
-  showSummary = true,
 }: {
   coaching: AnalysisCoaching;
   recordingUrl?: string;
-  scriptText?: string;
-  showSummary?: boolean;
 }) {
   const player = useRef<HTMLAudioElement>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
@@ -55,14 +50,7 @@ export function CoachingView({
     <div className="space-y-4">
       <section className="design-card space-y-3">
         <h2 className="text-lg font-bold">{title}</h2>
-        {showSummary && <p className="text-sm leading-6">{coaching.summary}</p>}
-        {scriptText != null && (
-          <p className="text-xs text-muted-foreground">
-            서버가 선택한 발음 코칭을 대본 위치와 함께 보여드려요. 전체 문장의
-            점수나 정상·오류 판정은 아니에요. 여러 곳에서 반복된 후보는 대표
-            위치에 한 번만 표시하며 서버의 후보 순서를 유지해요.
-          </p>
-        )}
+        <p className="text-sm leading-6">{coaching.summary}</p>
         <p className="text-xs text-muted-foreground">
           {coaching.score.validity === "INSUFFICIENT_EVIDENCE"
             ? "평가 근거가 부족한 항목이 있어 점수를 보류했어요. 0점을 뜻하지 않아요."
@@ -104,30 +92,14 @@ export function CoachingView({
 
       {coaching.items.map((item, index) => {
         const seconds = coachingSeekTime(item);
-        const sentence =
-          scriptText == null ? null : coachingSentence(scriptText, item);
         return (
           <section key={item.candidateId} className="design-card space-y-3">
-            {scriptText != null &&
-              (sentence ? (
-                <div className="rounded-xl bg-muted p-3 text-sm leading-6">
-                  <p className="font-semibold">
-                    대본 {sentence.number}번째 문장의 코칭
-                  </p>
-                  <p className="whitespace-pre-wrap">{sentence.text}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  대본 문장 위치를 확정할 수 없어 단어·발음 근거로 표시해요.
-                </p>
-              ))}
             <h2 className="font-bold">
               {index + 1}.{" "}
               {item.location.word ? `‘${item.location.word}’의 ` : ""}‘
               {item.expectedPhone}’ 연습
             </h2>
             <p className="text-sm leading-6">{item.action}</p>
-            <p className="text-sm leading-6">{item.explanation}</p>
             <div className="rounded-xl bg-muted p-3 text-sm leading-6">
               <p className="font-semibold">짧게 연습하기</p>
               <p>{item.practice}</p>
@@ -139,10 +111,7 @@ export function CoachingView({
                 어떤 근거인가요?
               </summary>
               <p className="leading-6">{item.observation}</p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                후보 ID: {item.candidateId} · 근거:{" "}
-                {item.evidenceIds.join(", ")}
-              </p>
+              <p className="mt-2 leading-6">{item.explanation}</p>
               {item.location.writtenRole && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   글자 위치: {roles[item.location.writtenRole]}. 실제 소리의
@@ -166,12 +135,6 @@ export function CoachingView({
           </section>
         );
       })}
-      {coaching.practicePlan && (
-        <section className="design-card text-sm leading-6">
-          <h2 className="font-bold">다음 연습</h2>
-          <p>{coaching.practicePlan}</p>
-        </section>
-      )}
 
       {coaching.visual.observations.some(
         (observation) => observation.measurements.length > 0,

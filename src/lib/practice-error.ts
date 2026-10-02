@@ -1,5 +1,6 @@
 import { AnalysisFailed, AnalysisWaitTimeout } from "./analysis-polling";
 import { ApiError } from "./api/client";
+import { CanonicalResultUnavailable } from "./canonical-presentation";
 
 export type PracticeErrorKind =
   "quality" | "input" | "unsupported" | "preparation";
@@ -18,6 +19,13 @@ export function describePracticeError(
   reason: unknown,
   recorderStatus?: string,
 ) {
+  if (reason instanceof CanonicalResultUnavailable) {
+    return {
+      kind: "analysis",
+      title: "AI 분석을 완료하지 못했어요",
+      hint: reason.message,
+    };
+  }
   if (reason instanceof AnalysisWaitTimeout) {
     return {
       kind: "waiting",

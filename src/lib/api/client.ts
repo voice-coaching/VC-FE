@@ -249,7 +249,7 @@ export function createHttpClient(
           try {
             await refreshAccessToken();
           } catch (error) {
-            // Never confuse a refresh endpoint's 404 with a canonical-to-legacy signal.
+            // Keep authentication failures distinct from result endpoint errors.
             if (endpointErrorsOnly)
               throw new ApiError(
                 "로그인 갱신에 실패했습니다.",
