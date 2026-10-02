@@ -16,10 +16,26 @@ export class ApiError extends Error {
 const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
 let accessToken: string | null = null;
 let sessionVersion = 0;
-let nativeSessionRecoveryEnabled = false;
-
-export function enableNativeSessionRecovery() {
-  nativeSessionRecoveryEnabled = true;
+const sessionListeners = new Set<() => void>();
+function notifySessionChange() {
+  sessionListeners.forEach((listener) => listener());
+}
+function onStoredTokenChange(event: StorageEvent) {
+  if (event.key !== ACCESS_TOKEN_STORAGE_KEY && event.key !== null) return;
+  accessToken = readStoredAccessToken();
+  sessionVersion += 1;
+  notifySessionChange();
+}
+/** Result readers must discard in-memory evidence on login/logout/user switches. */
+export function subscribeAuthSession(listener: () => void) {
+  if (sessionListeners.size === 0 && typeof window !== "undefined")
+    window.addEventListener("storage", onStoredTokenChange);
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+    if (sessionListeners.size === 0 && typeof window !== "undefined")
+      window.removeEventListener("storage", onStoredTokenChange);
+  };
 }
 
 export function getAuthSessionVersion() {
@@ -64,6 +80,7 @@ function persistAccessToken(value: string | null) {
 export function saveAccessToken(value: string) {
   const token = storeAccessToken(value);
   sessionVersion += 1;
+  notifySessionChange();
   return token;
 }
 
@@ -89,6 +106,7 @@ export function clearAccessToken() {
   sessionVersion += 1;
   accessToken = null;
   persistAccessToken(null);
+  notifySessionChange();
 }
 
 export function getAccessToken() {
@@ -101,7 +119,7 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   timeoutMs?: number;
   skipAuth?: boolean;
   skipRefresh?: boolean;
-  deferAuthFailure?: boolean;
+  endpointErrorsOnly?: boolean;
   responseType?: "json" | "audio";
 }
 
@@ -180,7 +198,7 @@ export function createHttpClient(
       timeoutMs = 20_000,
       skipAuth = false,
       skipRefresh = false,
-      deferAuthFailure = false,
+      endpointErrorsOnly = false,
       responseType = "json",
       signal,
       ...fetchOptions
@@ -221,7 +239,20 @@ export function createHttpClient(
         clearTimeout(timeout);
         // Another request may already have renewed the expired token while
         // this response was in flight. Reuse it instead of rotating again.
-        if (getAccessToken() === token) await refreshAccessToken();
+        if (getAccessToken() === token) {
+          try {
+            await refreshAccessToken();
+          } catch (error) {
+            // Never confuse a refresh endpoint's 404 with a canonical-to-legacy signal.
+            if (endpointErrorsOnly)
+              throw new ApiError(
+                "로그인 갱신에 실패했습니다.",
+                error instanceof ApiError ? error.status : 401,
+                "AUTH_REFRESH_FAILED",
+              );
+            throw error;
+          }
+        }
         assertCurrentSession(version);
         if (signal?.aborted)
           throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
@@ -351,18 +382,35 @@ export function createHttpClient(
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
-      const requestHeaders = new Headers(headers);
+      const version = sessionVersion;
       const token = getAccessToken();
-      if (authorize && token && !requestHeaders.has("Authorization")) {
-        requestHeaders.set("Authorization", `Bearer ${token}`);
-      }
-      requestHeaders.forEach((value, key) => xhr.setRequestHeader(key, value));
+      if (
+        authorize &&
+        token &&
+        !Object.keys(headers).some(
+          (key) => key.toLowerCase() === "authorization",
+        )
+      )
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      Object.entries(headers).forEach(([key, value]) =>
+        xhr.setRequestHeader(key, value),
+      );
       xhr.timeout = 60_000;
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable)
           onProgress?.(Math.round((event.loaded / event.total) * 100));
       };
       xhr.onload = () => {
+        if (version !== sessionVersion) {
+          reject(
+            new ApiError(
+              "로그인 상태가 변경되었습니다.",
+              409,
+              "AUTH_SESSION_CHANGED",
+            ),
+          );
+          return;
+        }
         if (xhr.status >= 200 && xhr.status < 300) {
           onProgress?.(100);
           resolve();

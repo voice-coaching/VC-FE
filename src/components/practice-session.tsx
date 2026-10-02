@@ -28,17 +28,9 @@ import {
   describePracticeError,
   PracticeInputError,
 } from "@/lib/practice-error";
-import { splitSentences } from "@/lib/sentences";
-import { getAuthenticatedUserId } from "@/lib/auth-session";
-import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
-import { cacheResources } from "@/lib/cache-resources";
-import {
-  CLIENT_CACHE_LIVE_MAX_AGE_MS,
-  readUserClientCache,
-  removeUserClientCache,
-  removeUserClientCacheGroup,
-  writeUserClientCache,
-} from "@/lib/client-cache";
+import { cn } from "@/lib/utils";
+import { PracticeSessionEntry } from "./practice-session-entry";
+import { getAuthSessionVersion } from "@/lib/api/client";
 
 type Phase =
   | "idle"
@@ -51,16 +43,19 @@ type Phase =
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function invalidateLearningCaches() {
-  const userId = getAuthenticatedUserId();
-  removeUserClientCacheGroup(userId, "home-");
-  removeUserClientCacheGroup(userId, "mypage-history-");
-  removeUserClientCacheGroup(userId, "streak-");
-  removeUserClientCacheGroup(userId, "course-catalog-");
-  removeUserClientCache(userId, "mypage-overview");
+export function PracticeSession(props: {
+  content: PracticeContent;
+  localOnly?: boolean;
+  onTitleChange?: (title: string) => void;
+}) {
+  return (
+    <PracticeSessionEntry {...props}>
+      <LegacyPracticeSession {...props} />
+    </PracticeSessionEntry>
+  );
 }
 
-export function PracticeSession({
+function LegacyPracticeSession({
   content,
   onTitleChange,
   localOnly = false,
@@ -100,6 +95,7 @@ export function PracticeSession({
   const [activeSentence, setActiveSentence] = useState(0);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
+  const authEpochRef = useRef(getAuthSessionVersion());
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
@@ -171,6 +167,7 @@ export function PracticeSession({
       const activeSessionId = sessionIdRef.current;
       if (
         activeSessionId &&
+        authEpochRef.current === getAuthSessionVersion() &&
         !completedRef.current &&
         !analysisPendingRef.current &&
         phaseRef.current !== "analyzing"

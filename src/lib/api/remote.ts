@@ -42,35 +42,38 @@ function query(params: Record<string, QueryValue>) {
 
 const id = (value: Id) => encodeURIComponent(String(value));
 
+// Relative upload URLs refer to the Backend API, not the frontend route root.
+// Never attach a login token to an external presigned storage URL.
 function uploadTarget(baseUrl: string, uploadUrl: string) {
-  const url = uploadUrl.trim();
-  const external = /^(?:https?:)?\/\//i.test(url);
-  if (!external) {
-    return {
-      url: `${baseUrl.replace(/\/$/, "")}${url.startsWith("/") ? url : `/${url}`}`,
-      authorize: true,
-    };
-  }
-
-  let authorize = false;
-  try {
-    const fallbackOrigin =
-      typeof window === "undefined"
-        ? "https://frontend.invalid"
-        : window.location.origin;
-    const backend = new URL(baseUrl, fallbackOrigin);
-    const target = new URL(url, fallbackOrigin);
-    const backendPath = backend.pathname.replace(/\/$/, "");
-    authorize =
-      target.origin === backend.origin &&
-      (!backendPath ||
-        target.pathname === backendPath ||
-        target.pathname.startsWith(`${backendPath}/`));
-  } catch {}
-
+  const raw = uploadUrl.trim();
+  const origin =
+    typeof window === "undefined"
+      ? "https://frontend.invalid"
+      : window.location.origin;
+  const backend = new URL(baseUrl, origin);
+  const path = backend.pathname.replace(/\/$/, "");
+  const absolute = /^(?:https?:)?\/\//i.test(raw);
+  const resolved = absolute
+    ? raw
+    : `${baseUrl.replace(/\/$/, "")}/${raw.replace(/^\//, "")}`;
+  const target = new URL(resolved, origin);
+  if (
+    !["http:", "https:"].includes(target.protocol) ||
+    target.username ||
+    target.password
+  )
+    throw new ApiError(
+      "올바른 업로드 주소가 아닙니다.",
+      502,
+      "INVALID_UPLOAD_URL",
+    );
   return {
-    url,
-    authorize,
+    url: target.href,
+    authorize:
+      target.origin === backend.origin &&
+      (!path ||
+        target.pathname === path ||
+        target.pathname.startsWith(`${path}/`)),
   };
 }
 
