@@ -105,3 +105,49 @@ Next 배포 빌드는 수행하지 않는다. 다음은 완료 증빙이 아닌 
 - 실제 사용 브라우저/모바일 접근성·레이아웃과 FE 배포 환경의 Backend 프록시 설정.
 
 merge 및 FE 운영 배포는 이 PR에 포함되지 않는다.
+
+## 2026-10-02 후속: 총평만 보이는 피드백 화면 수정
+
+### 조사 근거와 원인
+
+- 기준 FE: `dev=f49efee`, `main=7087bf9`. PR #33은 병합됐지만 이 main 커밋의
+  GitHub Vercel 상태는 `failure`였다. 배포 로그 자체를 열람한 것은 아니며,
+  로컬 컴파일에서도 history-detail JSX, 누락된 import/함수/인증 옵션 오류를 확인했다.
+- 사용자 제보 시간 범위의 AWS nginx 기록에서 콘텐츠 조회, 분석 요청·claim·callback,
+  결과 GET, segments GET, 학습 완료가 모두 200인 흐름을 확인했다. 응답 body나
+  특정 계정의 DB 저장값을 확인한 것은 아니다. 요청 메타데이터와 화면만으로 같은
+  요청이라고 확정하지 않으며 접근 토큰·녹음·사용자 피드백 원문은 이 문서에 기록하지 않는다.
+- 운영 RunPod `http_models.result_payload`는 coaching이 있으면 v3 결과로
+  `overallScore=null`, `scoringEvidence=null`, `coaching`을 전송한다.
+  `coaching_evidence` 점수는 NOT_CALIBRATED 또는 INSUFFICIENT_EVIDENCE다.
+- Backend `RunPodAnalysisResultCallbackRequestDto.toWorkerResult`의 기존 segments는
+  빈 목록이며 `applyCoaching`은 별도 coaching 문서를 저장하고 숫자 점수를 null로 유지한다.
+  `AnalysisResultReaderImpl` → `AnalysisResultResponseDto`는 이를 공개 `coaching` 필드로 전달한다.
+- 피드백 `AnalysisView`는 최신 main에서 coaching을 읽지 않고 구형 overallScore,
+  segments, pronunciationEvidence.selectedPhone만 표시했다. 따라서 총평이 있어도
+  상세 코칭은 빠지고 점수/선택 음소가 빈 화면이 됐다. 전송 장애와 결과 종류 불일치를 구분해야 한다.
+
+### 이번 수정
+
+- 연습·재진입·이력의 legacy v3 상세는 `GET /api/analyses/{id}`의 coaching을 소비한다.
+  coaching이 있는 결과에 구형 segments 조회를 필수로 묶지 않는다. coaching이 없는
+  과거 결과의 segments/점수 화면과 canonical v4의 별도 public view는 유지한다.
+- 실제 action/explanation/practice/selfCheck/observation과 후보·근거 ID를 표시한다.
+  서버 후보 순서는 바꾸지 않는다. 비어 있는 legacy selectedPhone을 교정 근거로 표시하지 않는다.
+- 서버 charStart/charEnd는 Python Unicode code-point 인덱스다. 원문 공백을 유지한 채
+  해당 음절·Hangul 단어가 실제 대본에 일치할 때만 문장 위치를 붙인다. 소수점은 문장
+  경계로 나누지 않는다. 일치하지 않으면 문장 위치 미확인으로 남기고 단어/발음 코칭만 표시한다.
+- 이 문장 구분은 **대본의 표시 문맥**이다. 새 AnalysisSegment, 문장 점수, 전체 문장의
+  정상/오류 판정을 생성하지 않는다. 반복 후보의 대표 위치를 모든 반복 문장에 복제하지 않는다.
+- 숫자 대신 점수 미제공 상태·API reasonCodes를 표시한다. detector ranking을 100점으로
+  환산하거나 GPT에게 점수를 만들어 내게 하지 않는다. 숫자 채점을 제공하려면 별도의
+  검증된 rubric/calibration/score validity 및 서버·클라이언트 계약 변경이 필요하다.
+- history-detail은 최근 UI의 녹음/AI 리포트 탭·삭제 확인을 유지하면서 canonical reader,
+  전체 identity, 정확한 legacy fallback, no-cache 및 인증/삭제 fence를 함께 복구했다.
+- practice-session의 누락 import/cache 무효화/experienceLabel과 HTTP client의 누락된
+  native session recovery 정의를 기존 main 구현에 맞춰 복구했다. v4 헤더·오류 분리·
+  인증 구독은 제거하지 않았다. report/confirm 쿼리 변경만으로 연습 세션을 재마운트하지 않는다.
+
+확인은 TypeScript 컴파일·포맷·정적 diff/계약 대조 범위다. 브라우저 자동화·회귀 테스트·
+fixture·실제 녹음/추론 재실행은 하지 않는다. 이 소스 수정은 FE 운영 배포 완료가 아니다.
+운영 DB 직접 조회는 별도 권한 확인 전 수행하지 않았고, 서버 API·DB·GPT 정책은 변경하지 않았다.

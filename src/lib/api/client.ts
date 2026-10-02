@@ -16,6 +16,10 @@ export class ApiError extends Error {
 const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
 let accessToken: string | null = null;
 let sessionVersion = 0;
+let nativeSessionRecoveryEnabled = false;
+export function enableNativeSessionRecovery() {
+  nativeSessionRecoveryEnabled = true;
+}
 const sessionListeners = new Set<() => void>();
 function notifySessionChange() {
   sessionListeners.forEach((listener) => listener());
@@ -120,6 +124,7 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
   skipRefresh?: boolean;
   endpointErrorsOnly?: boolean;
+  deferAuthFailure?: boolean;
   responseType?: "json" | "audio";
 }
 
@@ -199,6 +204,7 @@ export function createHttpClient(
       skipAuth = false,
       skipRefresh = false,
       endpointErrorsOnly = false,
+      deferAuthFailure = false,
       responseType = "json",
       signal,
       ...fetchOptions

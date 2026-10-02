@@ -35,9 +35,14 @@ export function PracticeSessionEntry(props: Props) {
     () => 0,
   );
   const search = useSearchParams();
+  // Report/dialog navigation does not change the analysis attempt. Remounting
+  // here would discard feedback and could invoke the legacy cancel cleanup.
+  const attemptSearch = new URLSearchParams(search.toString());
+  attemptSearch.delete("report");
+  attemptSearch.delete("confirm");
   return (
     <Entry
-      key={JSON.stringify([epoch, props.content.id, search.toString()])}
+      key={JSON.stringify([epoch, props.content.id, attemptSearch.toString()])}
       {...props}
     />
   );

@@ -31,6 +31,17 @@ import {
 import { cn } from "@/lib/utils";
 import { PracticeSessionEntry } from "./practice-session-entry";
 import { getAuthSessionVersion } from "@/lib/api/client";
+import { splitSentences } from "@/lib/sentences";
+import { getAuthenticatedUserId } from "@/lib/auth-session";
+import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
+import { cacheResources } from "@/lib/cache-resources";
+import {
+  CLIENT_CACHE_LIVE_MAX_AGE_MS,
+  readUserClientCache,
+  removeUserClientCache,
+  removeUserClientCacheGroup,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 
 type Phase =
   | "idle"
@@ -43,10 +54,20 @@ type Phase =
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function invalidateLearningCaches() {
+  const userId = getAuthenticatedUserId();
+  removeUserClientCacheGroup(userId, "home-");
+  removeUserClientCacheGroup(userId, "mypage-history-");
+  removeUserClientCacheGroup(userId, "streak-");
+  removeUserClientCacheGroup(userId, "course-catalog-");
+  removeUserClientCache(userId, "mypage-overview");
+}
+
 export function PracticeSession(props: {
   content: PracticeContent;
   localOnly?: boolean;
   onTitleChange?: (title: string) => void;
+  experienceLabel?: string;
 }) {
   return (
     <PracticeSessionEntry {...props}>
@@ -219,10 +240,15 @@ function LegacyPracticeSession({
         }
 
         if (!active) return;
-        const [result, segmentPage] = await Promise.all([
-          api.analyses.get(analysisId),
-          api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-        ]);
+        const result = await api.analyses.get(analysisId);
+        if (!active) return;
+        const segmentPage =
+          result.coaching != null
+            ? { items: [] }
+            : await api.analyses.getSegments(analysisId, {
+                page: 0,
+                size: 100,
+              });
         if (!active) return;
         setAnalysis(result);
         setSegments(segmentPage.items);
@@ -397,10 +423,11 @@ function LegacyPracticeSession({
   }
 
   async function loadResult(activeSessionId: Id, analysisId: Id) {
-    const [result, segmentPage] = await Promise.all([
-      api.analyses.get(analysisId),
-      api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-    ]);
+    const result = await api.analyses.get(analysisId);
+    const segmentPage =
+      result.coaching != null
+        ? { items: [] }
+        : await api.analyses.getSegments(analysisId, { page: 0, size: 100 });
     setAnalysis(result);
     setSegments(segmentPage.items);
     await api.training.complete(
