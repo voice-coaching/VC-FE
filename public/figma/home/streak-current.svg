@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Badge">
+<path id="Flame" d="M18 2.4C18 2.4 29.7 10.98 29.7 21.12C29.7 27.984 24.396 33.6 18 33.6C11.604 33.6 6.3 27.984 6.3 21.12C6.3 16.128 9.108 12.54 11.76 10.044C11.76 14.1 13.476 16.596 15.504 16.596C15.816 11.448 16.908 6.768 18 2.4Z" fill="url(#paint0_linear_0_69)"/>
+<path id="Inner" d="M18 18C18 18 23.2 21.8571 23.2 25.8571C23.2 28.7143 20.8889 31 18 31C15.1111 31 12.8 28.7143 12.8 25.8571C12.8 23.4286 14.2444 21.7143 15.5444 20.7143C15.6889 22.4286 16.4111 23.4286 17.2778 23.4286C17.4222 21.2857 17.7111 19.5714 18 18Z" fill="url(#paint1_linear_0_69)"/>
+<circle id="Core" cx="18" cy="28.4" r="2.6" fill="#FFD37A"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_69" x1="9.875" y1="7.16667" x2="30.675" y2="22.7667" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FF9A4D"/>
+<stop offset="1" stop-color="#F0472E"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_69" x1="14.3889" y1="19.9861" x2="23.1965" y2="27.0322" gradientUnits="userSpaceOnUse">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="#FFE7B0"/>
+</linearGradient>
+</defs>
+</svg>

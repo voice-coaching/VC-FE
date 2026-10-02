@@ -40,6 +40,9 @@ export type UserTitleCode =
   | "ANNOUNCER";
 export type UserTitleLabel =
   "왕초보" | "초보" | "동네 아나운서" | "아나운서 지망생" | "아나운서";
+export type DayOfWeek = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+export type InquiryStatus = "RECEIVED" | "IN_PROGRESS" | "ANSWERED" | "CLOSED";
+export type AnalysisMediaType = "AUDIO_ONLY" | "AUDIO_VISUAL";
 
 export interface ApiEnvelope<T> {
   result: boolean;
@@ -108,6 +111,7 @@ export interface UserTitleExam {
   requiredTrainingCount: number;
   passingScore: number;
   status: TitleExamStatus;
+  trainingSessionId: Id | null;
   createdAt: string;
 }
 
@@ -155,7 +159,7 @@ export interface SocialLoginInput {
   provider: SocialProvider;
   authorizationCode: string;
   redirectUri: string;
-  state: string;
+  state?: string | null;
 }
 
 export interface OnboardingSurveyAnswers {
@@ -239,14 +243,57 @@ export interface PracticeContentSummary {
   category: string;
   difficulty: Difficulty;
   estimatedSeconds: number;
+  publisher?: string | null;
+  paragraphCount?: number | null;
+  sentenceCount?: number | null;
+  syllableCount?: number | null;
+  publishedAt?: string | null;
+  speakerName?: string | null;
 }
 
 export interface PracticeContent extends PracticeContentSummary {
   learningFocus: LearningFocus;
-  description: string;
+  description: string | null;
   scriptText: string;
   targetPronunciations: string[];
   referenceAudioAvailable: boolean;
+  origin: "USER_INPUT" | null;
+  sentences: PracticeContentSentence[] | null;
+  createdAt: string | null;
+}
+
+export interface PracticeContentSentence {
+  sequenceNo: number;
+  text: string;
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface NextPracticeContent {
+  id: Id;
+  contentType: ContentType;
+  title: string;
+  difficulty: Difficulty;
+  scriptText: string;
+}
+
+export interface ContentFacetOption {
+  value: string;
+  label: string;
+  count: number;
+  order: number;
+}
+
+export interface ContentFacets {
+  type: ContentType;
+  categories: ContentFacetOption[];
+  difficulties: Array<ContentFacetOption & { value: Difficulty }>;
+  revision: string;
+}
+
+export interface AdjacentPracticeContent {
+  previous: { id: Id; title: string } | null;
+  next: { id: Id; title: string } | null;
 }
 
 export interface PracticeContentRecommendation {
@@ -308,6 +355,26 @@ export interface CourseStep {
   completed: boolean;
 }
 
+export type CourseStepBlock =
+  | { type: "TEXT"; title?: string | null; body: string }
+  | {
+      type: "IMAGE";
+      assetUrl: string;
+      altText: string;
+      aspectRatio: number;
+    }
+  | { type: "DIAGRAM"; diagram: { kind: string; altText: string } }
+  | { type: "CHECKLIST"; items: string[] }
+  | { type: "AUDIO"; referenceAudioId: Id }
+  | { type: "PRACTICE_PROMPT"; practiceContentId: Id };
+
+export interface CourseStepDetail extends CourseStep {
+  courseId: Id;
+  subtitle: string | null;
+  contentRevision: number;
+  blocks: CourseStepBlock[];
+}
+
 export interface UserCourseProgress extends CourseProgress {
   title: string;
   updatedAt: string;
@@ -320,7 +387,13 @@ export interface TrainingSession {
   courseStepId?: Id | null;
   learningFocus?: LearningFocus;
   status: TrainingSessionStatus;
-  content?: { id: Id; title: string; scriptText: string };
+  content?: {
+    id: Id;
+    title: string;
+    scriptText: string;
+    practiceExampleId: string | null;
+    practiceExampleRevision: number | null;
+  };
   selectedRecordingId?: Id | null;
   recordingCount?: number;
   analysisAvailable?: boolean;
@@ -340,6 +413,7 @@ export interface VoiceRecording {
   attemptNo: number;
   durationMs?: number;
   qualityStatus: RecordingQualityStatus;
+  analysisMediaType: AnalysisMediaType;
   selected: boolean;
   createdAt?: string;
 }
@@ -556,9 +630,9 @@ export interface WeaknessRecommendations {
   }>;
   recommendations: Array<{
     targetType: "CONTENT" | "COURSE" | string;
-    contentId?: Id;
-    courseId?: Id;
-    contentType?: ContentType;
+    contentId?: Id | null;
+    courseId?: Id | null;
+    contentType?: ContentType | null;
     title: string;
     reason: string;
   }>;
@@ -581,6 +655,94 @@ export interface PracticeExamples {
   items: PracticeExample[];
 }
 
+export interface NotificationPreferences {
+  practiceReminder: {
+    enabled: boolean;
+    time: string;
+    daysOfWeek: DayOfWeek[];
+    timezone: string;
+  };
+  marketing: { enabled: boolean };
+  updatedAt: string;
+}
+
+export interface NotificationPreferencesUpdateInput {
+  practiceReminder?: {
+    enabled?: boolean | null;
+    time?: string | null;
+    daysOfWeek?: DayOfWeek[] | null;
+    timezone?: string | null;
+  } | null;
+  marketing?: { enabled?: boolean | null } | null;
+}
+
+export interface PushSubscriptionInput {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  userAgent: string;
+  deviceName?: string;
+}
+
+export interface PushSubscription {
+  id: Id;
+  deviceName: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface NotificationItem {
+  id: Id;
+  type: string;
+  title: string;
+  body: string;
+  deepLink: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationPage extends PageResult<NotificationItem> {
+  unreadCount: number;
+}
+
+export interface NoticeSummary {
+  id: Id;
+  title: string;
+  pinned: boolean;
+  publishedAt: string;
+  summary: string;
+}
+
+export interface NoticeDetail extends NoticeSummary {
+  sections: Array<{ title: string; paragraphs: string[] }>;
+}
+
+export interface InquiryInput {
+  category: string;
+  subject: string;
+  body: string;
+  relatedSessionId?: Id;
+  replyEmail?: string;
+}
+
+export interface InquiryReceipt {
+  id: Id;
+  status: "RECEIVED";
+  createdAt: string;
+}
+
+export interface Inquiry {
+  id: Id;
+  category: string;
+  subject: string;
+  body: string;
+  relatedSessionId: Id | null;
+  replyEmail: string | null;
+  status: InquiryStatus;
+  answer: string | null;
+  createdAt: string;
+  answeredAt: string | null;
+}
+
 export interface ApiContract {
   auth: {
     checkEmail(email: string): Promise<{ email: string; available: boolean }>;
@@ -600,11 +762,14 @@ export interface ApiContract {
       nickname: string;
     }): Promise<{ id: Id; nickname: string; updatedAt: string }>;
     getProfileImage(): Promise<ProfileImage | null>;
-    createProfileImage(input: ProfileImageInput): Promise<ProfileImage>;
+    createProfileImage(
+      input: ProfileImageInput,
+      idempotencyKey?: string,
+    ): Promise<ProfileImage>;
     updateProfileImage(input: ProfileImageInput): Promise<ProfileImage>;
     deleteProfileImage(): Promise<void>;
     getTitle(): Promise<UserTitleProgress>;
-    createTitleExam(): Promise<UserTitleExam>;
+    createTitleExam(idempotencyKey?: string): Promise<UserTitleExam>;
     getTitleExam(examId: Id): Promise<UserTitleExam>;
     submitTitleExam(examId: Id, analysisId: Id): Promise<UserTitleExamResult>;
     withdraw(): Promise<{ withdrawnAt: string }>;
@@ -646,15 +811,28 @@ export interface ApiContract {
         retention: "SESSION_HISTORY";
         locale: "ko-KR";
       },
-      idempotencyKey: string,
+      idempotencyKey?: string,
     ): Promise<PracticeContent>;
+    getFacets(type: ContentType): Promise<ContentFacets>;
+    getAdjacent(
+      id: Id,
+      filters: {
+        type: ContentType;
+        category?: string;
+        difficulty?: Difficulty;
+        focus?: LearningFocus;
+      },
+    ): Promise<AdjacentPracticeContent>;
     getNext(filters: {
       type: ContentType;
       category?: string;
       difficulty?: Difficulty;
       excludeId?: Id;
-    }): Promise<PracticeContent>;
-    getRecommendations(id: Id): Promise<PracticeContentRecommendation[]>;
+    }): Promise<NextPracticeContent>;
+    getRecommendations(
+      id: Id,
+      limit?: number,
+    ): Promise<PracticeContentRecommendation[]>;
     getReferenceAudios(id: Id): Promise<ReferenceAudio[]>;
     getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
   };
@@ -679,6 +857,7 @@ export interface ApiContract {
     ): Promise<CourseProgress>;
     complete(id: Id): Promise<CourseProgress & { completedAt: string }>;
     getSteps(id: Id): Promise<CourseStep[]>;
+    getStep(id: Id, stepId: Id, sessionId?: Id): Promise<CourseStepDetail>;
     getMyProgress(status?: CourseProgressStatus): Promise<UserCourseProgress[]>;
   };
   training: {
@@ -711,6 +890,8 @@ export interface ApiContract {
         mimeType: string;
         fileSizeBytes: number;
         durationMs: number;
+        videoProcessingConsentAccepted?: boolean | null;
+        videoProcessingConsentPolicyRevision?: string | null;
       },
     ): Promise<VoiceRecording>;
     listRecordings(sessionId: Id): Promise<VoiceRecording[]>;
@@ -781,6 +962,40 @@ export interface ApiContract {
       limit?: number;
       contentType?: ContentType;
     }): Promise<WeaknessRecommendations>;
+  };
+  notifications: {
+    getPreferences(): Promise<NotificationPreferences>;
+    updatePreferences(
+      input: NotificationPreferencesUpdateInput,
+    ): Promise<NotificationPreferences>;
+    createPushSubscription(
+      input: PushSubscriptionInput,
+      idempotencyKey?: string,
+    ): Promise<PushSubscription>;
+    deletePushSubscription(subscriptionId: Id): Promise<void>;
+    list(filters?: {
+      page?: number;
+      size?: number;
+      unreadOnly?: boolean;
+    }): Promise<NotificationPage>;
+    markRead(notificationId: Id): Promise<NotificationItem>;
+    markAllRead(): Promise<{ updatedCount: number }>;
+  };
+  support: {
+    listNotices(filters?: {
+      page?: number;
+      size?: number;
+    }): Promise<PageResult<NoticeSummary>>;
+    getNotice(noticeId: Id): Promise<NoticeDetail>;
+    createInquiry(
+      input: InquiryInput,
+      idempotencyKey?: string,
+    ): Promise<InquiryReceipt>;
+    listInquiries(filters?: {
+      page?: number;
+      size?: number;
+    }): Promise<PageResult<Inquiry>>;
+    getInquiry(inquiryId: Id): Promise<Inquiry>;
   };
 }
 

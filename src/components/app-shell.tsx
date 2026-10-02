@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -19,7 +25,15 @@ const tabFlowPrefixes = [
   "/my-script",
   "/announcer",
   "/practice",
+  "/lip-practice",
 ];
+
+// These views share the same profile header and should switch without sliding it.
+const staticMyPageTabs = new Set([
+  "/mypage",
+  "/mypage/history",
+  "/mypage/plan",
+]);
 
 export function BottomNav() {
   return (
@@ -34,17 +48,22 @@ export function AppShell({
   nav = true,
   className,
   viewportLocked = false,
+  chromeColor,
+  mainRef,
 }: {
   children: ReactNode;
   nav?: boolean;
   className?: string;
   viewportLocked?: boolean;
+  chromeColor?: string;
+  mainRef?: Ref<HTMLElement>;
 }) {
   const pathname = usePathname();
   const lockViewport = nav || viewportLocked;
   const animateTabFlow = tabFlowPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+  const animateContent = animateTabFlow && !staticMyPageTabs.has(pathname);
   const transitionDirection = useMemo(() => {
     void pathname;
     return getTabTransitionDirection();
@@ -56,6 +75,11 @@ export function AppShell({
 
   return (
     <div
+      style={
+        chromeColor
+          ? ({ "--app-chrome-background": chromeColor } as CSSProperties)
+          : undefined
+      }
       className={cn(
         "app-shell learning-shell flex flex-col",
         styles.safeAreaShell,
@@ -65,6 +89,7 @@ export function AppShell({
       )}
     >
       <main
+        ref={mainRef}
         key={animateTabFlow ? pathname : undefined}
         onClickCapture={
           animateTabFlow ? () => setTabTransitionDirection("right") : undefined
@@ -72,8 +97,8 @@ export function AppShell({
         className={cn(
           "flex-1",
           lockViewport && "min-h-0",
-          animateTabFlow && styles.tabContent,
-          animateTabFlow &&
+          animateContent && styles.tabContent,
+          animateContent &&
             (transitionDirection === "left"
               ? styles.fromLeft
               : styles.fromRight),

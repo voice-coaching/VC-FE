@@ -27,11 +27,16 @@ const expected = [
   "GET /api/recommendations?type=SENTENCE&limit=5",
   "GET /api/users/me/training-sessions/recent",
   "GET /api/practice-contents?type=SENTENCE&page=0&size=20",
+  "POST /api/practice-contents/custom",
+  "GET /api/practice-contents/facets?type=NEWS",
+  "GET /api/practice-contents/1/adjacent?type=NEWS&category=ECONOMY&difficulty=BEGINNER&focus=PRONUNCIATION",
   "GET /api/practice-contents/next?type=SENTENCE&excludeId=1",
   "GET /api/practice-contents/1",
-  "GET /api/practice-contents/1/recommendations",
+  "GET /api/practice-contents/1/recommendations?limit=5",
   "GET /api/practice-contents/1/reference-audios",
   "GET /api/reference-audios/1/playback-url",
+  "GET /api/courses/1/steps/1/practice-examples?sessionId=1",
+  "GET /api/practice-examples/example-1/audio",
   "GET /api/courses?type=PRONUNCIATION&page=0&size=20",
   "GET /api/courses/1",
   "POST /api/courses/1/start",
@@ -39,6 +44,7 @@ const expected = [
   "PATCH /api/courses/1/progress",
   "POST /api/courses/1/complete",
   "GET /api/courses/1/steps",
+  "GET /api/courses/1/steps/1?sessionId=1",
   "GET /api/users/me/course-progress?status=IN_PROGRESS",
   "GET /api/analysis-capabilities",
   "POST /api/training-sessions",
@@ -65,6 +71,18 @@ const expected = [
   "GET /api/users/me/training-sessions/1",
   "DELETE /api/users/me/training-sessions/1",
   "GET /api/users/me/weakness-recommendations?limit=10&contentType=SENTENCE",
+  "GET /api/users/me/notification-preferences",
+  "PATCH /api/users/me/notification-preferences",
+  "POST /api/users/me/push-subscriptions",
+  "DELETE /api/users/me/push-subscriptions/1",
+  "GET /api/notifications?page=0&size=20&unreadOnly=true",
+  "PATCH /api/notifications/1/read",
+  "POST /api/notifications/read-all",
+  "GET /api/notices?page=0&size=20",
+  "GET /api/notices/1",
+  "POST /api/inquiries",
+  "GET /api/users/me/inquiries?page=0&size=20",
+  "GET /api/users/me/inquiries/1",
 ] as const;
 
 const calls: string[] = [];
@@ -98,6 +116,12 @@ globalThis.fetch = (async (
   );
   calls.push(`${init?.method ?? "GET"} ${url.pathname}${url.search}`);
   requestOptions.push(init ?? {});
+  if (url.pathname.endsWith("/audio")) {
+    return new Response(new Uint8Array([1]), {
+      status: 200,
+      headers: { "content-type": "audio/mpeg" },
+    });
+  }
   return new Response(
     JSON.stringify({ result: true, message: "ok", data: responseData }),
     {
@@ -144,11 +168,11 @@ const profileImage = {
   file: new Blob(["profile"], { type: "image/png" }),
   fileName: "profile.png",
 };
-await api.users.createProfileImage(profileImage);
+await api.users.createProfileImage(profileImage, "profile-image-key");
 await api.users.updateProfileImage(profileImage);
 await api.users.deleteProfileImage();
 await api.users.getTitle();
-await api.users.createTitleExam();
+await api.users.createTitleExam("title-exam-key");
 await api.users.getTitleExam(1);
 await api.users.submitTitleExam(1, 1);
 await api.users.withdraw();
@@ -170,11 +194,30 @@ await api.home.get();
 await api.home.getRecommendations({ type: "SENTENCE", limit: 5 });
 await api.home.getRecentTraining();
 await api.content.list({ type: "SENTENCE", page: 0, size: 20 });
+await api.content.createCustom(
+  {
+    title: "내 문장",
+    scriptText: "또박또박 읽습니다.",
+    learningFocus: "PRONUNCIATION",
+    retention: "SESSION_HISTORY",
+    locale: "ko-KR",
+  },
+  "custom-content-key",
+);
+await api.content.getFacets("NEWS");
+await api.content.getAdjacent(1, {
+  type: "NEWS",
+  category: "ECONOMY",
+  difficulty: "BEGINNER",
+  focus: "PRONUNCIATION",
+});
 await api.content.getNext({ type: "SENTENCE", excludeId: 1 });
 await api.content.get(1);
-await api.content.getRecommendations(1);
+await api.content.getRecommendations(1, 5);
 await api.content.getReferenceAudios(1);
 await api.content.getReferenceAudioPlaybackUrl(1);
+await api.examples.list(1, 1, 1);
+await api.examples.getAudio("example-1");
 await api.courses.list({ type: "PRONUNCIATION", page: 0, size: 20 });
 await api.courses.get(1);
 await api.courses.start(1);
@@ -182,6 +225,7 @@ await api.courses.getProgress(1);
 await api.courses.updateProgress(1, { lastStepId: 1, progressPercent: 50 });
 await api.courses.complete(1);
 await api.courses.getSteps(1);
+await api.courses.getStep(1, 1, 1);
 await api.courses.getMyProgress("IN_PROGRESS");
 await api.training.getAnalysisCapabilities();
 await api.training.create({ contentId: 1, learningFocus: "PRONUNCIATION" });
@@ -194,9 +238,11 @@ await api.training.getUploadUrl(1, {
 });
 await api.training.registerRecording(1, {
   objectKey: "key",
-  mimeType: "audio/webm",
+  mimeType: "video/webm",
   fileSizeBytes: 1,
   durationMs: 1000,
+  videoProcessingConsentAccepted: true,
+  videoProcessingConsentPolicyRevision: "voice-video-processing-consent-v1",
 });
 await api.training.listRecordings(1);
 await api.training.deleteRecording(1, 1);
@@ -229,13 +275,56 @@ await api.myPage.getWeaknessRecommendations({
   limit: 10,
   contentType: "SENTENCE",
 });
+await api.notifications.getPreferences();
+await api.notifications.updatePreferences({
+  practiceReminder: { enabled: true },
+});
+await api.notifications.createPushSubscription(
+  {
+    endpoint: "https://push.example/subscription",
+    keys: { p256dh: "p256dh", auth: "auth" },
+    userAgent: "contract-test",
+    deviceName: "test-device",
+  },
+  "push-subscription-key",
+);
+await api.notifications.deletePushSubscription(1);
+await api.notifications.list({ page: 0, size: 20, unreadOnly: true });
+await api.notifications.markRead(1);
+await api.notifications.markAllRead();
+await api.support.listNotices({ page: 0, size: 20 });
+await api.support.getNotice(1);
+await api.support.createInquiry(
+  {
+    category: "SERVICE",
+    subject: "문의 제목",
+    body: "문의 내용",
+    replyEmail: "test@example.com",
+  },
+  "inquiry-key",
+);
+await api.support.listInquiries({ page: 0, size: 20 });
+await api.support.getInquiry(1);
 
 assert.equal(
   expected.length,
-  62,
-  "Frontend adapter endpoint count must include the AI capability contract.",
+  80,
+  "Frontend adapter must cover every endpoint in the updated API contract.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
+for (const [path, key] of [
+  ["POST /api/users/me/profile-image", "profile-image-key"],
+  ["POST /api/users/me/title-exams", "title-exam-key"],
+  ["POST /api/practice-contents/custom", "custom-content-key"],
+  ["POST /api/users/me/push-subscriptions", "push-subscription-key"],
+  ["POST /api/inquiries", "inquiry-key"],
+] as const) {
+  const callIndex = calls.indexOf(path);
+  assert.equal(
+    new Headers(requestOptions[callIndex]?.headers).get("idempotency-key"),
+    key,
+  );
+}
 for (const path of [
   "POST /api/training-sessions/1/analyze",
   "POST /api/training-sessions/1/analysis/retry",
@@ -247,6 +336,17 @@ for (const path of [
     analysisConsent,
   );
 }
+const recordingIndex = calls.indexOf(
+  "POST /api/training-sessions/1/recordings",
+);
+assert.deepEqual(JSON.parse(String(requestOptions[recordingIndex]?.body)), {
+  objectKey: "key",
+  mimeType: "video/webm",
+  fileSizeBytes: 1,
+  durationMs: 1000,
+  videoProcessingConsentAccepted: true,
+  videoProcessingConsentPolicyRevision: "voice-video-processing-consent-v1",
+});
 const regenerateIndex = calls.indexOf(
   "POST /api/analyses/1/feedback/regenerate",
 );
@@ -255,8 +355,10 @@ assert.deepEqual(JSON.parse(String(requestOptions[regenerateIndex]?.body)), {
 });
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
 assert.ok(
-  requestOptions.every(
-    (init) => new Headers(init.headers).get("accept") === "application/json",
+  requestOptions.every((init, index) =>
+    calls[index] === "GET /api/practice-examples/example-1/audio"
+      ? new Headers(init.headers).get("accept") === "audio/mpeg"
+      : new Headers(init.headers).get("accept") === "application/json",
   ),
 );
 assert.ok(

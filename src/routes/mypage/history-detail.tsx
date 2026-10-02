@@ -1,9 +1,9 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { AppShell } from "@/components/app-shell";
-import { TopBar } from "@/components/top-bar";
 import { ReferencePlayer } from "@/components/reference-player";
 import { api, type TrainingHistoryDetail } from "@/lib/api";
 import {
@@ -36,9 +36,14 @@ export default function LearningHistoryDetail({
 
 function HistoryDetail({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const [detail, setDetail] = useState<TrainingHistoryDetail | null>(null);
+  const userId = getAuthenticatedUserId();
+  const cacheResource = cacheResources.historyDetail(sessionId);
+  const [initialBundle] = useState(() =>
+    readUserClientCache<DetailBundle>(userId, cacheResource),
+  );
+  const [bundle, setBundle] = useState<DetailBundle | null>(initialBundle);
+  const [tab, setTab] = useState<"recording" | "report">("recording");
   const [error, setError] = useState<string | null>(null);
-  const [playbackUrl, setPlaybackUrl] = useState<string>();
   const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState<CanonicalOrLegacyAnalysis | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -105,7 +110,9 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
   }
 
   async function deleteHistory() {
-    if (!window.confirm("이 학습 기록을 삭제할까요?")) return;
+    if (deleteBusy.current || !bundle) return;
+    deleteBusy.current = true;
+    const requestLifecycle = lifecycle.current;
     setDeleting(true);
     setError(null);
     setResult(null);
@@ -113,16 +120,29 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
     setPlaybackUrl(undefined);
     try {
       await api.myPage.deleteTrainingSession(sessionId);
-      router.replace("/mypage/history");
+      deletedRef.current = true;
+      removeUserClientCache(userId, cacheResource);
+      removeCachedHistorySession(userId, sessionId);
+      removeUserClientCacheGroup(userId, "home-");
+      removeUserClientCacheGroup(userId, "streak-");
+      if (requestLifecycle !== lifecycle.current) return;
+      setDeleted(true);
+      setConfirmDelete(false);
     } catch (reason) {
-      setError(
+      if (requestLifecycle !== lifecycle.current) return;
+      setDeleteError(
         reason instanceof Error
           ? reason.message
           : "학습 기록을 삭제하지 못했습니다.",
       );
+      deleteBusy.current = false;
       setDeleting(false);
     }
   }
+
+  const sentences = bundle
+    ? splitSentences(bundle.content.scriptText)
+    : ([] as string[]);
 
   return (
     <AppShell nav={false}>
@@ -233,17 +253,115 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
               </section>
             )}
 
+      {bundle && tab === "recording" && (
+        <>
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pt-4 pb-6 [overflow-wrap:anywhere]">
+            <section className="space-y-3.5 rounded-[20px] bg-white p-[18px] text-[16px] leading-[1.6]">
+              {sentences.map((sentence, index) => (
+                <p
+                  key={`${index}-${sentence}`}
+                  className={
+                    index === 0
+                      ? "font-bold text-[#191f28]"
+                      : "font-medium text-[#b0b8c1]"
+                  }
+                >
+                  {sentence}
+                </p>
+              ))}
+            </section>
             <button
+              ref={deleteTrigger}
               type="button"
               disabled={deleting}
-              onClick={() => void deleteHistory()}
-              className="w-full py-3 text-xs font-semibold text-destructive underline disabled:opacity-50"
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmDelete(true);
+              }}
+              className="mt-6 w-full py-3 text-[12px] font-medium text-[#8b95a1] underline disabled:opacity-50"
             >
-              {deleting ? "삭제 중…" : "학습 기록 삭제"}
+              {deleting ? "삭제 중…" : "연습 기록 삭제"}
             </button>
-          </>
-        )}
-      </div>
+          </div>
+          <div className="shrink-0 px-5 pb-4">
+            <ReferencePlayer
+              recordingId={bundle.detail.recording.id}
+              title="내 녹음 듣기"
+              durationSeconds={bundle.detail.recording.durationMs / 1_000}
+              variant="recording"
+            />
+          </div>
+        </>
+      )}
+
+      {bundle && tab === "report" && (
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <AnalysisView
+            analysis={bundle.analysis}
+            segments={bundle.segments}
+            content={bundle.content}
+            recordingId={bundle.detail.recording.id}
+            courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
+          />
+        </div>
+      )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent
+          className="max-h-[calc(100dvh-40px)] w-[calc(100%-40px)] max-w-[362px] overflow-y-auto rounded-[24px] border-0"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (!deleted) deleteTrigger.current?.focus({ preventScroll: true });
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 연습 기록을 삭제할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              삭제한 기록과 분석 결과는 복구할 수 없어요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteError ? (
+            <p
+              role="alert"
+              className="text-sm text-destructive [overflow-wrap:anywhere]"
+            >
+              {deleteError}
+            </p>
+          ) : null}
+          <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
+            <AlertDialogCancel
+              disabled={deleting}
+              className="mt-0 min-h-12 rounded-full"
+            >
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-12 rounded-full bg-red-500 text-white"
+              disabled={deleting || !bundle}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteHistory();
+              }}
+            >
+              {deleting ? "삭제 중…" : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
+  );
+}
+
+function HistoryDetailSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="px-5 pt-4">
+      <span className="sr-only">기록을 불러오는 중</span>
+      <div className="space-y-4 rounded-[20px] bg-white p-[18px]">
+        <SkeletonBlock className="h-4 w-11/12" />
+        <SkeletonBlock className="h-4 w-4/5" />
+        <SkeletonBlock className="h-4 w-full" />
+        <SkeletonBlock className="h-4 w-3/5" />
+      </div>
+    </div>
   );
 }

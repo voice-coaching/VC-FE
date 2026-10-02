@@ -1,7 +1,7 @@
 "use client";
 import { NavigationIcon } from "@/components/navigation-icon";
 
-import Link from "next/link";
+import { BackButton } from "@/components/back-button";
 import type { ReactNode } from "react";
 
 export function TopBar({
@@ -18,23 +18,22 @@ export function TopBar({
   onBack?: () => void;
 }) {
   return (
-    <header className="relative flex h-16 shrink-0 items-center gap-3 px-5 py-3">
+    <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
       {onBack ? (
         <button
           onClick={onBack}
           aria-label="이전 단계"
-          className="text-foreground transition-opacity hover:opacity-60"
+          className="flex size-10 items-center justify-center text-foreground transition-opacity hover:opacity-60"
         >
           <NavigationIcon />
         </button>
       ) : (
-        <Link
-          href={to}
-          aria-label="뒤로가기"
-          className="text-foreground transition-opacity hover:opacity-60"
+        <BackButton
+          fallback={to}
+          className="flex size-10 items-center justify-center text-foreground transition-opacity hover:opacity-60"
         >
           <NavigationIcon />
-        </Link>
+        </BackButton>
       )}
       {typeof progress === "number" ? (
         <div className="h-1.5 flex-1 rounded-full bg-muted">
@@ -44,7 +43,7 @@ export function TopBar({
           />
         </div>
       ) : (
-        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[18px] font-bold">
+        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
           {title}
         </h1>
       )}

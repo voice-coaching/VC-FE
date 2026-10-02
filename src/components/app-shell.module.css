@@ -31,7 +31,7 @@
 }
 
 .standaloneSafeArea {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(34px, env(safe-area-inset-bottom, 0px));
 }
 
 .tabFlow {

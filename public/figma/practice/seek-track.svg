@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="290" height="12" viewBox="0 0 290 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Track">
+<rect x="6" y="4" width="284" height="4" rx="2" fill="#E5E8EB"/>
+<rect id="Rectangle" x="6" y="4" width="0.01" height="4" rx="0.005" fill="#2F6BFF"/>
+<rect id="Rectangle_2" x="62.8" y="4" width="2" height="4" fill="white"/>
+<rect id="Rectangle_3" x="113.92" y="4" width="2" height="4" fill="white"/>
+<rect id="Rectangle_4" x="182.08" y="4" width="2" height="4" fill="white"/>
+<rect id="Rectangle_5" x="233.2" y="4" width="2" height="4" fill="white"/>
+<circle id="Knob" cx="6" cy="6" r="5" fill="#2F6BFF" stroke="white" stroke-width="2"/>
+</g>
+</svg>

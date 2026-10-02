@@ -123,12 +123,20 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
   responseType?: "json" | "audio";
 }
 
+type HttpClientOptions = {
+  native?: boolean;
+  refreshRetryDelayMs?: number;
+};
+
 function joinUrl(baseUrl: string, path: string) {
   if (/^https?:\/\//.test(path)) return path;
   return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-export function createHttpClient(baseUrl: string) {
+export function createHttpClient(
+  baseUrl: string,
+  { native, refreshRetryDelayMs = 500 }: HttpClientOptions = {},
+) {
   type RefreshResult = {
     accessToken: string;
     tokenType: string;
@@ -142,11 +150,33 @@ export function createHttpClient(baseUrl: string) {
   async function refreshAccessToken() {
     const version = sessionVersion;
     if (!refreshFlight || refreshFlight.version !== version) {
-      const promise = request<RefreshResult>("/api/auth/token/refresh", {
-        method: "POST",
-        skipAuth: true,
-        skipRefresh: true,
-      })
+      const recoverNativeSession = native ?? nativeSessionRecoveryEnabled;
+      const requestRefresh = (deferAuthFailure: boolean) =>
+        request<RefreshResult>("/api/auth/token/refresh", {
+          method: "POST",
+          skipAuth: true,
+          skipRefresh: true,
+          deferAuthFailure,
+        });
+      const promise = (async () => {
+        try {
+          return await requestRefresh(recoverNativeSession);
+        } catch (reason) {
+          const retryable =
+            reason instanceof ApiError && [0, 401, 408].includes(reason.status);
+          if (!recoverNativeSession || !retryable) throw reason;
+
+          // A resumed WKWebView can briefly make its cookie jar or network
+          // unavailable. Give it one short grace attempt before treating the
+          // refresh session as expired and signing the user out.
+          assertCurrentSession(version);
+          await new Promise((resolve) =>
+            setTimeout(resolve, refreshRetryDelayMs),
+          );
+          assertCurrentSession(version);
+          return requestRefresh(false);
+        }
+      })()
         .then((data) => {
           assertCurrentSession(version);
           return { ...data, accessToken: storeAccessToken(data.accessToken) };
@@ -291,6 +321,7 @@ export function createHttpClient(baseUrl: string) {
         if (
           response.status === 401 &&
           (!skipAuth || path === "/api/auth/token/refresh") &&
+          !deferAuthFailure &&
           getAccessToken() === token
         ) {
           clearAccessToken();
@@ -384,11 +415,17 @@ export function createHttpClient(baseUrl: string) {
           onProgress?.(100);
           resolve();
         } else {
+          const uploadAuthorizationFailed =
+            xhr.status === 401 || xhr.status === 403;
           reject(
             new ApiError(
-              "음성 파일 업로드에 실패했습니다.",
+              uploadAuthorizationFailed
+                ? "녹음 파일 업로드 승인이 만료되었거나 올바르지 않습니다."
+                : "음성 파일 업로드에 실패했습니다.",
               xhr.status,
-              "UPLOAD_FAILED",
+              uploadAuthorizationFailed
+                ? "UPLOAD_AUTHORIZATION_FAILED"
+                : "UPLOAD_FAILED",
             ),
           );
         }

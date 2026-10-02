@@ -33,6 +33,13 @@ export function describePracticeError(
     };
   }
   if (reason instanceof ApiError) {
+    if (reason.code.startsWith("UPLOAD_")) {
+      return {
+        kind: "upload",
+        title: "녹음 파일을 업로드하지 못했어요",
+        hint: "업로드 승인을 새로 받아 다시 시도했지만 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      };
+    }
     if (reason.status === 401 || reason.status === 403) {
       return {
         kind: "auth",

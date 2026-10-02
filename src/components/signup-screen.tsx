@@ -145,10 +145,14 @@ export function SignupScreen() {
     <IPhoneFrame>
       <form
         onSubmit={handleSubmit}
-        className="flex h-full flex-col bg-white"
+        className="flex min-h-full flex-col bg-white"
         aria-label="회원가입"
       >
-        <div className="h-11 shrink-0" aria-hidden="true" />
+        <div
+          style={{ height: "max(44px, env(safe-area-inset-top, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
 
         <header className="flex h-12 shrink-0 items-center px-4 py-3">
           <button
@@ -165,7 +169,7 @@ export function SignupScreen() {
           <span className="size-6 shrink-0" aria-hidden="true" />
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col px-6">
+        <div className="flex flex-1 flex-col px-6">
           <div className="h-[34px] shrink-0" aria-hidden="true" />
           <h2 className="text-[24px] leading-8 font-bold tracking-[-0.552px]">
             가입 정보 입력
@@ -303,7 +307,7 @@ export function SignupScreen() {
             </p>
           )}
 
-          <div className="min-h-0 flex-1" />
+          <div className="min-h-6 flex-1" />
 
           <button
             type="submit"
@@ -315,7 +319,11 @@ export function SignupScreen() {
           <div className="h-6 shrink-0" aria-hidden="true" />
         </div>
 
-        <div className="h-[34px] shrink-0" aria-hidden="true" />
+        <div
+          style={{ height: "max(34px, env(safe-area-inset-bottom, 0px))" }}
+          className="shrink-0"
+          aria-hidden="true"
+        />
       </form>
     </IPhoneFrame>
   );
@@ -449,26 +457,8 @@ function PasswordField({
           maxLength={20}
           aria-invalid={status === "error"}
           aria-describedby={message ? `${id}-message` : undefined}
-          className={`relative z-10 ${FIELD_INPUT_CLASS} ${
-            visible ? "text-[#191f28]" : "text-transparent caret-transparent"
-          }`}
+          className={FIELD_INPUT_CLASS}
         />
-        {!visible && (value.length > 0 || status === "focused") && (
-          <span
-            className="pointer-events-none absolute top-1/2 left-0 flex max-w-[310px] -translate-y-1/2 items-center gap-1 overflow-hidden"
-            aria-hidden="true"
-          >
-            {Array.from(value.slice(0, 16)).map((_, index) => (
-              <span
-                key={index}
-                className="size-[15px] shrink-0 rounded-full bg-[#191f28]"
-              />
-            ))}
-            {status === "focused" && (
-              <span className="password-mask-caret h-[22px] w-[1.5px] shrink-0 bg-[#191f28]" />
-            )}
-          </span>
-        )}
         <button
           type="button"
           aria-label={visible ? `${label} 숨기기` : `${label} 보기`}

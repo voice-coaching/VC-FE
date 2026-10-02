@@ -159,9 +159,7 @@ export async function redirectToOAuthProvider(
   provider: SocialProvider,
   returnTo = "/home",
 ) {
-  // A hidden developer session uses a local mock API. Always leave that mode
-  // before starting a real OAuth flow so the callback exchanges the code with
-  // the backend rather than returning fixed local data.
+  // Clear obsolete developer flags/tokens left by older app versions.
   disableDeveloperApi();
   const attempt = createOAuthAttempt(provider, returnTo);
   try {

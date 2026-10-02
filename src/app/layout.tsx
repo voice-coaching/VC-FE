@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "../styles.css";
 import { Providers } from "./providers";
 import { NativeOAuthBridge } from "@/components/native-oauth-bridge";
+import { NativeSessionBridge } from "@/components/native-session-bridge";
 
 const designFont = localFont({
   src: "../assets/fonts/NotoSansKR.woff",
@@ -27,12 +28,7 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image" },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/app-icon-192.png", sizes: "192x192", type: "image/png" },
-    ],
+    icon: [{ url: "/favicon.svg", sizes: "any", type: "image/svg+xml" }],
     apple: [
       {
         url: "/apple-touch-icon.png",
@@ -40,7 +36,7 @@ export const metadata: Metadata = {
         type: "image/png",
       },
     ],
-    shortcut: ["/favicon.ico"],
+    shortcut: ["/favicon.svg"],
   },
 };
 
@@ -49,7 +45,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
-  themeColor: "#f5f6f8",
+  themeColor: "#2f6bff",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -58,6 +54,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className={designFont.className}>
         <Providers>
           <NativeOAuthBridge />
+          <NativeSessionBridge />
           {children}
         </Providers>
       </body>

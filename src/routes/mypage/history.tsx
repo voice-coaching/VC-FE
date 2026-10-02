@@ -1,66 +1,260 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { TopBar } from "@/components/top-bar";
-
-import { api, type ContentType, type TrainingHistoryItem } from "@/lib/api";
+import { NicknameEditor } from "@/components/nickname-editor";
+import layout from "@/components/my-page-layout.module.css";
+import {
+  api,
+  type ContentType,
+  type Statistics,
+  type TrainingHistoryItem,
+  type UserAccount,
+  type UserTitleProgress,
+} from "@/lib/api";
+import { getAuthenticatedUserId, getCachedUser } from "@/lib/auth-session";
+import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
+import {
+  readMyPageOverviewCache,
+  updateMyPageOverviewCache,
+} from "@/lib/my-page-cache";
+import {
+  getTitleTrainingCountDisplay,
+  getUserTitleProgress,
+} from "@/lib/user-title";
 import { cn } from "@/lib/utils";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { installNavigationHistory } from "@/lib/navigation-history";
+import { mergeHistoryItems, refreshHistoryWindow } from "@/lib/history-pages";
+import { historyCacheResource, type HistoryCache } from "@/lib/history-cache";
 
 const FILTERS: Array<{ value?: ContentType; label: string }> = [
   { label: "전체" },
   { value: "NEWS", label: "뉴스" },
   { value: "SENTENCE", label: "문장" },
-  { value: "ANNOUNCER", label: "따라 읽기" },
+  { value: "ANNOUNCER", label: "아나운서" },
   { value: "CLASS_PRACTICE", label: "클래스" },
 ];
 
+const TYPE_LABEL: Record<ContentType, string> = {
+  NEWS: "뉴스",
+  SENTENCE: "문장",
+  ANNOUNCER: "아나운서",
+  CLASS_PRACTICE: "클래스",
+};
+
+function localStartOfWeek(date: Date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function relativeDateLabel(value: string, now = new Date()) {
+  const date = new Date(value);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+  const days = Math.round((today.getTime() - target.getTime()) / 86_400_000);
+  if (days === 0) return "오늘";
+  if (days === 1) return "어제";
+  if (days > 1 && days < 7) return `${days}일 전`;
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
 export default function LearningHistory() {
-  const [kind, setKind] = useState<ContentType | undefined>();
-  const [items, setItems] = useState<TrainingHistoryItem[]>([]);
+  const router = useRouter();
+  const params = useSearchParams();
+  const kind = FILTERS.find(
+    (filter) => filter.value === params.get("type"),
+  )?.value;
+  const userId = getAuthenticatedUserId();
+  const [initialOverview] = useState(readMyPageOverviewCache);
+  const [initialHistory] = useState(() =>
+    readUserClientCache<HistoryCache>(userId, historyCacheResource(kind)),
+  );
+  const [items, setItems] = useState<TrainingHistoryItem[]>(
+    initialHistory?.items ?? [],
+  );
+  const [account, setAccount] = useState<UserAccount | null>(getCachedUser);
+  const [statistics, setStatistics] = useState<Statistics | null>(
+    initialOverview?.statistics ?? null,
+  );
+  const [titleProgress, setTitleProgress] = useState<UserTitleProgress | null>(
+    initialOverview?.titleProgress ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialHistory === null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const [examStarting, setExamStarting] = useState(false);
+  const [page, setPage] = useState(initialHistory?.page ?? 0);
+  const [hasNext, setHasNext] = useState(initialHistory?.hasNext ?? false);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
+  const generation = useRef(0);
+  const moreBusy = useRef(false);
+  const scope = `history:${userId}:${kind ?? "all"}`;
+  const [loadedScope, setLoadedScope] = useState(scope);
+  const loadingList = loading || loadedScope !== scope;
+  const scrollReady = userId !== null && !loadingList && !overviewLoading;
+  const mainScroll = useHistoryScroll(`${scope}:outer`, scrollReady);
+  const listScroll = useHistoryScroll(`${scope}:inner`, scrollReady);
+
+  function setKind(next?: ContentType) {
+    if (next === kind) return;
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("type", next);
+    else url.searchParams.delete("type");
+    installNavigationHistory(window.history);
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  }
+
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    setOverviewLoading(true);
+    const cached = getCachedUser();
+    void Promise.allSettled([
+      cached ? Promise.resolve(cached) : api.users.getMe(),
+      api.myPage.getStatistics({ period: "MONTH" }),
+      api.users.getTitle(),
+    ]).then(([userResult, statsResult, titleResult]) => {
+      if (!active) return;
+      setOverviewLoading(false);
+      if (userResult.status === "fulfilled") {
+        setAccount(userResult.value);
+        updateMyPageOverviewCache({ nickname: userResult.value.nickname });
+      }
+      if (statsResult.status === "fulfilled") {
+        setStatistics(statsResult.value);
+        updateMyPageOverviewCache({ statistics: statsResult.value });
+      }
+      if (titleResult.status === "fulfilled") {
+        setTitleProgress(titleResult.value);
+        updateMyPageOverviewCache({ titleProgress: titleResult.value });
+      } else if (
+        statsResult.status === "fulfilled" &&
+        !initialOverview?.titleProgress
+      ) {
+        const fallback = getUserTitleProgress(
+          "ABSOLUTE_BEGINNER",
+          statsResult.value.totalSessionCount,
+        );
+        setTitleProgress(fallback);
+        updateMyPageOverviewCache({ titleProgress: fallback });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialOverview, retry]);
+
+  useEffect(() => {
+    let active = true;
+    generation.current += 1;
+    moreBusy.current = false;
+    setLoadingMore(false);
+    setRefreshing(true);
+    setLoadedScope(scope);
+    const resource = historyCacheResource(kind);
+    const cached = readUserClientCache<HistoryCache>(userId, resource);
+    if (cached) {
+      setItems(cached.items);
+      setPage(cached.page);
+      setHasNext(cached.hasNext);
+      setLoading(false);
+    } else {
+      setItems([]);
+      setPage(0);
+      setHasNext(false);
+      setLoading(true);
+    }
     setError(null);
     setLoadMoreError(null);
-    api.myPage
-      .listTrainingSessions({
-        type: kind,
-        status: "COMPLETED",
-        page: 0,
-        size: 20,
-      })
+    // Revalidate the entire loaded window, not just page zero. Otherwise a
+    // detail round-trip removes later pages and clamps the restored scroll.
+    const lastPage = cached?.page ?? 0;
+    void refreshHistoryWindow(
+      (page) =>
+        api.myPage.listTrainingSessions({
+          type: kind,
+          status: "COMPLETED",
+          page,
+          size: 20,
+        }),
+      lastPage,
+      () => active,
+    )
       .then((value) => {
-        if (active) {
-          setItems(value.items);
-          setPage(value.page);
-          setHasNext(Boolean(value.hasNext));
-        }
+        if (!active || !value) return;
+        setItems(value.items);
+        setPage(value.page);
+        setHasNext(Boolean(value.hasNext));
+        writeUserClientCache<HistoryCache>(userId, resource, {
+          items: value.items,
+          page: value.page,
+          hasNext: Boolean(value.hasNext),
+        });
       })
       .catch((reason) => {
-        if (active)
+        if (active && !cached) {
           setError(
             reason instanceof Error
               ? reason.message
               : "기록을 불러오지 못했습니다.",
           );
+        }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       });
     return () => {
       active = false;
+      generation.current += 1;
     };
-  }, [kind]);
+  }, [kind, userId, retry, scope]);
+
+  const groups = useMemo(() => {
+    const week = localStartOfWeek(new Date());
+    const previous = new Date(week);
+    previous.setDate(previous.getDate() - 7);
+    return [
+      {
+        label: "이번 주",
+        items: items.filter((item) => new Date(item.completedAt) >= week),
+      },
+      {
+        label: "지난주",
+        items: items.filter((item) => {
+          const date = new Date(item.completedAt);
+          return date >= previous && date < week;
+        }),
+      },
+      {
+        label: "이전 기록",
+        items: items.filter((item) => new Date(item.completedAt) < previous),
+      },
+    ].filter((group) => group.items.length > 0);
+  }, [items]);
 
   async function loadMore() {
+    if (moreBusy.current || refreshing || loadingList || !hasNext) return;
+    moreBusy.current = true;
+    const requestGeneration = generation.current;
     setLoadingMore(true);
     setLoadMoreError(null);
     try {
@@ -70,94 +264,385 @@ export default function LearningHistory() {
         page: page + 1,
         size: 20,
       });
-      setItems((current) => [...current, ...value.items]);
+      if (requestGeneration !== generation.current) return;
+      const nextItems = mergeHistoryItems(items, value.items);
+      setItems(nextItems);
       setPage(value.page);
       setHasNext(Boolean(value.hasNext));
+      writeUserClientCache<HistoryCache>(userId, historyCacheResource(kind), {
+        items: nextItems,
+        page: value.page,
+        hasNext: Boolean(value.hasNext),
+      });
     } catch (reason) {
+      if (requestGeneration !== generation.current) return;
       setLoadMoreError(
         reason instanceof Error
           ? reason.message
           : "기록을 더 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingMore(false);
+      if (requestGeneration === generation.current) {
+        moreBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }
+
+  async function startTitleExam() {
+    setExamStarting(true);
+    setError(null);
+    try {
+      const exam = await api.users.createTitleExam();
+      router.push(
+        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage%2Fhistory&start=1`,
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "승급 시험을 시작하지 못했습니다.",
+      );
+      setExamStarting(false);
+    }
+  }
+
   return (
-    <AppShell nav={false}>
-      <TopBar to="/mypage" title="연습 기록" />
-      <div className="px-5 pb-10">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {FILTERS.map((filter) => (
-            <button
-              key={filter.label}
-              onClick={() => setKind(filter.value)}
-              className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-xs font-semibold",
-                kind === filter.value
-                  ? "bg-primary text-white"
-                  : "bg-[#f2f4f6] text-[#6b7684]",
-              )}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        {loading ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">
-            기록을 불러오는 중…
-          </p>
-        ) : error ? (
-          <p
-            role="alert"
-            className="py-12 text-center text-sm text-destructive"
-          >
-            {error}
-          </p>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {items.map((item) => (
-              <Link
-                key={String(item.sessionId)}
-                href={`/mypage/history/${item.sessionId}`}
-                className="design-card flex items-center justify-between gap-4 !p-4"
+    <AppShell
+      mainRef={mainScroll}
+      chromeColor="#c5d6ff"
+      viewportLocked
+      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
+    >
+      <ProfileBand
+        account={account}
+        statistics={statistics}
+        titleProgress={titleProgress}
+        loading={overviewLoading}
+      />
+      <div
+        ref={listScroll}
+        className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
+      >
+        <MyPageHead
+          active="history"
+          loading={overviewLoading}
+          titleProgress={titleProgress}
+          examStarting={examStarting}
+          onExam={() => void startTitleExam()}
+        />
+
+        <div className="overflow-hidden px-5 pt-3.5 pb-6">
+          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {FILTERS.map((filter) => (
+              <button
+                key={filter.label}
+                type="button"
+                onClick={() => setKind(filter.value)}
+                aria-pressed={kind === filter.value}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-[7px] text-[13px] leading-[18px] font-medium",
+                  kind === filter.value
+                    ? "bg-primary text-white"
+                    : "bg-white text-[#4e5968]",
+                )}
               >
-                <div>
-                  <p className="text-sm font-semibold">{item.title}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {new Date(item.completedAt).toLocaleDateString("ko-KR")}
-                  </p>
-                </div>
-                <b className="shrink-0 text-sm text-primary">
-                  {item.overallScore == null
-                    ? "점수 없음"
-                    : `${Math.round(item.overallScore)}점`}
-                </b>
-              </Link>
+                {filter.label}
+              </button>
             ))}
-            {items.length === 0 && (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                아직 저장된 학습 기록이 없습니다.
+          </div>
+
+          {error || (!overviewLoading && (!statistics || !titleProgress)) ? (
+            <div className="mt-4 rounded-2xl bg-white p-4">
+              <p role="alert" className="text-[13px] text-destructive">
+                {error || "학습 정보를 모두 불러오지 못했어요."}
               </p>
-            )}
-            {hasNext && (
               <button
                 type="button"
-                disabled={loadingMore}
-                onClick={() => void loadMore()}
-                className="mt-3 w-full rounded-full border border-border py-3 text-sm font-semibold disabled:opacity-50"
+                disabled={loading || overviewLoading}
+                onClick={() => {
+                  setOverviewLoading(true);
+                  setLoading(true);
+                  setRetry((value) => value + 1);
+                }}
+                className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary disabled:opacity-50"
               >
-                {loadingMore ? "불러오는 중…" : "기록 더 보기"}
+                다시 시도
               </button>
-            )}
-            {loadMoreError && (
-              <p role="alert" className="text-center text-xs text-destructive">
-                {loadMoreError}
-              </p>
-            )}
-          </div>
-        )}
+            </div>
+          ) : null}
+          {loadingList ? (
+            <HistoryListSkeleton />
+          ) : error ? null : groups.length ? (
+            <div className="mt-3 space-y-3">
+              {groups.map((group) => (
+                <section key={group.label}>
+                  <h2 className="px-1 pt-2 pb-2 text-[12px] leading-4 font-bold text-[#8b95a1]">
+                    {group.label}
+                  </h2>
+                  <div className="space-y-2.5">
+                    {group.items.map((item) => (
+                      <Link
+                        key={String(item.sessionId)}
+                        href={`/mypage/history/${item.sessionId}`}
+                        className="flex min-h-[68px] items-center gap-3 rounded-2xl bg-white py-3.5 pr-3.5 pl-4"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="shrink-0 rounded-full bg-[#f2f4f6] px-[7px] py-0.5 text-[11px] leading-[14px] font-bold text-[#4e5968]">
+                              {TYPE_LABEL[item.contentType]}
+                            </span>
+                            <strong className="truncate text-[15px] leading-[22px] font-bold text-[#191f28]">
+                              {item.title}
+                            </strong>
+                          </span>
+                          <span className="mt-[3px] block text-[12px] leading-4 text-[#b0b8c1]">
+                            {relativeDateLabel(item.completedAt)}
+                          </span>
+                        </span>
+                        <Image
+                          src="/figma/catalog/chevron-right.svg"
+                          alt=""
+                          width={18}
+                          height={18}
+                        />
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {hasNext ? (
+                <button
+                  type="button"
+                  disabled={loadingMore || refreshing}
+                  onClick={() => void loadMore()}
+                  className="h-12 w-full rounded-full bg-white text-[14px] font-bold text-primary disabled:opacity-50"
+                >
+                  {loadingMore ? "불러오는 중…" : "기록 더 보기"}
+                </button>
+              ) : null}
+              {loadMoreError ? (
+                <p
+                  role="alert"
+                  className="text-center text-xs text-destructive"
+                >
+                  {loadMoreError}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="py-12 text-center text-[13px] text-[#8b95a1]">
+              아직 저장된 학습 기록이 없어요.
+            </p>
+          )}
+        </div>
       </div>
     </AppShell>
+  );
+}
+
+function ProfileBand({
+  account,
+  statistics,
+  titleProgress,
+  loading,
+}: {
+  account: UserAccount | null;
+  statistics: Statistics | null;
+  titleProgress: UserTitleProgress | null;
+  loading: boolean;
+}) {
+  const next = titleProgress?.next;
+  const span = next
+    ? Math.max(
+        1,
+        next.requiredTrainingCount - titleProgress.minimumTrainingCount,
+      )
+    : 1;
+  const percent = titleProgress
+    ? next
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            ((titleProgress.completedTrainingCount -
+              titleProgress.minimumTrainingCount) /
+              span) *
+              100,
+          ),
+        )
+      : 100
+    : 0;
+  return (
+    <>
+      <div className="absolute inset-x-0 top-0 h-[262px] bg-[#c5d6ff]" />
+      <header className="absolute inset-x-0 top-0 z-10 grid h-10 grid-cols-[24px_1fr_24px] items-center px-5">
+        <span />
+        <h1 className="text-center text-[17px] leading-6 font-bold">마이</h1>
+        <Link
+          href="/mypage/settings"
+          aria-label="설정"
+          className="flex size-10 -translate-x-2 items-center justify-center justify-self-center"
+        >
+          <Image
+            src="/figma/mypage/settings.svg"
+            alt=""
+            width={24}
+            height={24}
+          />
+        </Link>
+      </header>
+      <section className="absolute inset-x-0 top-10 z-10 flex h-[222px] flex-col items-center pt-5">
+        <div
+          className="relative size-[104px] rounded-[42px] p-1.5"
+          style={{
+            background: `conic-gradient(#2f6bff ${percent * 3.6}deg, rgba(255,255,255,.58) 0deg)`,
+          }}
+        >
+          <span className="relative block size-full overflow-hidden rounded-[37px] border-2 border-white bg-[#edf2ff]">
+            <Image
+              src="/figma/mypage/avatar-character.png"
+              alt=""
+              fill
+              sizes="92px"
+              className="scale-[1.18] object-contain object-bottom"
+              priority
+            />
+          </span>
+          {titleProgress ? (
+            <span className="absolute top-[89px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-white bg-primary px-2.5 py-1 text-[11px] leading-[14px] font-bold text-white">
+              {titleProgress.label}
+            </span>
+          ) : null}
+        </div>
+        <NicknameEditor account={account} />
+        {statistics ? (
+          <p className="mt-1 flex items-center gap-2 text-[13px] leading-[18px] font-medium text-[#3d4a5c]">
+            <span>연속 {statistics.consecutiveLearningDays}일</span>
+            <span className="h-2.5 w-px bg-[#8fa0bc]" />
+            <span>총 {statistics.totalSessionCount}회 연습</span>
+          </p>
+        ) : (
+          <p className="mt-1 text-[13px] leading-[18px] text-[#3d4a5c]">
+            {loading
+              ? "학습 기록을 불러오는 중"
+              : "학습 기록을 확인하지 못했어요"}
+          </p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function MyPageHead({
+  active,
+  titleProgress,
+  examStarting,
+  onExam,
+  loading,
+}: {
+  active: "summary" | "history" | "plan";
+  titleProgress: UserTitleProgress | null;
+  examStarting: boolean;
+  onExam: () => void;
+  loading: boolean;
+}) {
+  const trainingCount = titleProgress
+    ? getTitleTrainingCountDisplay(titleProgress)
+    : null;
+
+  return (
+    <div className="bg-white px-5 pt-4">
+      {titleProgress ? (
+        <div className="flex min-h-[72px] items-center gap-3 rounded-[20px] bg-[#edf2ff] py-4 pr-4 pl-[18px]">
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] leading-[22px] font-bold">
+              {titleProgress.next?.eligible
+                ? "승급 시험 응시 가능"
+                : titleProgress.next
+                  ? `연습 ${titleProgress.next.remainingTrainingCount}회 남았어요`
+                  : "최고 칭호 달성"}
+            </p>
+            <p className="mt-[3px] truncate text-[12px] leading-4 font-medium text-[#4e5968]">
+              {titleProgress.next
+                ? `다음 칭호  ${titleProgress.next.label}  `
+                : "누적 연습  "}
+              <b className="text-primary">{trainingCount?.completed}</b>
+              <span className="text-[#8b95a1]">
+                /{trainingCount?.required}회
+              </span>
+            </p>
+          </div>
+          {titleProgress.next?.eligible ? (
+            <button
+              type="button"
+              onClick={onExam}
+              disabled={examStarting}
+              className="flex shrink-0 items-center gap-0.5 rounded-xl bg-primary px-3.5 py-2.5 text-[14px] leading-5 font-bold text-white disabled:opacity-60"
+            >
+              {examStarting ? "준비 중" : "시험 보기"}
+              <Image
+                src="/figma/mypage/chevron-right-white.svg"
+                alt=""
+                width={16}
+                height={16}
+              />
+            </button>
+          ) : null}
+        </div>
+      ) : loading ? (
+        <div className="h-[72px] animate-pulse rounded-[20px] bg-[#edf2ff]" />
+      ) : (
+        <p className="flex min-h-[72px] items-center justify-center rounded-[20px] bg-[#edf2ff] px-4 text-center text-[13px] text-[#6b7684]">
+          칭호 정보를 확인하지 못했어요
+        </p>
+      )}
+      <nav className="mt-2.5 grid h-11 grid-cols-3 border-b border-[#e5e8eb]">
+        {[
+          ["summary", "/mypage", "요약"],
+          ["history", "/mypage/history", "기록"],
+          ["plan", "/mypage/plan", "계획"],
+        ].map(([key, href, label]) => (
+          <Link
+            key={key}
+            href={href}
+            aria-current={active === key ? "page" : undefined}
+            className={cn(
+              "relative flex items-center justify-center text-[15px] leading-[22px]",
+              active === key
+                ? "font-bold text-[#191f28] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#191f28]"
+                : "font-medium text-[#8b95a1]",
+            )}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function HistoryListSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="mt-3">
+      <span className="sr-only">기록을 불러오는 중</span>
+      <div className="px-1 pt-2 pb-2">
+        <SkeletonBlock className="h-3 w-14 bg-[#e5e8eb]" />
+      </div>
+      <div className="space-y-2.5">
+        {[0, 1, 2, 3].map((index) => (
+          <div
+            key={index}
+            className="flex min-h-[68px] flex-col justify-center rounded-2xl bg-white py-3.5 pr-3.5 pl-4"
+          >
+            <div className="flex items-center gap-1.5">
+              <SkeletonBlock className="h-[18px] w-9" />
+              <SkeletonBlock className="h-4 w-2/5" />
+            </div>
+            <SkeletonBlock className="mt-2 h-3 w-14" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

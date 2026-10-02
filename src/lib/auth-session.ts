@@ -1,4 +1,5 @@
 import type { AuthSession, Id, UserAccount } from "./api/types";
+import { clearUserClientCache } from "./client-cache";
 
 export type AuthSessionSnapshot =
   | { status: "unknown" }
@@ -18,6 +19,12 @@ export function getAuthSessionSnapshot() {
 
 export function getCachedUser() {
   return cachedUser;
+}
+
+export function getAuthenticatedUserId() {
+  return snapshot.status === "authenticated" && snapshot.userId !== undefined
+    ? String(snapshot.userId)
+    : null;
 }
 
 export function markAuthenticatedSession(session: AuthSession) {
@@ -44,6 +51,7 @@ export function markOnboardingCompleted() {
 }
 
 export function markAnonymousSession() {
+  clearUserClientCache(getAuthenticatedUserId());
   cachedUser = null;
   snapshot = { status: "anonymous" };
 }

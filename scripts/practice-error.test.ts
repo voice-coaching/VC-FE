@@ -48,6 +48,12 @@ test("quality, preparation, unsupported, auth and network errors remain distinct
     "auth",
   );
   assert.equal(
+    describePracticeError(
+      new ApiError("upload rejected", 401, "UPLOAD_AUTHORIZATION_FAILED"),
+    ).kind,
+    "upload",
+  );
+  assert.equal(
     describePracticeError(new ApiError("failed", 503)).kind,
     "server",
   );

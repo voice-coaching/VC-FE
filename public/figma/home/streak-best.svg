@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Badge">
+<g clip-path="url(#clip0_0_61)">
+<path id="Star" d="M14.9646 7.52919C16.2523 5.08854 19.7477 5.08854 21.0354 7.5292L22.4575 10.2244C22.954 11.1657 23.8592 11.8233 24.9077 12.0047L27.9105 12.5242C30.6296 12.9947 31.7098 16.3191 29.7865 18.298L27.6626 20.4833C26.9209 21.2464 26.5752 22.3104 26.7267 23.3638L27.1605 26.3801C27.5533 29.1115 24.7254 31.1661 22.249 29.9485L19.5144 28.6038C18.5594 28.1343 17.4406 28.1343 16.4856 28.6038L13.751 29.9485C11.2746 31.1661 8.44673 29.1115 8.83954 26.3801L9.27332 23.3638C9.4248 22.3104 9.07908 21.2464 8.33739 20.4833L6.21349 18.298C4.29021 16.3191 5.37036 12.9947 8.08948 12.5242L11.0923 12.0047C12.1408 11.8233 13.046 11.1657 13.5425 10.2244L14.9646 7.52919Z" fill="url(#paint0_linear_0_61)"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_61" x1="18" y1="1.776" x2="18" y2="36.096" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFEEBA"/>
+<stop offset="1" stop-color="#F5A000"/>
+</linearGradient>
+<clipPath id="clip0_0_61">
+<rect width="36" height="36" rx="12" fill="white"/>
+</clipPath>
+</defs>
+</svg>

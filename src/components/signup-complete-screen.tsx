@@ -1,9 +1,8 @@
 "use client";
 
-import { Lottie } from "lottie-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { IPhoneFrame } from "@/components/iphone-frame";
-import successCheckAnimation from "@/assets/success-check.json";
 
 export function SignupCompleteScreen() {
   const router = useRouter();
@@ -25,15 +24,15 @@ export function SignupCompleteScreen() {
           </p>
 
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
-            <div className="size-[140px] shrink-0 overflow-hidden">
-              <Lottie
-                src={successCheckAnimation}
-                autoplay
-                loop={false}
-                aria-hidden="true"
-                className="size-full"
-              />
-            </div>
+            <Image
+              src="/figma/auth/signup-complete-character.png"
+              alt=""
+              width={280}
+              height={280}
+              priority
+              aria-hidden="true"
+              className="size-[280px] shrink-0 object-cover"
+            />
           </div>
         </div>
 

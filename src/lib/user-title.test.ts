@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getUserTitleProgress, USER_TITLE_LEVELS } from "./user-title";
+import {
+  getTitleTrainingCountDisplay,
+  getUserTitleProgress,
+  USER_TITLE_LEVELS,
+} from "./user-title";
 
 test("user titles keep the requested order and do not auto-promote", () => {
   assert.deepEqual(
@@ -32,4 +36,15 @@ test("title progress unlocks an exam without awarding its title", () => {
   assert.equal(eligible.label, "초보");
   assert.equal(eligible.next?.eligible, true);
   assert.equal(eligible.next?.remainingTrainingCount, 0);
+});
+
+test("eligible title progress never displays more than the required count", () => {
+  assert.deepEqual(
+    getTitleTrainingCountDisplay(getUserTitleProgress("ABSOLUTE_BEGINNER", 6)),
+    { completed: 5, required: 5 },
+  );
+  assert.deepEqual(
+    getTitleTrainingCountDisplay(getUserTitleProgress("ANNOUNCER", 61)),
+    { completed: 61, required: 61 },
+  );
 });
