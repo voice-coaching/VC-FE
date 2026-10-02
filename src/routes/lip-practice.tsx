@@ -443,19 +443,18 @@ export default function LipPractice() {
       });
       requireActive();
       const analysisId = completedAnalysisId ?? requested.analysisId;
-      const [analysis, segmentPage] = await Promise.all([
-        api.analyses.get(analysisId),
-        api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-      ]);
+      const analysis = await api.analyses.get(analysisId, recordingId);
       requireActive();
       await api.training.complete(
         sessionId,
         Math.max(1, Math.round(reportClip.durationMs / 1_000)),
+        analysis.canonical,
       );
       requireActive();
       setAnalyses((current) => ({
         ...current,
-        [selectedClip]: { content, analysis, segments: segmentPage.items },
+        // The canonical public view has phoneme candidates, not sentence segments.
+        [selectedClip]: { content, analysis, segments: [] },
       }));
       setAnalysisPhase("result");
     } catch (reason) {
