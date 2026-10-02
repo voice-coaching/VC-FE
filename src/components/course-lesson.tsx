@@ -12,6 +12,9 @@ import {
   type PracticeExamples,
 } from "@/lib/api";
 import { TtsPracticePlayer } from "@/components/tts-practice-player";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { navigationEntryId } from "@/lib/navigation-history";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import {
@@ -24,6 +27,11 @@ type CourseLessonCache = {
   detail?: CourseStepDetail;
   examples?: PracticeExamples;
 };
+
+const exampleSelections = new Map<string, number>();
+function selectionKey(scope: string) {
+  return `${scope}:${typeof window === "undefined" ? "" : navigationEntryId(window.history.state)}`;
+}
 
 export function CourseLesson({
   course,
@@ -45,8 +53,12 @@ export function CourseLesson({
   const [initialCache] = useState(() =>
     readUserClientCache<CourseLessonCache>(userId, cacheResource),
   );
-  const [example, setExample] = useState(false);
-  const [selectedExampleIndex, setSelectedExampleIndex] = useState(0);
+  const [panel, setPanel] = useHistoryPanel("examples", ["open"] as const);
+  const example = panel === "open";
+  const selectionScope = `${userId}:${course.id}:${step.id}`;
+  const [selectedExampleIndex, setSelectedExampleIndex] = useState(
+    () => exampleSelections.get(selectionKey(selectionScope)) ?? 0,
+  );
   const [content, setContent] = useState<PracticeContent | null>(null);
   const [stepDetail, setStepDetail] = useState<CourseStepDetail | null>(
     initialCache?.detail ?? null,
@@ -94,7 +106,6 @@ export function CourseLesson({
     );
     setExamples(cached?.examples ?? null);
     setExampleError(null);
-    setSelectedExampleIndex(0);
     api.examples
       .list(course.id, step.id)
       .then((value) => {
@@ -154,11 +165,28 @@ export function CourseLesson({
       active = false;
     };
   }, [practiceContentId, userId]);
-  const selectedExample = examples?.items[selectedExampleIndex];
+  const safeIndex = examples?.items[selectedExampleIndex]
+    ? selectedExampleIndex
+    : 0;
+  const selectedExample = examples?.items[safeIndex];
+  const scrollRef = useHistoryScroll(
+    `${selectionScope}:${example ? "examples" : "lesson"}`,
+    example
+      ? examples !== null || exampleError !== null
+      : stepDetail !== null || stepDetailError !== null,
+  );
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto overscroll-y-contain">
+    <div
+      ref={scrollRef}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
+    >
       <header className="flex items-center justify-between px-5 pt-8 pb-5">
-        <button type="button" aria-label="학습 닫기" onClick={onClose}>
+        <button
+          type="button"
+          className="flex size-11 items-center justify-center"
+          aria-label={example ? "학습 내용으로 돌아가기" : "학습 닫기"}
+          onClick={() => (example ? setPanel(null) : onClose())}
+        >
           <X className="size-5" />
         </button>
         <h1 className="text-lg font-bold">{step.stepOrder}단계</h1>
@@ -209,7 +237,7 @@ export function CourseLesson({
                 </p>
               </div>
               <span className="shrink-0 text-xs font-semibold text-primary">
-                {selectedExample ? selectedExampleIndex + 1 : 0}/
+                {selectedExample ? safeIndex + 1 : 0}/
                 {examples?.items.length ?? 0}
               </span>
             </div>
@@ -230,13 +258,22 @@ export function CourseLesson({
             ) : null}
             <ol className="space-y-2.5">
               {examples?.items.map((practiceExample, index) => {
-                const selected = index === selectedExampleIndex;
+                const selected = index === safeIndex;
                 return (
                   <li key={practiceExample.id}>
                     <button
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setSelectedExampleIndex(index)}
+                      onClick={() => {
+                        const key = selectionKey(selectionScope);
+                        exampleSelections.delete(key);
+                        exampleSelections.set(key, index);
+                        if (exampleSelections.size > 100)
+                          exampleSelections.delete(
+                            exampleSelections.keys().next().value!,
+                          );
+                        setSelectedExampleIndex(index);
+                      }}
                       className={`flex w-full gap-3 rounded-2xl border p-4 text-left ${selected ? "border-primary bg-[#edf2ff]" : "border-border bg-white"}`}
                     >
                       <span
@@ -367,7 +404,7 @@ export function CourseLesson({
               ? selectedExample &&
                 examples &&
                 onPractice(selectedExample, examples.revision)
-              : setExample(true)
+              : setPanel("open")
           }
           className="design-action"
         >

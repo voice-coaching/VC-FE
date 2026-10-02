@@ -4,7 +4,7 @@ import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
 import { Check, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
@@ -23,6 +23,8 @@ import type { PracticeExample } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
 
 type CourseCatalogCache = {
   items: CourseSummary[];
@@ -50,7 +52,27 @@ function mergeProgress(
   }));
 }
 
-export function CourseCatalog({
+type CourseCatalogProps = {
+  type?: CourseType;
+  title: string;
+  description: string;
+};
+
+export function CourseCatalog(props: CourseCatalogProps) {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <CourseListSkeleton />
+        </AppShell>
+      }
+    >
+      <CourseCatalogView {...props} />
+    </Suspense>
+  );
+}
+
+function CourseCatalogView({
   type,
   title,
   description,
@@ -61,11 +83,6 @@ export function CourseCatalog({
 }) {
   const router = useRouter();
   const userId = getAuthenticatedUserId();
-  const [lesson, setLesson] = useState<{
-    course: CourseSummary;
-    step: CourseStep;
-    count: number;
-  } | null>(null);
   const activeType = type ?? "PRONUNCIATION";
   const cacheResource = cacheResources.courseCatalog(activeType);
   const [initialCache] = useState(() =>
@@ -87,7 +104,16 @@ export function CourseCatalog({
     Record<string, UserCourseProgress>
   >(initialCache?.progressByCourse ?? {});
   const [startingId, setStartingId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useHistoryPanel(
+    "course",
+    items.map((item) => String(item.id)),
+  );
+  const [lessonId, setLessonId] = useHistoryPanel(
+    "lesson",
+    (expandedId ? (stepsByCourse[expandedId] ?? []) : []).map((step) =>
+      String(step.id),
+    ),
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailsByCourse, setDetailsByCourse] = useState<
     Record<string, CourseDetail>
@@ -100,10 +126,11 @@ export function CourseCatalog({
   useEffect(() => {
     lifecycle.current += 1;
     startBusy.current = false;
+    setStartingId(null);
     return () => {
       lifecycle.current += 1;
     };
-  }, [activeType, userId]);
+  }, [activeType, userId, expandedId]);
 
   useEffect(() => {
     setIndicatorType(activeType);
@@ -351,13 +378,7 @@ export function CourseCatalog({
         steps.find((step) => step.practiceContentId != null);
       if (!practice?.practiceContentId)
         throw new Error("이 클래스의 연습 콘텐츠가 아직 준비되지 않았습니다.");
-      setLesson({
-        course,
-        step: requestedStep
-          ? { ...practice, title: requestedStep.title }
-          : practice,
-        count: steps.length,
-      });
+      setLessonId(String(requestedStep?.id ?? practice.id));
     } catch (reason) {
       if (requestLifecycle !== lifecycle.current) return;
       setError(
@@ -373,54 +394,84 @@ export function CourseCatalog({
     }
   }
 
-  async function toggleDetails(course: CourseSummary) {
-    const key = String(course.id);
-    if (expandedId === key) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(key);
+  useEffect(() => {
+    if (!expandedId) return;
+    let active = true;
+    const key = expandedId;
     const cachedDetail = detailsByCourse[key];
     const cachedSteps = stepsByCourse[key];
-    if (cachedDetail && cachedSteps) return;
+    if (cachedDetail && cachedSteps) {
+      setDetailLoadingId(null);
+      return;
+    }
 
     setDetailLoadingId(key);
     setError(null);
-    try {
-      const [detail, steps] = await Promise.all([
-        cachedDetail
-          ? Promise.resolve(cachedDetail)
-          : api.courses.get(course.id),
-        cachedSteps
-          ? Promise.resolve(cachedSteps)
-          : api.courses.getSteps(course.id),
-      ]);
-      const nextSteps = {
-        ...stepsByCourse,
-        [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
-      };
-      const nextDetails = { ...detailsByCourse, [key]: detail };
-      setStepsByCourse(nextSteps);
-      setDetailsByCourse(nextDetails);
-      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-        stepsByCourse: nextSteps,
-        detailsByCourse: nextDetails,
+    void Promise.all([
+      cachedDetail ? Promise.resolve(cachedDetail) : api.courses.get(key),
+      cachedSteps ? Promise.resolve(cachedSteps) : api.courses.getSteps(key),
+    ])
+      .then(([detail, steps]) => {
+        if (!active) return;
+        const nextSteps = {
+          ...stepsByCourse,
+          [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
+        };
+        const nextDetails = { ...detailsByCourse, [key]: detail };
+        setStepsByCourse(nextSteps);
+        setDetailsByCourse(nextDetails);
+        updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+          stepsByCourse: nextSteps,
+          detailsByCourse: nextDetails,
+        });
+      })
+      .catch((reason) => {
+        if (!active) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "클래스 상세를 불러오지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        if (active) setDetailLoadingId(null);
       });
-    } catch (reason) {
-      setExpandedId(null);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "클래스 상세를 불러오지 못했습니다.",
-      );
-    } finally {
-      setDetailLoadingId(null);
-    }
-  }
+    return () => {
+      active = false;
+    };
+  }, [expandedId, detailsByCourse, stepsByCourse, cacheResource, userId]);
 
   const selectedCourse = items.find((item) => String(item.id) === expandedId);
   const detail = expandedId ? detailsByCourse[expandedId] : undefined;
   const steps = expandedId ? (stepsByCourse[expandedId] ?? []) : [];
+  const requestedLessonStep = steps.find(
+    (step) => String(step.id) === lessonId,
+  );
+  const firstIncomplete = steps.findIndex((step) => !step.completed);
+  const lessonUnlocked =
+    requestedLessonStep &&
+    (requestedLessonStep.completed ||
+      firstIncomplete < 0 ||
+      steps.indexOf(requestedLessonStep) <= firstIncomplete);
+  const lessonPractice =
+    requestedLessonStep &&
+    steps.find(
+      (step) =>
+        step.stepOrder >= requestedLessonStep.stepOrder &&
+        step.practiceContentId != null,
+    );
+  const lesson =
+    selectedCourse && requestedLessonStep && lessonPractice && lessonUnlocked
+      ? {
+          course: selectedCourse,
+          step: { ...lessonPractice, title: requestedLessonStep.title },
+          count: steps.length,
+        }
+      : null;
+  const scrollRef = useHistoryScroll(
+    `${userId}:courses:${activeType}:${expandedId ?? "list"}`,
+    !loading && !lesson,
+  );
   const level = (value: CourseSummary["difficulty"]) =>
     ({ BEGINNER: "초급", INTERMEDIATE: "중급", ADVANCED: "고급" })[value];
 
@@ -438,12 +489,12 @@ export function CourseCatalog({
           step={lesson.step}
           stepCount={lesson.count}
           description={detailsByCourse[String(lesson.course.id)]?.description}
-          onClose={() => setLesson(null)}
+          onClose={() => setLessonId(null)}
           onPractice={(example: PracticeExample, revision: number) => {
             const params = new URLSearchParams({
               courseId: String(lesson.course.id),
               courseStepId: String(lesson.step.id),
-              returnTo: type ? `/class/${type.toLowerCase()}` : "/class",
+              returnTo: `${window.location.pathname}${window.location.search}`,
               exampleId: example.id,
               exampleRevision: String(revision),
             });
@@ -494,7 +545,10 @@ export function CourseCatalog({
           {selectedCourse?.title ?? "클래스"}
         </h1>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
+      >
         <div className={selectedCourse ? "px-5 pb-6" : "pb-6"}>
           <p className="sr-only">
             {title} · {description}
@@ -652,7 +706,7 @@ export function CourseCatalog({
                   <button
                     key={String(course.id)}
                     type="button"
-                    onClick={() => void toggleDetails(course)}
+                    onClick={() => setExpandedId(String(course.id))}
                     className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
                   >
                     <span
