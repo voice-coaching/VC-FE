@@ -3,7 +3,7 @@
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, ChevronDown, X } from "lucide-react";
+import { CatalogDifficultyPicker } from "@/components/catalog-difficulty-picker";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
@@ -97,7 +97,6 @@ export function ContentCatalog({
   const [categories, setCategories] = useState(fallbackCategories);
   const [difficultyOptions, setDifficultyOptions] = useState(DIFFICULTIES);
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
-  const [difficultySheet, setDifficultySheet] = useState(false);
   const userId = getAuthenticatedUserId();
   const [initialCache] = useState(() =>
     readUserClientCache<CatalogCache>(
@@ -336,17 +335,11 @@ export function ContentCatalog({
             ) : null}
           </h2>
           {type === "NEWS" ? (
-            <button
-              type="button"
-              onClick={() => setDifficultySheet(true)}
-              className="flex h-8 items-center gap-1 rounded-full border border-[#e5e8eb] bg-white px-3 text-[13px] font-medium text-[#6b7684]"
-            >
-              {
-                difficultyOptions.find((item) => item.value === difficulty)
-                  ?.label
-              }
-              <ChevronDown className="size-4" />
-            </button>
+            <CatalogDifficultyPicker
+              value={difficulty}
+              options={difficultyOptions}
+              onChange={setDifficulty}
+            />
           ) : null}
         </div>
 
@@ -405,54 +398,6 @@ export function ContentCatalog({
           </div>
         )}
       </section>
-
-      {difficultySheet ? (
-        <div
-          className="fixed inset-0 z-50 mx-auto flex max-w-[402px] items-end bg-black/35"
-          role="presentation"
-          onClick={() => setDifficultySheet(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="difficulty-title"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full rounded-t-[28px] bg-white px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom))]"
-          >
-            <div className="flex items-center justify-between">
-              <h2 id="difficulty-title" className="text-lg font-bold">
-                난이도
-              </h2>
-              <button
-                type="button"
-                onClick={() => setDifficultySheet(false)}
-                aria-label="닫기"
-                className="flex size-11 items-center justify-center"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-            <div className="mt-2">
-              {difficultyOptions.map((option) => (
-                <button
-                  key={option.value || "all"}
-                  type="button"
-                  onClick={() => {
-                    setDifficulty(option.value);
-                    setDifficultySheet(false);
-                  }}
-                  className="flex min-h-14 w-full items-center justify-between border-b border-[#f2f4f6] text-left text-[15px] font-medium"
-                >
-                  {option.label}
-                  {difficulty === option.value ? (
-                    <Check className="size-5 text-primary" />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      ) : null}
     </AppShell>
   );
 }
