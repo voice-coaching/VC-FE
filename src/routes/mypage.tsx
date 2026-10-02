@@ -1,9 +1,11 @@
 "use client";
 
+import { prepareTitleExam } from "@/lib/title-exam";
+
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { NicknameEditor } from "@/components/nickname-editor";
 import layout from "@/components/my-page-layout.module.css";
@@ -51,6 +53,8 @@ export default function MyPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [examStarting, setExamStarting] = useState(false);
+  const examRequestKey = useRef<string | null>(null);
+  const examRequestBusy = useRef(false);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
 
@@ -93,6 +97,8 @@ export default function MyPage() {
           "ABSOLUTE_BEGINNER",
           statsResult.value.totalSessionCount,
         );
+        // Only the title API can grant exam eligibility.
+        if (fallback.next) fallback.next.eligible = false;
         setTitleProgress(fallback);
         cachePatch.titleProgress = fallback;
       }
@@ -134,12 +140,14 @@ export default function MyPage() {
   const learningTime = hours ? `${hours}시간 ${minutes}분` : `${minutes}분`;
 
   async function startTitleExam() {
+    if (examRequestBusy.current) return;
+    examRequestBusy.current = true;
+    examRequestKey.current ??= crypto.randomUUID();
     setExamStarting(true);
     setError(null);
     try {
-      const exam = await api.users.createTitleExam();
       router.push(
-        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage&start=1`,
+        await prepareTitleExam(api, "/mypage", examRequestKey.current),
       );
     } catch (reason) {
       setError(
@@ -148,6 +156,7 @@ export default function MyPage() {
           : "승급 시험을 시작하지 못했습니다.",
       );
       setExamStarting(false);
+      examRequestBusy.current = false;
     }
   }
 

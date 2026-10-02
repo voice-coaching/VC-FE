@@ -47,6 +47,7 @@ const difficultyStyle: Record<Difficulty, string> = {
 };
 
 const SENTENCE_FILTERS = [
+  { label: "예시문제", symbol: "가", description: "난이도별로 연습해요" },
   { label: "받침", symbol: "ㄹ", description: "끝소리를 또렷하게" },
   { label: "된소리", symbol: "ㄲ", description: "힘주어 정확하게" },
   { label: "자음", symbol: "ㄹ", description: "첫소리를 분명하게" },
@@ -97,7 +98,9 @@ export function ContentCatalog({
   const userId = getAuthenticatedUserId();
   const { category, difficulty, setCategory, setDifficulty } =
     useCatalogFilters(`${userId}:${type}`);
-  const categoryValues = useRef<Record<string, string>>({});
+  const categoryValues = useRef<Record<string, string>>({
+    예시문제: "EXAMPLE_QUESTION",
+  });
   const fallbackCategories =
     type === "NEWS"
       ? ["사회", "경제", "문화", "스포츠"]
@@ -248,6 +251,10 @@ export function ContentCatalog({
           type,
           category: categoryValues.current[category] ?? (category || undefined),
           difficulty: difficulty || undefined,
+          focus:
+            type === "SENTENCE" && category === "예시문제"
+              ? "PRONUNCIATION"
+              : undefined,
           page,
           size: 20,
         }),
@@ -309,6 +316,10 @@ export function ContentCatalog({
         type,
         category: categoryValues.current[category] ?? (category || undefined),
         difficulty: difficulty || undefined,
+        focus:
+          type === "SENTENCE" && category === "예시문제"
+            ? "PRONUNCIATION"
+            : undefined,
         page: page + 1,
         size: 20,
       });

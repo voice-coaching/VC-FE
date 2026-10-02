@@ -1,5 +1,7 @@
 "use client";
 
+import { prepareTitleExam } from "@/lib/title-exam";
+
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
@@ -94,6 +96,8 @@ export default function LearningHistory() {
   const [loading, setLoading] = useState(initialHistory === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
+  const examRequestKey = useRef<string | null>(null);
+  const examRequestBusy = useRef(false);
   const [page, setPage] = useState(initialHistory?.page ?? 0);
   const [hasNext, setHasNext] = useState(initialHistory?.hasNext ?? false);
   const [overviewLoading, setOverviewLoading] = useState(true);
@@ -151,6 +155,8 @@ export default function LearningHistory() {
           "ABSOLUTE_BEGINNER",
           statsResult.value.totalSessionCount,
         );
+        // Only the title API can grant exam eligibility.
+        if (fallback.next) fallback.next.eligible = false;
         setTitleProgress(fallback);
         updateMyPageOverviewCache({ titleProgress: fallback });
       }
@@ -290,12 +296,14 @@ export default function LearningHistory() {
   }
 
   async function startTitleExam() {
+    if (examRequestBusy.current) return;
+    examRequestBusy.current = true;
+    examRequestKey.current ??= crypto.randomUUID();
     setExamStarting(true);
     setError(null);
     try {
-      const exam = await api.users.createTitleExam();
       router.push(
-        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage%2Fhistory&start=1`,
+        await prepareTitleExam(api, "/mypage/history", examRequestKey.current),
       );
     } catch (reason) {
       setError(
@@ -304,6 +312,7 @@ export default function LearningHistory() {
           : "승급 시험을 시작하지 못했습니다.",
       );
       setExamStarting(false);
+      examRequestBusy.current = false;
     }
   }
 

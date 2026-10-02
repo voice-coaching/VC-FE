@@ -1,5 +1,7 @@
 "use client";
 
+import { prepareTitleExam } from "@/lib/title-exam";
+
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -78,6 +80,8 @@ export default function PracticePlan() {
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
+  const examRequestKey = useRef<string | null>(null);
+  const examRequestBusy = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -117,6 +121,8 @@ export default function PracticePlan() {
           "ABSOLUTE_BEGINNER",
           statsResult.value.totalSessionCount,
         );
+        // Only the title API can grant exam eligibility.
+        if (fallback.next) fallback.next.eligible = false;
         setTitleProgress(fallback);
         updateMyPageOverviewCache({ titleProgress: fallback });
       }
@@ -245,12 +251,14 @@ export default function PracticePlan() {
   }
 
   async function startTitleExam() {
+    if (examRequestBusy.current) return;
+    examRequestBusy.current = true;
+    examRequestKey.current ??= crypto.randomUUID();
     setExamStarting(true);
     setError(null);
     try {
-      const exam = await api.users.createTitleExam();
       router.push(
-        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage%2Fplan&start=1`,
+        await prepareTitleExam(api, "/mypage/plan", examRequestKey.current),
       );
     } catch (reason) {
       setError(
@@ -259,6 +267,7 @@ export default function PracticePlan() {
           : "승급 시험을 시작하지 못했습니다.",
       );
       setExamStarting(false);
+      examRequestBusy.current = false;
     }
   }
 

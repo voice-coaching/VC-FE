@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Check, CircleAlert } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,6 +29,7 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
+import { createTitleExamSession } from "@/lib/title-exam";
 import { pollAnalysis } from "@/lib/analysis-polling";
 import {
   describePracticeError,
@@ -122,6 +129,9 @@ function PracticeSessionBody({
   const [titleExamResult, setTitleExamResult] =
     useState<UserTitleExamResult | null>(null);
   const [titleExamError, setTitleExamError] = useState<string | null>(null);
+  const [titleExamSubmitting, setTitleExamSubmitting] = useState(false);
+  const titleExamAnalysisId = useRef<Id | null>(null);
+  const titleExamSubmitBusy = useRef(false);
   const [canRetryAnalysis, setCanRetryAnalysis] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [recordingAttempts, setRecordingAttempts] = useState<VoiceRecording[]>(
@@ -147,7 +157,36 @@ function PracticeSessionBody({
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
   const analysisLearningFocus =
-    content.learningFocus === "BOTH" ? "PRONUNCIATION" : content.learningFocus;
+    titleExamId || content.learningFocus === "BOTH"
+      ? "PRONUNCIATION"
+      : content.learningFocus;
+  const submitTitleExamResult = useCallback(
+    async (analysisId: Id) => {
+      if (!titleExamId || titleExamSubmitBusy.current) return;
+      titleExamAnalysisId.current = analysisId;
+      titleExamSubmitBusy.current = true;
+      setTitleExamSubmitting(true);
+      setTitleExamError(null);
+      try {
+        const result = await api.users.submitTitleExam(titleExamId, analysisId);
+        if (authEpochRef.current !== getAuthSessionVersion()) return;
+        setTitleExamResult(result);
+        // Completion is cached before grading; promotion must invalidate it again.
+        invalidateLearningCaches();
+      } catch (reason) {
+        setTitleExamError(
+          reason instanceof Error
+            ? reason.message
+            : "승급 시험 결과를 저장하지 못했습니다.",
+        );
+      } finally {
+        titleExamSubmitBusy.current = false;
+        setTitleExamSubmitting(false);
+      }
+    },
+    [titleExamId],
+  );
+
   const sentences = splitSentences(content.scriptText);
   useEffect(() => {
     if (!courseId) return;
@@ -241,6 +280,7 @@ function PracticeSessionBody({
         }
         if (!active) return;
         const selected = attempts.find((item) => item.selected);
+        completedRef.current = resumedSession.status === "COMPLETED";
         selectedRecordingRef.current =
           selected?.recordingId ?? selected?.id ?? null;
         setRecordingAttempts(attempts);
@@ -302,6 +342,7 @@ function PracticeSessionBody({
           analysisPendingRef.current = false;
         }
         analysisPendingRef.current = false;
+        if (titleExamId) await submitTitleExamResult(analysisId);
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
@@ -323,10 +364,26 @@ function PracticeSessionBody({
     return () => {
       active = false;
     };
-  }, [content.id, resumeType, resumedSessionId]);
+  }, [
+    content.id,
+    resumeType,
+    resumedSessionId,
+    titleExamId,
+    submitTitleExamResult,
+  ]);
 
   async function ensureSession() {
     if (sessionId) return sessionId;
+    if (titleExamId) {
+      const createdId = await createTitleExamSession(
+        api,
+        titleExamId,
+        content.id,
+      );
+      setSessionId(createdId);
+      sessionIdRef.current = createdId;
+      return createdId;
+    }
     const session = await api.training.create({
       contentId: content.id,
       courseStepId: courseStepId || null,
@@ -341,15 +398,10 @@ function PracticeSessionBody({
   }
 
   async function getAnalysisCapabilities() {
-    if (
-      courseId ||
-      courseStepId ||
-      titleExamId ||
-      content.contentType === "CLASS_PRACTICE"
-    )
+    if (courseId || courseStepId || content.contentType === "CLASS_PRACTICE")
       throw new PracticeInputError(
         "unsupported",
-        "현재 서버의 분석 계약은 단독 음성 발음 연습만 지원합니다. 클래스·승급 시험 분석은 아직 지원하지 않습니다.",
+        "현재 서버의 분석 계약은 클래스 분석을 아직 지원하지 않습니다.",
       );
     if (capabilitiesRef.current) return capabilitiesRef.current;
     const userId = getAuthenticatedUserId();
@@ -516,19 +568,7 @@ function PracticeSessionBody({
         setCourseFinished(true);
       }
     }
-    if (titleExamId) {
-      try {
-        setTitleExamResult(
-          await api.users.submitTitleExam(titleExamId, analysisId),
-        );
-      } catch (reason) {
-        setTitleExamError(
-          reason instanceof Error
-            ? reason.message
-            : "승급 시험 결과를 저장하지 못했습니다.",
-        );
-      }
-    }
+    if (titleExamId) await submitTitleExamResult(analysisId);
     setPhase("result");
   }
 
@@ -1290,7 +1330,7 @@ function PracticeSessionBody({
               <p className="mt-2 text-sm text-[#6b7684]">
                 {titleExamResult.passed
                   ? "새 칭호는 마이페이지에 바로 반영됩니다."
-                  : "학습 횟수는 유지되며 언제든 다시 응시할 수 있어요."}
+                  : "마이페이지에서 다음 응시 가능 여부를 확인해 주세요."}
               </p>
               <button
                 type="button"
@@ -1302,12 +1342,23 @@ function PracticeSessionBody({
             </section>
           )}
           {titleExamError && (
-            <p
+            <div
               role="alert"
               className="rounded-2xl bg-destructive/10 px-4 py-3 text-xs text-destructive"
             >
               {titleExamError}
-            </p>
+              <button
+                type="button"
+                disabled={titleExamSubmitting}
+                onClick={() => {
+                  if (titleExamAnalysisId.current != null)
+                    void submitTitleExamResult(titleExamAnalysisId.current);
+                }}
+                className="mt-3 block min-h-11 w-full rounded-xl border border-current font-semibold disabled:opacity-50"
+              >
+                {titleExamSubmitting ? "채점 확인 중…" : "채점 다시 확인"}
+              </button>
+            </div>
           )}
           <AnalysisView
             analysis={analysis}
@@ -1329,7 +1380,9 @@ function PracticeSessionBody({
               type="button"
               disabled={loadingNext}
               onClick={() =>
-                courseId ? void goToNextContent() : router.push("/home")
+                courseId
+                  ? void goToNextContent()
+                  : router.push(titleExamId ? "/mypage" : "/home")
               }
               className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white disabled:opacity-50"
             >
