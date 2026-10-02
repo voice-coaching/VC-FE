@@ -76,11 +76,73 @@ export interface AnalysisCoaching {
 
 export function supportedCoaching(value: AnalysisCoaching | null | undefined) {
   return value?.schemaVersion === "voice-coaching.coaching-result.v1" &&
+    typeof value.summary === "string" &&
+    (value.practicePlan === null || typeof value.practicePlan === "string") &&
     Array.isArray(value.items) &&
+    value.items.length <= 3 &&
+    value.items.every(
+      (item) =>
+        item &&
+        [
+          item.candidateId,
+          item.guidanceId,
+          item.expectedPhone,
+          item.observation,
+          item.explanation,
+          item.action,
+          item.practice,
+          item.selfCheck,
+        ].every((text) => typeof text === "string" && text.length > 0) &&
+        Array.isArray(item.evidenceIds) &&
+        item.evidenceIds.every((id) => typeof id === "string") &&
+        item.claimScope === "MODEL_OBSERVATION_NOT_CONFIRMED_ARTICULATION" &&
+        item.location &&
+        [item.location.word, item.location.syllable].every(
+          (text) => text === null || typeof text === "string",
+        ) &&
+        [null, "onset", "nucleus", "coda"].includes(
+          item.location.writtenRole,
+        ) &&
+        [
+          item.location.charStart,
+          item.location.charEnd,
+          item.location.startMs,
+          item.location.endMs,
+        ].every(
+          (number) =>
+            number === null || (Number.isSafeInteger(number) && number >= 0),
+        ) &&
+        ["CTC_NONBLANK_SPAN", "UNAVAILABLE"].includes(
+          item.location.timingProvenance,
+        ),
+    ) &&
+    new Set(value.items.map((item) => item.candidateId)).size ===
+      value.items.length &&
     Array.isArray(value.limitations) &&
+    value.limitations.every((text) => typeof text === "string") &&
     Array.isArray(value.strengths) &&
+    value.strengths.every((text) => typeof text === "string") &&
     Array.isArray(value.visual?.observations) &&
+    value.visual.correctiveClaimsAllowed === false &&
+    value.visual.observations.every(
+      (observation) =>
+        observation &&
+        Array.isArray(observation.measurements) &&
+        observation.measurements.every(
+          (measurement) =>
+            measurement &&
+            typeof measurement.cueId === "string" &&
+            [measurement.value, measurement.startMs, measurement.endMs].every(
+              (number) => typeof number === "number" && Number.isFinite(number),
+            ),
+        ),
+    ) &&
     value.score?.overallScore === null &&
+    ["INSUFFICIENT_EVIDENCE", "NOT_CALIBRATED"].includes(
+      value.score.validity,
+    ) &&
+    Array.isArray(value.score.reasonCodes) &&
+    value.score.reasonCodes.every((code) => typeof code === "string") &&
     ["READY", "LIMITED_EVIDENCE", "NO_ACTIONABLE_ISSUE"].includes(
       value.status,
     ) &&
