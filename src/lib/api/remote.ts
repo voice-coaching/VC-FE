@@ -6,6 +6,19 @@ import {
   saveAccessToken,
 } from "./client";
 import {
+  canonicalDatabaseId,
+  createCanonicalAnalysisClient,
+} from "./canonical";
+import {
+  canonicalPresentation,
+  CanonicalResultUnavailable,
+} from "../canonical-presentation";
+import type { TrainingSession } from "./types";
+import {
+  canonicalAttemptKey,
+  type CanonicalViewIdentity,
+} from "../canonical-analysis";
+import {
   markAnonymousSession,
   markAuthenticatedSession,
   markAuthenticatedUser,
@@ -90,6 +103,36 @@ function idempotencyHeaders(idempotencyKey?: string) {
 export function createRemoteApi(baseUrl: string): ApiContract {
   const { request, requestAudio, upload, refreshAccessToken } =
     createHttpClient(baseUrl);
+  const canonical = createCanonicalAnalysisClient(baseUrl);
+
+  async function currentAnalysis(
+    sessionId: Id,
+    expected?: CanonicalViewIdentity,
+  ) {
+    const [session, status] = await Promise.all([
+      request<TrainingSession>(`/api/training-sessions/${id(sessionId)}`, {
+        cache: "no-store",
+      }),
+      canonical.status(sessionId),
+    ]);
+    if (session.selectedRecordingId == null)
+      throw new ApiError(
+        "선택한 녹음을 확인할 수 없습니다.",
+        409,
+        "RECORDING_ID_REQUIRED",
+      );
+    const view = await canonical.get({
+      analysisId: canonicalDatabaseId(status.analysisId),
+      recordingId: canonicalDatabaseId(session.selectedRecordingId),
+    });
+    if (expected && canonicalAttemptKey(view) !== canonicalAttemptKey(expected))
+      throw new ApiError(
+        "분석 시도가 변경되었습니다. 현재 상태를 다시 확인해 주세요.",
+        409,
+        "CANONICAL_ATTEMPT_CHANGED",
+      );
+    return view;
+  }
 
   async function persistSession(
     session: AuthSession,
@@ -397,37 +440,73 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           `/api/training-sessions/${id(sessionId)}/recordings/${id(recordingId)}/select`,
           { method: "PATCH" },
         ),
-      analyze: (sessionId, consent) =>
-        request(`/api/training-sessions/${id(sessionId)}/analyze`, {
-          method: "POST",
-          body: consent,
-        }),
-      getAnalysisStatus: (sessionId) =>
-        request(`/api/training-sessions/${id(sessionId)}/analysis/status`),
-      retryAnalysis: (sessionId, consent) =>
-        request(`/api/training-sessions/${id(sessionId)}/analysis/retry`, {
-          method: "POST",
-          body: consent,
-        }),
-      getSessionAnalysis: (sessionId) =>
-        request(`/api/training-sessions/${id(sessionId)}/analysis`),
+      analyze: canonical.analyze,
+      async getAnalysisStatus(sessionId) {
+        const status = await canonical.status(sessionId);
+        if (status.status === "FAILED")
+          throw new CanonicalResultUnavailable(
+            await currentAnalysis(sessionId),
+          );
+        return status;
+      },
+      async retryAnalysis(sessionId, consent, expected) {
+        const current = await currentAnalysis(sessionId, expected);
+        if (!current.actions.canRetry)
+          throw new CanonicalResultUnavailable(current);
+        return canonical.retry(sessionId, consent);
+      },
+      async getSessionAnalysis(sessionId) {
+        const view = await currentAnalysis(sessionId);
+        return {
+          sessionId,
+          analysisId: view.analysisId,
+          status: view.jobStatus,
+          outcome: null,
+          overallScore: null,
+          pronunciationScore: null,
+          intonationScore: null,
+        };
+      },
       getRecordingPlaybackUrl: (recordingId) =>
         request(`/api/recordings/${id(recordingId)}/playback-url`),
-      complete: (sessionId, totalLearningSeconds) =>
-        request(`/api/training-sessions/${id(sessionId)}/complete`, {
+      async complete(sessionId, totalLearningSeconds, expected) {
+        const current = await currentAnalysis(sessionId, expected);
+        if (!current.actions.canComplete)
+          throw new CanonicalResultUnavailable(current);
+        return request(`/api/training-sessions/${id(sessionId)}/complete`, {
           method: "POST",
           body: { totalLearningSeconds },
-        }),
+        });
+      },
     },
     analyses: {
-      get: (analysisId) => request(`/api/analyses/${id(analysisId)}`),
-      getSegments: (analysisId, filters = {}) =>
-        request(`/api/analyses/${id(analysisId)}/segments${query(filters)}`),
-      regenerateFeedback: (analysisId, feedbackStyle) =>
-        request(`/api/analyses/${id(analysisId)}/feedback/regenerate`, {
-          method: "POST",
-          body: { feedbackStyle },
-        }),
+      async get(analysisId, recordingId) {
+        return canonicalPresentation(
+          await canonical.get({
+            analysisId: canonicalDatabaseId(analysisId),
+            ...(recordingId == null
+              ? {}
+              : { recordingId: canonicalDatabaseId(recordingId) }),
+          }),
+        );
+      },
+      async getSegments(analysisId, filters = {}) {
+        await canonical.get({ analysisId: canonicalDatabaseId(analysisId) });
+        // Public v4 exposes ordered phoneme candidates, not sentence judgments.
+        return {
+          items: [],
+          page: filters.page ?? 0,
+          size: filters.size ?? 100,
+          totalElements: 0,
+        };
+      },
+      async regenerateFeedback() {
+        throw new ApiError(
+          "현재 분석 계약은 안내 재생성을 지원하지 않습니다.",
+          409,
+          "CANONICAL_REGENERATION_UNAVAILABLE",
+        );
+      },
     },
     myPage: {
       getStatistics: (filters = {}) =>
