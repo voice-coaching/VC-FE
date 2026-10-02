@@ -2,11 +2,12 @@
 import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
   useRef,
   useState,
+  Suspense,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -14,6 +15,10 @@ import { IPhoneFrame } from "@/components/iphone-frame";
 import { api } from "@/lib/api";
 import type { Goal } from "@/lib/app-data";
 import { useProfile } from "@/lib/use-profile";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { installNavigationHistory } from "@/lib/navigation-history";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 import {
   PURPOSE_OPTIONS,
@@ -26,9 +31,17 @@ import {
 } from "@/lib/onboarding-options";
 
 export default function Onboarding() {
+  return (
+    <Suspense fallback={<LoadingOverlay label="온보딩을 준비하고 있어요" />}>
+      <OnboardingFlow />
+    </Suspense>
+  );
+}
+
+function OnboardingFlow() {
   const router = useRouter();
+  const params = useSearchParams();
   const { save } = useProfile({ loadExisting: false });
-  const [step, setStep] = useState(1);
   const [transitionDirection, setTransitionDirection] = useState<
     "forward" | "back"
   >("forward");
@@ -39,9 +52,28 @@ export default function Onboarding() {
   const [name, setName] = useState("사용자");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editSection, setEditSection] = useState<EditSection | null>(null);
-  const [sheetClosing, setSheetClosing] = useState(false);
-  const sheetCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editSection, setEditSection] = useHistoryPanel("edit", [
+    "purpose",
+    "improvements",
+    "schedule",
+    "methods",
+  ] as const);
+  const savingRef = useRef(false);
+  const navigating = useRef(false);
+  const highestStep = !purpose
+    ? 1
+    : !improvements.length
+      ? 2
+      : !schedule
+        ? 3
+        : !methods.length
+          ? 4
+          : 5;
+  const requestedStep = Number(params.get("step") ?? 1);
+  const step =
+    Number.isInteger(requestedStep) && requestedStep >= 1
+      ? Math.min(requestedStep, highestStep)
+      : 1;
   const [draftPurpose, setDraftPurpose] = useState<Goal | null>(null);
   const [draftImprovements, setDraftImprovements] = useState<string[]>([]);
   const [draftSchedule, setDraftSchedule] = useState<ScheduleId | null>(null);
@@ -60,12 +92,16 @@ export default function Onboarding() {
     };
   }, []);
 
-  useEffect(
-    () => () => {
-      if (sheetCloseTimer.current) clearTimeout(sheetCloseTimer.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    navigating.current = false;
+    // A copied URL or reload must not skip unanswered questions.
+    if (requestedStep !== step || (step !== 5 && editSection)) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("step", String(step));
+      url.searchParams.delete("edit");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  }, [params, requestedStep, step, editSection]);
 
   const toggleImprovement = (
     value: string,
@@ -91,31 +127,32 @@ export default function Onboarding() {
     );
 
   const goBack = () => {
+    if (savingRef.current || navigating.current) return;
     if (step === 1) router.replace("/terms");
     else {
       setTransitionDirection("back");
-      setStep((current) => current - 1);
+      navigating.current = true;
+      if (window.history.state?.__onboardingStep === step)
+        window.history.back();
+      else {
+        const url = new URL(window.location.href);
+        url.searchParams.set("step", String(step - 1));
+        url.searchParams.delete("edit");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
     }
   };
 
   const openEditor = (section: EditSection) => {
-    if (sheetCloseTimer.current) clearTimeout(sheetCloseTimer.current);
     setDraftPurpose(purpose);
     setDraftImprovements(improvements);
     setDraftSchedule(schedule);
     setDraftMethods(methods);
-    setSheetClosing(false);
     setEditSection(section);
   };
 
   const closeEditor = () => {
-    if (sheetClosing) return;
-    setSheetClosing(true);
-    sheetCloseTimer.current = setTimeout(() => {
-      setEditSection(null);
-      setSheetClosing(false);
-      sheetCloseTimer.current = null;
-    }, 240);
+    setEditSection(null);
   };
 
   const saveEditor = () => {
@@ -129,14 +166,31 @@ export default function Onboarding() {
   };
 
   const goNext = () => {
+    if (navigating.current || !isNextEnabled || step >= 5) return;
+    navigating.current = true;
     setTransitionDirection("forward");
-    setStep((current) => current + 1);
+    installNavigationHistory(window.history);
+    const url = new URL(window.location.href);
+    url.searchParams.set("step", String(step + 1));
+    url.searchParams.delete("edit");
+    window.history.pushState(
+      { __onboardingStep: step + 1 },
+      "",
+      url.pathname + url.search,
+    );
   };
 
   const finishOnboarding = async () => {
-    if (!purpose || !schedule || !improvements.length || !methods.length)
+    if (
+      savingRef.current ||
+      !purpose ||
+      !schedule ||
+      !improvements.length ||
+      !methods.length
+    )
       return;
 
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -167,6 +221,7 @@ export default function Onboarding() {
           : "온보딩 정보를 저장하지 못했습니다.",
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -184,7 +239,10 @@ export default function Onboarding() {
         className="relative flex h-full flex-col bg-white"
         aria-label="온보딩"
       >
-        <div className="h-11 shrink-0" aria-hidden="true" />
+        <div
+          className="h-[max(12px,env(safe-area-inset-top,0px))] shrink-0"
+          aria-hidden="true"
+        />
         <ProgressHeader step={step} onBack={goBack} />
 
         {step === 1 && (
@@ -286,12 +344,14 @@ export default function Onboarding() {
             </p>
           )}
         </footer>
-        <div className="h-[34px] shrink-0 bg-white" aria-hidden="true" />
+        <div
+          className="h-[env(safe-area-inset-bottom,0px)] shrink-0 bg-white"
+          aria-hidden="true"
+        />
 
-        {editSection && (
+        {step === 5 && editSection && (
           <EditBottomSheet
             section={editSection}
-            closing={sheetClosing}
             purpose={draftPurpose}
             improvements={draftImprovements}
             schedule={draftSchedule}
@@ -326,18 +386,18 @@ function ProgressHeader({
         type="button"
         onClick={onBack}
         aria-label="이전 화면으로 돌아가기"
-        className="flex size-6 shrink-0 touch-manipulation items-center justify-center rounded transition-transform duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+        className="flex size-11 shrink-0 touch-manipulation items-center justify-center rounded transition-transform duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
       >
         <NavigationIcon />
       </button>
       <div
-        className="flex h-2 w-[282px] shrink-0 gap-[5px]"
+        className="flex h-2 min-w-0 flex-1 gap-[5px]"
         aria-label={`${step}/5 단계`}
       >
         {Array.from({ length: 5 }).map((_, index) => (
           <span
             key={index}
-            className={`h-2 w-[52.4px] rounded transition-[background-color,transform] duration-300 ease-out ${
+            className={`h-2 min-w-0 flex-1 rounded transition-[background-color,transform] duration-300 ease-out ${
               index < step ? "bg-[#2f6bff]" : "bg-[#e6e9ed]"
             }`}
           />
@@ -364,8 +424,10 @@ function QuestionScreen({
   children: ReactNode;
   direction: "forward" | "back";
 }) {
+  const scrollRef = useHistoryScroll(`onboarding:${title}`, true);
   return (
     <div
+      ref={scrollRef}
       className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${
         direction === "forward"
           ? "onboarding-step-enter-forward"
@@ -491,6 +553,7 @@ function PlanScreen({
   const purposeTitle = PURPOSE_OPTIONS.find(
     (option) => option.value === purpose,
   )!.title;
+  const scrollRef = useHistoryScroll("onboarding:plan", true);
   const scheduleTitle = SCHEDULE_OPTIONS.find(
     (option) => option.value === schedule,
   )!.title;
@@ -518,7 +581,8 @@ function PlanScreen({
 
   return (
     <div
-      className={`min-h-0 flex-1 overflow-hidden px-6 ${
+      ref={scrollRef}
+      className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 pb-6 ${
         direction === "forward"
           ? "onboarding-step-enter-forward"
           : "onboarding-step-enter-back"
@@ -566,7 +630,6 @@ function PlanScreen({
 
 function EditBottomSheet({
   section,
-  closing,
   purpose,
   improvements,
   schedule,
@@ -579,7 +642,6 @@ function EditBottomSheet({
   onSave,
 }: {
   section: EditSection;
-  closing: boolean;
   purpose: Goal | null;
   improvements: string[];
   schedule: ScheduleId | null;
@@ -596,17 +658,22 @@ function EditBottomSheet({
   const dragging = useRef(false);
   const dragStartY = useRef(0);
   const dragOffset = useRef(0);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const dialog = dialogRef.current;
+    const trigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      trigger?.focus({ preventScroll: true });
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, []);
 
   const handleDragStart = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (closing) return;
     dragging.current = true;
     setIsDragging(true);
     dragStartY.current = event.clientY;
@@ -661,9 +728,13 @@ function EditBottomSheet({
     (section === "methods" && methods.length > 0);
 
   return (
-    <div
-      className={`absolute inset-0 z-20 ${closing ? "pointer-events-none" : ""}`}
-      role="dialog"
+    <dialog
+      ref={dialogRef}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="fixed inset-0 m-auto h-dvh max-h-none w-full max-w-[402px] overflow-hidden border-0 bg-transparent p-0 text-[#191f28] backdrop:bg-transparent"
       aria-modal="true"
       aria-label={details.title}
     >
@@ -674,17 +745,11 @@ function EditBottomSheet({
         style={
           dragY > 0 ? { opacity: Math.max(0, 1 - dragY / 320) } : undefined
         }
-        className={`absolute inset-0 bg-[rgba(25,31,40,0.45)] ${
-          closing ? "onboarding-scrim-exit" : "onboarding-scrim-enter"
-        }`}
+        className="absolute inset-0 bg-[rgba(25,31,40,0.45)] onboarding-scrim-enter"
       />
-      <div
-        className={`absolute bottom-0 left-0 w-full ${
-          closing ? "onboarding-sheet-exit" : "onboarding-sheet-enter"
-        }`}
-      >
+      <div className="absolute bottom-0 left-0 w-full onboarding-sheet-enter">
         <div
-          className="flex w-full flex-col items-center overflow-hidden rounded-t-3xl bg-white px-6 shadow-[0_-12px_36px_rgba(25,31,40,0.08)]"
+          className="flex max-h-[90dvh] w-full flex-col items-center overflow-x-hidden overflow-y-auto overscroll-contain rounded-t-3xl bg-white px-6 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_36px_rgba(25,31,40,0.08)]"
           style={{
             transform: `translateY(${dragY}px)`,
             transition: isDragging
@@ -703,7 +768,7 @@ function EditBottomSheet({
             <div className="h-1 w-10 rounded-sm bg-[#e5e8eb]" />
           </div>
           <div className="h-2 shrink-0" />
-          <div className="flex w-full flex-col gap-1.5">
+          <div className="flex w-full shrink-0 flex-col gap-1.5">
             <h2 className="text-[20px] leading-7 font-bold tracking-[-0.24px] text-[#191f28]">
               {details.title}
             </h2>
@@ -714,7 +779,7 @@ function EditBottomSheet({
             )}
           </div>
           <div className="h-5 shrink-0" />
-          <div className="flex w-full flex-col gap-2.5">
+          <div className="flex w-full shrink-0 flex-col gap-2.5">
             {section === "purpose" &&
               PURPOSE_OPTIONS.map((option) => (
                 <DetailedCard
@@ -764,6 +829,6 @@ function EditBottomSheet({
           <div className="h-[34px] shrink-0" aria-hidden="true" />
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
