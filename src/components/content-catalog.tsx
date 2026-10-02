@@ -18,6 +18,9 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { categoryLabel } from "@/lib/content-labels";
+import { useCatalogFilters } from "@/hooks/use-catalog-filters";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { refreshCatalogWindow } from "@/lib/catalog-pages";
 
 const DIFFICULTIES: Array<{ value: Difficulty | ""; label: string }> = [
   { value: "", label: "모든 난이도" },
@@ -86,7 +89,9 @@ export function ContentCatalog({
       : type === "SENTENCE"
         ? "/sentences"
         : "/announcer";
-  const [category, setCategory] = useState("");
+  const userId = getAuthenticatedUserId();
+  const { category, difficulty, setCategory, setDifficulty } =
+    useCatalogFilters(`${userId}:${type}`);
   const categoryValues = useRef<Record<string, string>>({});
   const fallbackCategories =
     type === "NEWS"
@@ -96,12 +101,10 @@ export function ContentCatalog({
         : [];
   const [categories, setCategories] = useState(fallbackCategories);
   const [difficultyOptions, setDifficultyOptions] = useState(DIFFICULTIES);
-  const [difficulty, setDifficulty] = useState<Difficulty | "">("");
-  const userId = getAuthenticatedUserId();
   const [initialCache] = useState(() =>
     readUserClientCache<CatalogCache>(
       userId,
-      catalogCacheResource(type, "", ""),
+      catalogCacheResource(type, category, difficulty),
     ),
   );
   const [items, setItems] = useState<PracticeContentSummary[]>(
@@ -120,6 +123,9 @@ export function ContentCatalog({
   const [refreshing, setRefreshing] = useState(false);
   const generation = useRef(0);
   const loadMoreBusy = useRef(false);
+  const scope = `${userId}:${catalogCacheResource(type, category, difficulty)}`;
+  const [loadedScope, setLoadedScope] = useState(scope);
+  const scrollRef = useHistoryScroll(scope, !loading && loadedScope === scope);
 
   useEffect(() => {
     let active = true;
@@ -168,6 +174,7 @@ export function ContentCatalog({
     setLoadMoreError(null);
     setRefreshing(true);
     const cached = readUserClientCache<CatalogCache>(userId, resource);
+    setLoadedScope(scope);
     if (cached) {
       setItems(cached.items);
       setTotalElements(cached.totalElements);
@@ -193,16 +200,20 @@ export function ContentCatalog({
       setLoading(true);
     }
     setError(null);
-    api.content
-      .list({
-        type,
-        category: categoryValues.current[category] ?? (category || undefined),
-        difficulty: difficulty || undefined,
-        page: 0,
-        size: 20,
-      })
+    refreshCatalogWindow(
+      (page) =>
+        api.content.list({
+          type,
+          category: categoryValues.current[category] ?? (category || undefined),
+          difficulty: difficulty || undefined,
+          page,
+          size: 20,
+        }),
+      cached?.page ?? 0,
+      () => active,
+    )
       .then((result) => {
-        if (!active) return;
+        if (!active || !result) return;
         setItems(result.items);
         setTotalElements(result.totalElements);
         if (!category) {
@@ -243,7 +254,7 @@ export function ContentCatalog({
       active = false;
       generation.current += 1;
     };
-  }, [category, difficulty, type, userId, retry]);
+  }, [category, difficulty, type, userId, retry, scope]);
 
   async function loadMore() {
     if (loadMoreBusy.current || refreshing || !hasNext) return;
@@ -295,7 +306,11 @@ export function ContentCatalog({
   const featured = items[0];
 
   return (
-    <AppShell chromeColor="#f2f4f6" className="bg-[#f2f4f6]">
+    <AppShell
+      mainRef={scrollRef}
+      chromeColor="#f2f4f6"
+      className="bg-[#f2f4f6]"
+    >
       <CatalogHeader title={title} />
       <p className="sr-only">{description}</p>
 
