@@ -2,7 +2,10 @@
 
 import { SkeletonBlock } from "@/components/skeleton-block";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { canonicalApi, canonicalDatabaseId } from "@/lib/api/canonical";
+import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
+import { canonicalPresentation } from "@/lib/canonical-presentation";
 import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
 import { ReferencePlayer } from "@/components/reference-player";
@@ -19,18 +22,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   api,
-  type AnalysisResult,
   type AnalysisSegment,
+  type AnalysisResult,
   type PracticeContent,
   type TrainingHistoryDetail,
 } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import {
-  readUserClientCache,
   removeUserClientCache,
   removeUserClientCacheGroup,
-  writeUserClientCache,
 } from "@/lib/client-cache";
 import { splitSentences } from "@/lib/sentences";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
@@ -40,7 +41,7 @@ import { removeCachedHistorySession } from "@/lib/history-cache";
 type DetailBundle = {
   detail: TrainingHistoryDetail;
   content: PracticeContent;
-  analysis: AnalysisResult;
+  result: AnalysisResult;
   segments: AnalysisSegment[];
 };
 
@@ -56,13 +57,26 @@ export default function LearningHistoryDetail({
 }: {
   sessionId: string;
 }) {
+  const epoch = useSyncExternalStore(
+    subscribeAuthSession,
+    getAuthSessionVersion,
+    () => 0,
+  );
+  return (
+    <HistoryDetail
+      key={JSON.stringify([epoch, sessionId])}
+      sessionId={sessionId}
+    />
+  );
+}
+
+function HistoryDetail({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const userId = getAuthenticatedUserId();
   const cacheResource = cacheResources.historyDetail(sessionId);
-  const [initialBundle] = useState(() =>
-    readUserClientCache<DetailBundle>(userId, cacheResource),
-  );
-  const [bundle, setBundle] = useState<DetailBundle | null>(initialBundle);
+  // Never restore unverified result payloads from persistent UI cache.
+  const [bundle, setBundle] = useState<DetailBundle | null>(null);
+  const readController = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"recording" | "report">("recording");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -101,40 +115,54 @@ export default function LearningHistoryDetail({
   }, [deleted, confirmDelete, router]);
 
   useEffect(() => {
-    let active = true;
-    const cached = readUserClientCache<DetailBundle>(userId, cacheResource);
-    setBundle(cached);
+    const controller = new AbortController();
+    readController.current = controller;
+    const epoch = getAuthSessionVersion();
+    const active = () =>
+      !controller.signal.aborted &&
+      !deletedRef.current &&
+      !deleteBusy.current &&
+      epoch === getAuthSessionVersion();
+    setBundle(null);
     setError(null);
+    // Discard an old cached detail, including any canonical projection.
+    removeUserClientCache(userId, cacheResource);
     void (async () => {
       try {
         const detail = await api.myPage.getTrainingSession(sessionId);
-        const [content, analysis, segmentPage] = await Promise.all([
-          api.content.get(detail.content.id),
-          api.analyses.get(detail.analysis.id),
-          api.analyses.getSegments(detail.analysis.id, { page: 0, size: 100 }),
-        ]);
-        if (active && !deletedRef.current) {
-          const value = {
+        if (!active()) return;
+        const result = await canonicalApi.get(
+          {
+            analysisId: canonicalDatabaseId(detail.analysis.id),
+            recordingId: canonicalDatabaseId(detail.recording.id),
+          },
+          controller.signal,
+        );
+        if (!active()) return;
+        const content = await api.content.get(detail.content.id);
+        if (!active()) return;
+        if (String(content.id) !== String(detail.content.id))
+          throw new Error("기록의 콘텐츠를 확인할 수 없습니다.");
+        const segmentPage = { items: [] };
+        if (active())
+          setBundle({
             detail,
-            content,
-            analysis,
+            content: { ...content, scriptText: detail.content.scriptText },
+            result: canonicalPresentation(result),
             segments: segmentPage.items,
-          };
-          setBundle(value);
-          writeUserClientCache(userId, cacheResource, value);
-        }
+          });
       } catch (reason) {
-        if (active && !cached)
+        if (active()) {
+          setBundle(null);
           setError(
             reason instanceof Error
               ? reason.message
               : "학습 기록을 불러오지 못했습니다.",
           );
+        }
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => controller.abort();
   }, [cacheResource, sessionId, userId, retry]);
 
   async function deleteHistory() {
@@ -143,6 +171,9 @@ export default function LearningHistoryDetail({
     const requestLifecycle = lifecycle.current;
     setDeleting(true);
     setDeleteError(null);
+    readController.current?.abort();
+    setBundle(null);
+    removeUserClientCache(userId, cacheResource);
     try {
       await api.myPage.deleteTrainingSession(sessionId);
       deletedRef.current = true;
@@ -162,6 +193,9 @@ export default function LearningHistoryDetail({
       );
       deleteBusy.current = false;
       setDeleting(false);
+      setError(
+        "삭제 상태를 확인하지 못했습니다. 현재 기록을 다시 조회해 주세요.",
+      );
     }
   }
 
@@ -215,7 +249,7 @@ export default function LearningHistoryDetail({
           </button>
         </div>
       )}
-      {!bundle && !error && <HistoryDetailSkeleton />}
+      {!bundle && !error && !deleting && !deleted && <HistoryDetailSkeleton />}
 
       {bundle && tab === "recording" && (
         <>
@@ -261,7 +295,8 @@ export default function LearningHistoryDetail({
       {bundle && tab === "report" && (
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <AnalysisView
-            analysis={bundle.analysis}
+            key={String(bundle.result.id)}
+            analysis={bundle.result}
             segments={bundle.segments}
             content={bundle.content}
             recordingId={bundle.detail.recording.id}

@@ -510,6 +510,8 @@ export interface AnalysisScoreBreakdown {
 }
 
 export interface AnalysisResult {
+  /** Verified v4 public result retained losslessly; not a legacy wire payload. */
+  canonical?: import("../canonical-analysis").CanonicalAnalysisView;
   coaching?: import("@/lib/coaching").AnalysisCoaching | null;
   id: Id;
   status: AnalysisStatus;
@@ -908,12 +910,14 @@ export interface ApiContract {
     retryAnalysis(
       sessionId: Id,
       consent: AnalysisConsentInput,
+      expected?: import("../canonical-analysis").CanonicalViewIdentity,
     ): Promise<AnalysisRequest>;
     getSessionAnalysis(sessionId: Id): Promise<SessionAnalysis>;
     getRecordingPlaybackUrl(recordingId: Id): Promise<PlaybackUrl>;
     complete(
       sessionId: Id,
       totalLearningSeconds: number,
+      expected?: import("../canonical-analysis").CanonicalViewIdentity,
     ): Promise<{
       sessionId: Id;
       status: TrainingSessionStatus;
@@ -921,7 +925,7 @@ export interface ApiContract {
     }>;
   };
   analyses: {
-    get(analysisId: Id): Promise<AnalysisResult>;
+    get(analysisId: Id, recordingId?: Id): Promise<AnalysisResult>;
     getSegments(
       analysisId: Id,
       filters?: { page?: number; size?: number },

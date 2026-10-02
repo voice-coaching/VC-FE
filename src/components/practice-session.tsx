@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, CircleAlert } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -23,11 +23,19 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
-import { AnalysisFailed, pollAnalysis } from "@/lib/analysis-polling";
+import { pollAnalysis } from "@/lib/analysis-polling";
 import {
   describePracticeError,
   PracticeInputError,
 } from "@/lib/practice-error";
+import { cn } from "@/lib/utils";
+import {
+  ApiError,
+  getAuthSessionVersion,
+  subscribeAuthSession,
+} from "@/lib/api/client";
+import { canonicalApi } from "@/lib/api/canonical";
+import { CanonicalResultUnavailable } from "@/lib/canonical-presentation";
 import { splitSentences } from "@/lib/sentences";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
@@ -60,7 +68,29 @@ function invalidateLearningCaches() {
   removeUserClientCache(userId, "mypage-overview");
 }
 
-export function PracticeSession({
+export function PracticeSession(props: {
+  content: PracticeContent;
+  localOnly?: boolean;
+  onTitleChange?: (title: string) => void;
+  experienceLabel?: string;
+}) {
+  const epoch = useSyncExternalStore(
+    subscribeAuthSession,
+    getAuthSessionVersion,
+    () => 0,
+  );
+  const params = useSearchParams();
+  const identity = [
+    epoch,
+    props.content.id,
+    params.get("sessionId"),
+    params.get("courseStepId"),
+    params.get("titleExamId"),
+  ];
+  return <PracticeSessionBody key={JSON.stringify(identity)} {...props} />;
+}
+
+function PracticeSessionBody({
   content,
   onTitleChange,
   localOnly = false,
@@ -100,6 +130,8 @@ export function PracticeSession({
   const [activeSentence, setActiveSentence] = useState(0);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
+  const authEpochRef = useRef(getAuthSessionVersion());
+  const selectedRecordingRef = useRef<Id | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
@@ -171,6 +203,7 @@ export function PracticeSession({
       const activeSessionId = sessionIdRef.current;
       if (
         activeSessionId &&
+        authEpochRef.current === getAuthSessionVersion() &&
         !completedRef.current &&
         !analysisPendingRef.current &&
         phaseRef.current !== "analyzing"
@@ -182,11 +215,7 @@ export function PracticeSession({
   );
 
   useEffect(() => {
-    if (
-      !resumedSessionId ||
-      !["ANALYSIS_STATUS", "ANALYSIS_RESULT"].includes(resumeType ?? "")
-    )
-      return;
+    if (!resumedSessionId) return;
 
     let active = true;
     setPhase("analyzing");
@@ -203,12 +232,31 @@ export function PracticeSession({
         ) {
           throw new Error("이어갈 학습과 현재 콘텐츠가 일치하지 않습니다.");
         }
-        if (active) setRecordingAttempts(attempts);
+        if (!active) return;
+        const selected = attempts.find((item) => item.selected);
+        selectedRecordingRef.current =
+          selected?.recordingId ?? selected?.id ?? null;
+        setRecordingAttempts(attempts);
 
+        let currentStatus;
+        try {
+          currentStatus = await canonicalApi.status(resumedSessionId);
+        } catch (reason) {
+          if (
+            reason instanceof ApiError &&
+            reason.status === 404 &&
+            reason.code === "ANALYSIS_NOT_FOUND" &&
+            ["RECORDING", "UPLOADING"].includes(resumedSession.status)
+          ) {
+            if (active) setPhase("idle");
+            return;
+          }
+          throw reason;
+        }
+        analysisPendingRef.current = true;
         let analysisId: Id;
-        if (resumeType === "ANALYSIS_RESULT") {
-          analysisId = (await api.training.getSessionAnalysis(resumedSessionId))
-            .analysisId;
+        if (["COMPLETED", "FAILED"].includes(currentStatus.status)) {
+          analysisId = currentStatus.analysisId;
         } else {
           analysisId = await pollAnalysis({
             getStatus: () => {
@@ -222,30 +270,40 @@ export function PracticeSession({
         }
 
         if (!active) return;
-        const [result, segmentPage] = await Promise.all([
-          api.analyses.get(analysisId),
-          api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-        ]);
+        const result = await readResult(analysisId);
+        if (!active) return;
+        const segmentPage = { items: [] };
         if (!active) return;
         setAnalysis(result);
         setSegments(segmentPage.items);
-        if (resumeType === "ANALYSIS_STATUS") {
+        if (
+          resumedSession.status !== "COMPLETED" &&
+          result.canonical?.actions.canComplete
+        ) {
           const selectedRecording = attempts.find((item) => item.selected);
           const durationSeconds = Math.max(
             1,
             Math.round((selectedRecording?.durationMs ?? 0) / 1_000),
           );
-          await api.training.complete(resumedSessionId, durationSeconds);
+          await api.training.complete(
+            resumedSessionId,
+            durationSeconds,
+            result.canonical,
+          );
           invalidateLearningCaches();
           completedRef.current = true;
           analysisPendingRef.current = false;
         }
+        analysisPendingRef.current = false;
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
         setRequestFailure(reason);
-        setCanRetryAnalysis(reason instanceof AnalysisFailed);
-        setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
+        setCanRetryAnalysis(
+          reason instanceof CanonicalResultUnavailable &&
+            reason.view.actions.canRetry,
+        );
+        setCanCheckAnalysis(!(reason instanceof CanonicalResultUnavailable));
         setRequestError(
           reason instanceof Error
             ? reason.message
@@ -276,6 +334,16 @@ export function PracticeSession({
   }
 
   async function getAnalysisCapabilities() {
+    if (
+      courseId ||
+      courseStepId ||
+      titleExamId ||
+      content.contentType === "CLASS_PRACTICE"
+    )
+      throw new PracticeInputError(
+        "unsupported",
+        "현재 서버의 분석 계약은 단독 음성 발음 연습만 지원합니다. 클래스·승급 시험 분석은 아직 지원하지 않습니다.",
+      );
     if (capabilitiesRef.current) return capabilitiesRef.current;
     const userId = getAuthenticatedUserId();
     const capabilities =
@@ -351,8 +419,11 @@ export function PracticeSession({
       });
     } catch (reason) {
       setRequestFailure(reason);
-      setCanRetryAnalysis(reason instanceof AnalysisFailed);
-      setCanCheckAnalysis(!(reason instanceof AnalysisFailed));
+      setCanRetryAnalysis(
+        reason instanceof CanonicalResultUnavailable &&
+          reason.view.actions.canRetry,
+      );
+      setCanCheckAnalysis(!(reason instanceof CanonicalResultUnavailable));
       throw reason;
     }
   }
@@ -399,19 +470,31 @@ export function PracticeSession({
     );
   }
 
+  async function readResult(analysisId: Id) {
+    if (selectedRecordingRef.current == null)
+      throw new Error("선택한 녹음을 확인할 수 없습니다.");
+    const result = await api.analyses.get(
+      analysisId,
+      selectedRecordingRef.current,
+    );
+    if (result.canonical && !result.canonical.actions.canComplete)
+      throw new CanonicalResultUnavailable(result.canonical);
+    return result;
+  }
+
   async function loadResult(activeSessionId: Id, analysisId: Id) {
-    const [result, segmentPage] = await Promise.all([
-      api.analyses.get(analysisId),
-      api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
-    ]);
+    const result = await readResult(analysisId);
+    const segmentPage = { items: [] };
     setAnalysis(result);
     setSegments(segmentPage.items);
     await api.training.complete(
       activeSessionId,
       Math.max(1, Math.round(recorder.durationMs / 1_000)),
+      result.canonical,
     );
     invalidateLearningCaches();
     completedRef.current = true;
+    analysisPendingRef.current = false;
 
     if (courseId && courseStepId) {
       const [steps, currentProgress] = await Promise.all([
@@ -513,12 +596,15 @@ export function PracticeSession({
       if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
       await waitForRecordingQuality(activeSessionId, recordingId);
       await api.training.selectRecording(activeSessionId, recordingId);
+      selectedRecordingRef.current = recordingId;
       setRecordingAttempts((current) =>
         current.map((item) => ({
           ...item,
           selected: String(item.recordingId ?? item.id) === String(recordingId),
         })),
       );
+      analysisPendingRef.current = true;
+      setCanCheckAnalysis(true);
       const requested = await api.training.analyze(
         activeSessionId,
         await getConsentInput(),
@@ -542,15 +628,24 @@ export function PracticeSession({
 
   async function retryFailedAnalysis() {
     if (!sessionId) return;
+    const expected =
+      requestFailure instanceof CanonicalResultUnavailable
+        ? requestFailure.view
+        : undefined;
     setRequestError(null);
     setRequestFailure(null);
     setCanRetryAnalysis(false);
     setAnalysisProgress(0);
+    setAnalysis(null);
+    setSegments([]);
+    analysisPendingRef.current = true;
+    setCanCheckAnalysis(true);
     setPhase("analyzing");
     try {
       const requested = await api.training.retryAnalysis(
         sessionId,
         await getConsentInput(),
+        expected,
       );
       const completedAnalysisId = await waitForAnalysis(sessionId);
       await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
@@ -562,6 +657,41 @@ export function PracticeSession({
           : "음성 분석 재시도에 실패했습니다.",
       );
       setPhase("error");
+    }
+  }
+
+  async function resetRecording() {
+    try {
+      if (requestFailure instanceof CanonicalResultUnavailable) {
+        const previous = requestFailure.view;
+        const current = await canonicalApi.get({
+          analysisId: previous.analysisId,
+          recordingId: previous.recordingId,
+          requestId: previous.requestId,
+          executionId: previous.executionId,
+        });
+        if (!current.actions.canRerecord)
+          throw new CanonicalResultUnavailable(current);
+        // Existing backend recovery uses a new recording in the SAME session.
+        selectedRecordingRef.current = null;
+        analysisPendingRef.current = false;
+        completedRef.current = false;
+        setAnalysis(null);
+        setSegments([]);
+      }
+      recorder.reset();
+      setRequestError(null);
+      setRequestFailure(null);
+      setPhase("idle");
+    } catch (reason) {
+      setRequestFailure(reason);
+      setCanRetryAnalysis(false);
+      setCanCheckAnalysis(true);
+      setRequestError(
+        reason instanceof Error
+          ? reason.message
+          : "현재 분석 상태를 확인하지 못했습니다.",
+      );
     }
   }
 
@@ -610,8 +740,13 @@ export function PracticeSession({
   if (phase === "error") {
     const errorView = describePracticeError(requestFailure, recorder.status);
     const quality = errorView.kind === "quality";
-    const rerecord =
-      quality || errorView.kind === "input" || errorView.kind === "recording";
+    const canonicalFailure =
+      requestFailure instanceof CanonicalResultUnavailable
+        ? requestFailure.view
+        : null;
+    const rerecord = canonicalFailure
+      ? canonicalFailure.actions.canRerecord
+      : quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
       <div className="flex min-h-full flex-col px-5 pb-8">
         <div className="my-auto py-10 text-center">
@@ -651,7 +786,17 @@ export function PracticeSession({
         </div>
         <button
           className="design-action"
+          disabled={
+            canonicalFailure != null &&
+            !canCheckAnalysis &&
+            !canonicalFailure.actions.canRetry &&
+            !rerecord
+          }
           onClick={() => {
+            if (canonicalFailure?.actions.canRetry) {
+              void retryFailedAnalysis();
+              return;
+            }
             if (canCheckAnalysis && sessionId) {
               void checkExistingAnalysis();
               return;
@@ -664,15 +809,12 @@ export function PracticeSession({
               void analyze();
               return;
             }
-            recorder.reset();
-            setRequestError(null);
-            setRequestFailure(null);
-            setPhase("idle");
+            void resetRecording();
           }}
         >
           {canCheckAnalysis && sessionId
             ? "분석 상태 다시 확인"
-            : canRetryAnalysis
+            : canRetryAnalysis || canonicalFailure?.actions.canRetry
               ? "분석 다시 시도"
               : rerecord
                 ? "다시 녹음하기"
