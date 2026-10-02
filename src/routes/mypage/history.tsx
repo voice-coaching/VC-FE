@@ -1,6 +1,6 @@
 "use client";
 
-import { prepareTitleExam } from "@/lib/title-exam";
+import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
@@ -306,11 +306,7 @@ export default function LearningHistory() {
         await prepareTitleExam(api, "/mypage/history", examRequestKey.current),
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "승급 시험을 시작하지 못했습니다.",
-      );
+      setError(titleExamErrorMessage(reason));
       setExamStarting(false);
       examRequestBusy.current = false;
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { prepareTitleExam } from "@/lib/title-exam";
+import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -150,11 +150,7 @@ export default function MyPage() {
         await prepareTitleExam(api, "/mypage", examRequestKey.current),
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "승급 시험을 시작하지 못했습니다.",
-      );
+      setError(titleExamErrorMessage(reason));
       setExamStarting(false);
       examRequestBusy.current = false;
     }

@@ -1,4 +1,31 @@
 import type { ApiContract, Id } from "./api/types";
+import { ApiError } from "./api/client";
+
+export function titleExamErrorMessage(reason: unknown) {
+  const messages: Record<string, string> = {
+    TITLE_EXAM_CONTENT_UNAVAILABLE:
+      "승급 시험 문제가 아직 준비되지 않았습니다. 준비가 완료된 후 다시 시도해 주세요.",
+    TITLE_EXAM_NOT_ELIGIBLE:
+      "승급 시험 응시 횟수가 부족합니다. 마이페이지에서 남은 연습 횟수를 확인해 주세요.",
+    MAX_TITLE_REACHED:
+      "이미 최고 칭호에 도달했습니다. 마이페이지에서 칭호를 확인해 주세요.",
+    TITLE_EXAM_CONTENT_MISMATCH:
+      "시험과 연습 콘텐츠가 일치하지 않습니다. 마이페이지에서 시험을 다시 열어 주세요.",
+    TITLE_EXAM_ALREADY_GRADED:
+      "이미 채점된 시험입니다. 마이페이지에서 칭호를 확인해 주세요.",
+    ANALYSIS_NOT_COMPLETED:
+      "분석이 아직 완료되지 않아 채점할 수 없습니다. 분석 완료 후 다시 확인해 주세요.",
+    ANALYSIS_SCORE_UNAVAILABLE:
+      "분석 점수를 확정할 수 없어 승급 채점을 보류했습니다.",
+    TEMPORARY_UNAVAILABLE:
+      "승급 시험을 일시적으로 이용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  };
+  if (reason instanceof ApiError && messages[reason.code])
+    return messages[reason.code];
+  return reason instanceof Error
+    ? reason.message
+    : "승급 시험 요청을 처리하지 못했습니다.";
+}
 
 export async function prepareTitleExam(
   api: Pick<ApiContract, "users">,

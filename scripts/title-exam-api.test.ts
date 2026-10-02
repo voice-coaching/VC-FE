@@ -1,6 +1,32 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { createRemoteApi } from "../src/lib/api/remote";
+import { ApiError } from "../src/lib/api/client";
+import { titleExamErrorMessage } from "../src/lib/title-exam";
+
+test("generic backend exam messages are distinguished by code without guessing unknown errors", () => {
+  const generic = "승급 시험 요청을 처리할 수 없습니다.";
+  assert.match(
+    titleExamErrorMessage(
+      new ApiError(generic, 503, "TITLE_EXAM_CONTENT_UNAVAILABLE"),
+    ),
+    /문제가 아직 준비되지/,
+  );
+  assert.match(
+    titleExamErrorMessage(
+      new ApiError(generic, 409, "TITLE_EXAM_NOT_ELIGIBLE"),
+    ),
+    /응시 횟수가 부족/,
+  );
+  assert.match(
+    titleExamErrorMessage(new ApiError(generic, 409, "MAX_TITLE_REACHED")),
+    /최고 칭호/,
+  );
+  assert.equal(
+    titleExamErrorMessage(new ApiError(generic, 409, "CONFLICT")),
+    generic,
+  );
+});
 import {
   createTitleExamSession,
   prepareTitleExam,

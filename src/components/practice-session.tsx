@@ -29,7 +29,10 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
-import { createTitleExamSession } from "@/lib/title-exam";
+import {
+  createTitleExamSession,
+  titleExamErrorMessage,
+} from "@/lib/title-exam";
 import { pollAnalysis } from "@/lib/analysis-polling";
 import {
   describePracticeError,
@@ -174,11 +177,7 @@ function PracticeSessionBody({
         // Completion is cached before grading; promotion must invalidate it again.
         invalidateLearningCaches();
       } catch (reason) {
-        setTitleExamError(
-          reason instanceof Error
-            ? reason.message
-            : "승급 시험 결과를 저장하지 못했습니다.",
-        );
+        setTitleExamError(titleExamErrorMessage(reason));
       } finally {
         titleExamSubmitBusy.current = false;
         setTitleExamSubmitting(false);
