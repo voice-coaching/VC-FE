@@ -42,7 +42,8 @@ import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
 const MAX_RECORDING_MS = 12_000;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type LipAnalysisPhase = "idle" | "uploading" | "analyzing" | "result" | "error";
+type LipAnalysisPhase =
+  "idle" | "preparing" | "uploading" | "analyzing" | "result" | "error";
 
 type LipAnalysisBundle = {
   content: PracticeContent;
@@ -78,6 +79,11 @@ export default function LipPractice() {
   const mounted = useRef(false);
   const mediaRequest = useRef(0);
   const mediaBusy = useRef(false);
+  const analysisBusyRef = useRef(false);
+  const analysisBusy =
+    analysisPhase === "preparing" ||
+    analysisPhase === "uploading" ||
+    analysisPhase === "analyzing";
 
   useEffect(() => {
     clipsRef.current = clips;
@@ -275,25 +281,27 @@ export default function LipPractice() {
   const selectedAnalysis = analyses[selectedClip];
 
   async function analyzeSelectedClip() {
-    if (
-      !reportClip ||
-      analysisPhase === "uploading" ||
-      analysisPhase === "analyzing"
-    )
-      return;
+    if (!reportClip || analysisBusyRef.current || !mounted.current) return;
     if (!videoConsentAccepted) {
       setAnalysisError("영상·음성 AI 분석 및 처리에 먼저 동의해 주세요.");
       setAnalysisPhase("error");
       return;
     }
 
+    analysisBusyRef.current = true;
+    setAnalysisPhase("preparing");
     setAnalysisTarget(selectedClip);
     setAnalysisError(null);
     setUploadProgress(0);
     setAnalysisProgress(0);
+    const requireActive = () => {
+      if (!mounted.current)
+        throw new DOMException("화면이 닫혔습니다.", "AbortError");
+    };
 
     try {
       const capabilities = await api.training.getAnalysisCapabilities();
+      requireActive();
       if (
         capabilities.recordingUpload !== "CONFIGURED" ||
         capabilities.analysisRequests !== "CONFIGURED" ||
@@ -344,6 +352,7 @@ export default function LipPractice() {
             ? crypto.randomUUID()
             : undefined,
         );
+        requireActive();
         contentByPromptRef.current.set(selectedClip, content);
       }
 
@@ -351,6 +360,7 @@ export default function LipPractice() {
         contentId: content.id,
         learningFocus: "PRONUNCIATION",
       });
+      requireActive();
       const sessionId = session.sessionId ?? session.id;
       if (sessionId == null) throw new Error("학습 세션을 만들지 못했어요.");
 
@@ -361,15 +371,25 @@ export default function LipPractice() {
         fileSizeBytes: prepared.blob.size,
       };
       const uploadInfo = await uploadRecordingWithFreshUrl({
-        issueUploadUrl: () => api.training.getUploadUrl(sessionId, uploadInput),
-        upload: (currentUpload) =>
-          api.training.uploadRecording(
+        issueUploadUrl: () => {
+          requireActive();
+          return api.training.getUploadUrl(sessionId, uploadInput);
+        },
+        upload: (currentUpload) => {
+          requireActive();
+          return api.training.uploadRecording(
             currentUpload,
             prepared.blob,
-            setUploadProgress,
-          ),
-        onRetry: () => setUploadProgress(0),
+            (progress) => {
+              if (mounted.current) setUploadProgress(progress);
+            },
+          );
+        },
+        onRetry: () => {
+          if (mounted.current) setUploadProgress(0);
+        },
       });
+      requireActive();
       const recording = await api.training.registerRecording(sessionId, {
         objectKey: uploadInfo.objectKey,
         mimeType: prepared.mimeType,
@@ -379,11 +399,14 @@ export default function LipPractice() {
         videoProcessingConsentPolicyRevision:
           capabilities.videoProcessingConsentPolicyRevision,
       });
+      requireActive();
       const recordingId = recording.recordingId ?? recording.id;
       if (recordingId == null) throw new Error("영상 녹화 ID가 없습니다.");
 
       for (let attempt = 0; attempt < 30; attempt += 1) {
+        requireActive();
         const recordings = await api.training.listRecordings(sessionId);
+        requireActive();
         const current = recordings.find(
           (item) => String(item.recordingId ?? item.id) === String(recordingId),
         );
@@ -402,36 +425,49 @@ export default function LipPractice() {
       }
 
       await api.training.selectRecording(sessionId, recordingId);
+      requireActive();
       const requested = await api.training.analyze(sessionId, {
         accepted: true,
         policyRevision: capabilities.consentPolicyRevision,
       });
+      requireActive();
       setAnalysisPhase("analyzing");
       const completedAnalysisId = await pollAnalysis({
-        getStatus: () => api.training.getAnalysisStatus(sessionId),
-        onProgress: setAnalysisProgress,
+        getStatus: () => {
+          requireActive();
+          return api.training.getAnalysisStatus(sessionId);
+        },
+        onProgress: (progress) => {
+          if (mounted.current) setAnalysisProgress(progress);
+        },
       });
+      requireActive();
       const analysisId = completedAnalysisId ?? requested.analysisId;
       const [analysis, segmentPage] = await Promise.all([
         api.analyses.get(analysisId),
         api.analyses.getSegments(analysisId, { page: 0, size: 100 }),
       ]);
+      requireActive();
       await api.training.complete(
         sessionId,
         Math.max(1, Math.round(reportClip.durationMs / 1_000)),
       );
+      requireActive();
       setAnalyses((current) => ({
         ...current,
         [selectedClip]: { content, analysis, segments: segmentPage.items },
       }));
       setAnalysisPhase("result");
     } catch (reason) {
+      if (!mounted.current) return;
       setAnalysisError(
         reason instanceof Error
           ? reason.message
           : "영상 발음 분석을 완료하지 못했어요.",
       );
       setAnalysisPhase("error");
+    } finally {
+      analysisBusyRef.current = false;
     }
   }
 
@@ -582,10 +618,7 @@ export default function LipPractice() {
                 <button
                   key={index}
                   type="button"
-                  disabled={
-                    analysisPhase === "uploading" ||
-                    analysisPhase === "analyzing"
-                  }
+                  disabled={analysisBusy}
                   onClick={() => {
                     setSelectedClip(index);
                     setAnalysisTarget(null);
@@ -611,8 +644,7 @@ export default function LipPractice() {
               {LIP_PRACTICE_PROMPTS[selectedClip]}
             </p>
 
-            {analysisTarget === selectedClip &&
-            (analysisPhase === "uploading" || analysisPhase === "analyzing") ? (
+            {analysisTarget === selectedClip && analysisBusy ? (
               <section className="mt-4 rounded-[20px] bg-[#f4f9ff] p-5 text-center">
                 <Image
                   src="/newsBird.webp"
@@ -622,7 +654,9 @@ export default function LipPractice() {
                   className="mx-auto size-24 object-contain"
                 />
                 <strong className="mt-3 block min-h-16 text-sm">
-                  {analysisPhase === "uploading" ? (
+                  {analysisPhase === "preparing" ? (
+                    <span role="status">영상을 분석할 준비를 하고 있어요</span>
+                  ) : analysisPhase === "uploading" ? (
                     <span role="status">
                       영상을 보내고 있어요 {uploadProgress}%
                     </span>
@@ -683,9 +717,7 @@ export default function LipPractice() {
 
             <button
               type="button"
-              disabled={
-                analysisPhase === "uploading" || analysisPhase === "analyzing"
-              }
+              disabled={analysisBusy}
               onClick={() => {
                 setPromptIndex(selectedClip);
                 setAnalysisPhase("idle");
