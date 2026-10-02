@@ -69,3 +69,27 @@ test("superseded refresh cannot publish or request further pages", async () => {
   assert.equal(result, null);
   assert.deepEqual(calls, [0]);
 });
+
+test("class pages use totalPages when hasNext is omitted", async () => {
+  const calls: number[] = [];
+  const result = await refreshCatalogWindow(
+    async (page) => {
+      calls.push(page);
+      return {
+        page,
+        size: 20,
+        totalElements: 2,
+        totalPages: 2,
+        items: [{ id: page + 1, courseType: "PRONUNCIATION" }],
+      };
+    },
+    3,
+    () => true,
+  );
+  assert.deepEqual(calls, [0, 1]);
+  assert.equal(result?.hasNext, false);
+  assert.deepEqual(
+    result?.items.map((item) => item.id),
+    [1, 2],
+  );
+});

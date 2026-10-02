@@ -25,6 +25,7 @@ import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { refreshCatalogWindow } from "@/lib/catalog-pages";
 
 type CourseCatalogCache = {
   items: CourseSummary[];
@@ -98,6 +99,10 @@ function CourseCatalogView({
   );
   const [loading, setLoading] = useState(initialCache === null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const listGeneration = useRef(0);
+  const loadMoreBusy = useRef(false);
   const [page, setPage] = useState(initialCache?.page ?? 0);
   const [hasNext, setHasNext] = useState(initialCache?.hasNext ?? false);
   const [progressByCourse, setProgressByCourse] = useState<
@@ -182,6 +187,11 @@ function CourseCatalogView({
 
   useEffect(() => {
     let active = true;
+    listGeneration.current += 1;
+    loadMoreBusy.current = false;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+    setRefreshing(true);
     const cached = readUserClientCache<CourseCatalogCache>(
       userId,
       cacheResource,
@@ -205,16 +215,21 @@ function CourseCatalogView({
     }
     setError(null);
     Promise.all([
-      api.courses.list({
-        type: activeType,
-        status: "PUBLISHED",
-        page: 0,
-        size: 20,
-      }),
+      refreshCatalogWindow(
+        (page) =>
+          api.courses.list({
+            type: activeType,
+            status: "PUBLISHED",
+            page,
+            size: 20,
+          }),
+        cached?.page ?? 0,
+        () => active,
+      ),
       api.courses.getMyProgress(),
     ])
       .then(([result, userProgress]) => {
-        if (!active) return;
+        if (!active || !result) return;
         const byCourse = progressMap(userProgress);
         const nextItems = mergeProgress(result.items, byCourse);
         const nextHasNext =
@@ -223,13 +238,17 @@ function CourseCatalogView({
         setItems(nextItems);
         setPage(result.page);
         setHasNext(nextHasNext);
+        const currentCache = readUserClientCache<CourseCatalogCache>(
+          userId,
+          cacheResource,
+        );
         updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
           items: nextItems,
           page: result.page,
           hasNext: nextHasNext,
           progressByCourse: byCourse,
-          detailsByCourse: cached?.detailsByCourse ?? {},
-          stepsByCourse: cached?.stepsByCourse ?? {},
+          detailsByCourse: currentCache?.detailsByCourse ?? {},
+          stepsByCourse: currentCache?.stepsByCourse ?? {},
         });
         void Promise.allSettled(
           result.items
@@ -245,7 +264,8 @@ function CourseCatalogView({
             ),
           );
           const nextDetails = {
-            ...(cached?.detailsByCourse ?? {}),
+            ...(readUserClientCache<CourseCatalogCache>(userId, cacheResource)
+              ?.detailsByCourse ?? {}),
             ...loadedDetails,
           };
           setDetailsByCourse(nextDetails);
@@ -264,15 +284,23 @@ function CourseCatalogView({
               : "클래스를 불러오지 못했습니다.",
           ),
       )
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
     return () => {
       active = false;
+      listGeneration.current += 1;
     };
   }, [activeType, cacheResource, userId, retry]);
 
   async function loadMore() {
+    if (loadMoreBusy.current || refreshing || !hasNext) return;
+    loadMoreBusy.current = true;
+    const requestGeneration = listGeneration.current;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const result = await api.courses.list({
         type: activeType,
@@ -280,14 +308,12 @@ function CourseCatalogView({
         page: page + 1,
         size: 20,
       });
-      setItems((current) => [
-        ...current,
-        ...mergeProgress(result.items, progressByCourse),
-      ]);
-      const nextItems = [
-        ...items,
-        ...mergeProgress(result.items, progressByCourse),
-      ];
+      if (requestGeneration !== listGeneration.current) return;
+      const merged = new Map(items.map((item) => [String(item.id), item]));
+      for (const item of mergeProgress(result.items, progressByCourse))
+        merged.set(String(item.id), item);
+      const nextItems = [...merged.values()];
+      setItems(nextItems);
       const nextHasNext =
         result.hasNext ?? result.page + 1 < (result.totalPages ?? 0);
       setPage(result.page);
@@ -298,13 +324,17 @@ function CourseCatalogView({
         hasNext: nextHasNext,
       });
     } catch (reason) {
-      setError(
+      if (requestGeneration !== listGeneration.current) return;
+      setLoadMoreError(
         reason instanceof Error
           ? reason.message
           : "클래스를 더 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingMore(false);
+      if (requestGeneration === listGeneration.current) {
+        loadMoreBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -786,14 +816,26 @@ function CourseCatalogView({
                   조건에 맞는 클래스가 없습니다.
                 </p>
               )}
+              {loadMoreError && (
+                <p
+                  role="alert"
+                  className="rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
+                >
+                  {loadMoreError}
+                </p>
+              )}
               {hasNext && (
                 <button
                   type="button"
-                  disabled={loadingMore}
+                  disabled={loadingMore || refreshing}
                   onClick={() => void loadMore()}
                   className="design-action"
                 >
-                  {loadingMore ? "불러오는 중…" : "클래스 더 보기"}
+                  {loadingMore
+                    ? "불러오는 중…"
+                    : loadMoreError
+                      ? "클래스 더 불러오기 재시도"
+                      : "클래스 더 보기"}
                 </button>
               )}
             </div>
