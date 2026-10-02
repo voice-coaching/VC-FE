@@ -13,6 +13,7 @@ test("catalog refresh retains loaded pages and deduplicates overlapping IDs", as
       calls.push(page);
       return {
         page,
+        size: 20,
         hasNext: true,
         totalElements: 50,
         items: page ? [item(1, "갱신"), item(2)] : [item(1)],
@@ -32,7 +33,13 @@ test("catalog refresh stops at the last server page", async () => {
   const result = await refreshCatalogWindow(
     async (page) => {
       calls.push(page);
-      return { page, hasNext: false, totalElements: 1, items: [item(1)] };
+      return {
+        page,
+        size: 20,
+        hasNext: false,
+        totalElements: 1,
+        items: [item(1)],
+      };
     },
     5,
     () => true,
@@ -48,7 +55,13 @@ test("superseded refresh cannot publish or request further pages", async () => {
     async (page) => {
       calls.push(page);
       active = false;
-      return { page, hasNext: true, totalElements: 40, items: [item(1)] };
+      return {
+        page,
+        size: 20,
+        hasNext: true,
+        totalElements: 40,
+        items: [item(1)],
+      };
     },
     1,
     () => active,

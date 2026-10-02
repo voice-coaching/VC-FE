@@ -94,6 +94,16 @@ export function CourseCatalog({
   >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const startBusy = useRef(false);
+  const lifecycle = useRef(0);
+
+  useEffect(() => {
+    lifecycle.current += 1;
+    startBusy.current = false;
+    return () => {
+      lifecycle.current += 1;
+    };
+  }, [activeType, userId]);
 
   useEffect(() => {
     setIndicatorType(activeType);
@@ -268,6 +278,9 @@ export function CourseCatalog({
   }
 
   async function start(course: CourseSummary, requestedStep?: CourseStep) {
+    if (startBusy.current) return;
+    startBusy.current = true;
+    const requestLifecycle = lifecycle.current;
     setStartingId(String(course.id));
     setError(null);
     try {
@@ -298,11 +311,13 @@ export function CourseCatalog({
       }
       replayFromStart =
         replayFromStart || currentProgress?.status === "COMPLETED";
+      if (requestLifecycle !== lifecycle.current) return;
 
       const steps = [
         ...(stepsByCourse[String(course.id)] ??
           (await api.courses.getSteps(course.id))),
       ].sort((a, b) => a.stepOrder - b.stepOrder);
+      if (requestLifecycle !== lifecycle.current) return;
       const nextSteps = {
         ...stepsByCourse,
         [String(course.id)]: steps,
@@ -344,13 +359,17 @@ export function CourseCatalog({
         count: steps.length,
       });
     } catch (reason) {
+      if (requestLifecycle !== lifecycle.current) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "클래스를 시작하지 못했습니다.",
       );
     } finally {
-      setStartingId(null);
+      if (requestLifecycle === lifecycle.current) {
+        startBusy.current = false;
+        setStartingId(null);
+      }
     }
   }
 
