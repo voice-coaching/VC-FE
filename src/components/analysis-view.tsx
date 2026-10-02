@@ -5,6 +5,8 @@ import { useMemo, type ReactNode } from "react";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
+import { CoachingView } from "@/components/coaching-view";
+import { supportedCoaching } from "@/lib/coaching";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -59,6 +61,8 @@ export function AnalysisView({
   recordingId?: Id;
   courseMode?: boolean;
 }) {
+  const coaching = supportedCoaching(analysis.coaching);
+  const hasCoaching = analysis.coaching != null;
   const [report, setReport] = useHistoryPanel("report", [
     "pronunciation",
     ...segments.map((segment) => `sentence:${segment.id}`),
@@ -79,9 +83,13 @@ export function AnalysisView({
     (segment) =>
       segment.pronunciationScore != null && segment.resultStatus === "NORMAL",
   );
-  const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
+  const overallScore = hasCoaching
+    ? null
+    : (analysis.overallScore ?? analysis.pronunciationScore);
   const summary =
-    analysis.summaryFeedback?.trim() || "제공된 AI 총평이 없습니다.";
+    coaching?.summary.trim() ||
+    analysis.summaryFeedback?.trim() ||
+    "제공된 AI 총평이 없습니다.";
   const sourceLabel = courseMode
     ? "클래스"
     : CONTENT_LABEL[content.contentType];
@@ -111,7 +119,7 @@ export function AnalysisView({
   }, [analysis.scoreBreakdown, analysis.scoreHierarchy]);
 
   let overlay: ReactNode = null;
-  if (report === "pronunciation") {
+  if (report === "pronunciation" && !hasCoaching) {
     overlay = (
       <ReportOverlay title="발음 분석" onBack={() => setReport(null)}>
         <div className="px-5 pt-1">
@@ -180,7 +188,7 @@ export function AnalysisView({
     );
   }
 
-  if (selected) {
+  if (selected && !hasCoaching) {
     const index = segments.findIndex(
       (segment) => String(segment.id) === String(selected.id),
     );
@@ -365,31 +373,66 @@ export function AnalysisView({
           </div>
         </section>
 
-        <button
-          type="button"
-          onClick={() => setReport("pronunciation")}
-          className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
-        >
-          <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
-          <span className="flex items-end gap-1">
-            <b className="text-[20px] leading-7 text-primary">
-              {scoreText(overallScore)}
-            </b>
-            {overallScore != null ? (
-              <span className="text-[12px] leading-4 text-[#8b95a1]">
-                / 100
-              </span>
-            ) : null}
-          </span>
-          <Image
-            src="/figma/report/chevron.svg"
-            alt=""
-            width={18}
-            height={18}
-          />
-        </button>
+        {coaching ? (
+          <section className="rounded-[20px] bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[17px] font-bold">종합 점수</h2>
+              <strong className="text-sm text-[#8b95a1]">점수 미제공</strong>
+            </div>
+            <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
+              {coaching.score.validity === "INSUFFICIENT_EVIDENCE"
+                ? "평가 근거가 부족하여 숫자 점수를 제공하지 않았어요. 아래의 제공 가능한 코칭을 확인해 주세요."
+                : "현재 분석 API는 검증된 채점 기준이 없어 숫자 점수를 제공하지 않아요. 아래의 발음 코칭을 확인해 주세요."}
+            </p>
+            <details className="mt-2 text-xs text-[#8b95a1]">
+              <summary>점수 미제공 사유</summary>
+              <p>{coaching.score.validity}</p>
+              <p>{coaching.score.reasonCodes.join(", ")}</p>
+            </details>
+          </section>
+        ) : (
+          <button
+            type="button"
+            disabled={hasCoaching}
+            onClick={() => setReport("pronunciation")}
+            className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
+          >
+            <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
+            <span className="flex items-end gap-1">
+              <b className="text-[20px] leading-7 text-primary">
+                {overallScore == null ? "점수 미제공" : scoreText(overallScore)}
+              </b>
+              {overallScore != null ? (
+                <span className="text-[12px] leading-4 text-[#8b95a1]">
+                  / 100
+                </span>
+              ) : null}
+            </span>
+            <Image
+              src="/figma/report/chevron.svg"
+              alt=""
+              width={18}
+              height={18}
+            />
+          </button>
+        )}
 
-        {segments.length ? (
+        {coaching ? (
+          <section aria-label="문장별 발음 코칭" className="space-y-3">
+            <h2 className="px-1 text-[17px] font-bold">문장별 발음 코칭</h2>
+            <CoachingView
+              key={String(analysis.id)}
+              coaching={coaching}
+              scriptText={content.scriptText}
+              showSummary={false}
+            />
+          </section>
+        ) : analysis.coaching != null ? (
+          <section role="alert" className="rounded-[20px] bg-white p-5 text-sm">
+            상세 코칭이 도착했지만 지원하는 형식으로 확인되지 않았어요. 이전
+            결과나 임의 피드백으로 대신 표시하지 않습니다.
+          </section>
+        ) : segments.length ? (
           <div className="space-y-3">
             <section className="rounded-[20px] bg-white px-5 py-4">
               <h2 className="text-[17px] leading-6 font-bold">
@@ -466,14 +509,17 @@ export function AnalysisView({
           </section>
         )}
 
-        {analysis.pronunciationEvidence ? (
-          <section className="rounded-[20px] bg-white p-5">
-            <h2 className="text-[15px] leading-[22px] font-bold">교정 근거</h2>
-            <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
-              선택된 발음 단위: {analysis.pronunciationEvidence.selectedPhone}
-            </p>
-          </section>
-        ) : null}
+        {!analysis.coaching &&
+          analysis.pronunciationEvidence?.selectedPhone?.trim() && (
+            <section className="rounded-[20px] bg-white p-5">
+              <h2 className="text-[15px] leading-[22px] font-bold">
+                교정 근거
+              </h2>
+              <p className="mt-2 text-[13px] leading-5 text-[#6b7684]">
+                선택된 발음 단위: {analysis.pronunciationEvidence.selectedPhone}
+              </p>
+            </section>
+          )}
       </div>
       {overlay}
     </>
