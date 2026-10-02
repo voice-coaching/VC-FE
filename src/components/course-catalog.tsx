@@ -120,6 +120,8 @@ function CourseCatalogView({
   >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
   const startBusy = useRef(false);
   const lifecycle = useRef(0);
 
@@ -127,6 +129,8 @@ function CourseCatalogView({
     lifecycle.current += 1;
     startBusy.current = false;
     setStartingId(null);
+    setDetailError(null);
+    setError(null);
     return () => {
       lifecycle.current += 1;
     };
@@ -406,7 +410,7 @@ function CourseCatalogView({
     }
 
     setDetailLoadingId(key);
-    setError(null);
+    setDetailError(null);
     void Promise.all([
       cachedDetail ? Promise.resolve(cachedDetail) : api.courses.get(key),
       cachedSteps ? Promise.resolve(cachedSteps) : api.courses.getSteps(key),
@@ -427,7 +431,7 @@ function CourseCatalogView({
       })
       .catch((reason) => {
         if (!active) return;
-        setError(
+        setDetailError(
           reason instanceof Error
             ? reason.message
             : "클래스 상세를 불러오지 못했습니다.",
@@ -439,7 +443,14 @@ function CourseCatalogView({
     return () => {
       active = false;
     };
-  }, [expandedId, detailsByCourse, stepsByCourse, cacheResource, userId]);
+  }, [
+    expandedId,
+    detailsByCourse,
+    stepsByCourse,
+    cacheResource,
+    userId,
+    detailRetry,
+  ]);
 
   const selectedCourse = items.find((item) => String(item.id) === expandedId);
   const detail = expandedId ? detailsByCourse[expandedId] : undefined;
@@ -620,6 +631,21 @@ function CourseCatalogView({
               ) : null}
             </div>
           )}
+          {selectedCourse && detailError ? (
+            <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
+              <p role="alert">{detailError}</p>
+              <button
+                type="button"
+                className="mt-1 min-h-11 font-semibold text-primary"
+                onClick={() => {
+                  setDetailError(null);
+                  setDetailRetry((value) => value + 1);
+                }}
+              >
+                클래스 상세 다시 불러오기
+              </button>
+            </div>
+          ) : null}
           {selectedCourse ? (
             <>
               <div className="flex gap-3 pt-2 text-xs font-medium">

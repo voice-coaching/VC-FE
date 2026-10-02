@@ -69,6 +69,8 @@ export function CourseLesson({
   );
   const [exampleError, setExampleError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [detailReload, setDetailReload] = useState(0);
+  const [contentReload, setContentReload] = useState(0);
   useEffect(() => {
     let active = true;
     const cached = readUserClientCache<CourseLessonCache>(
@@ -97,7 +99,7 @@ export function CourseLesson({
     return () => {
       active = false;
     };
-  }, [cacheResource, course.id, step.id, userId]);
+  }, [cacheResource, course.id, step.id, userId, detailReload]);
   useEffect(() => {
     let active = true;
     const cached = readUserClientCache<CourseLessonCache>(
@@ -164,7 +166,7 @@ export function CourseLesson({
     return () => {
       active = false;
     };
-  }, [practiceContentId, userId]);
+  }, [practiceContentId, userId, contentReload]);
   const safeIndex = examples?.items[selectedExampleIndex]
     ? selectedExampleIndex
     : 0;
@@ -216,14 +218,34 @@ export function CourseLesson({
           </p>
         </div>
         {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
+          <div className="rounded-2xl bg-destructive/5 p-4 text-sm text-destructive">
+            <p role="alert">{error}</p>
+            <button
+              type="button"
+              className="mt-1 min-h-11 font-semibold text-primary"
+              onClick={() => {
+                setError(null);
+                setContentReload((value) => value + 1);
+              }}
+            >
+              학습 자료 다시 불러오기
+            </button>
+          </div>
         )}
         {stepDetailError && !example ? (
-          <p role="alert" className="text-sm text-destructive">
-            {stepDetailError}
-          </p>
+          <div className="rounded-2xl bg-destructive/5 p-4 text-sm text-destructive">
+            <p role="alert">{stepDetailError}</p>
+            <button
+              type="button"
+              className="mt-1 min-h-11 font-semibold text-primary"
+              onClick={() => {
+                setStepDetailError(null);
+                setDetailReload((value) => value + 1);
+              }}
+            >
+              교육 내용 다시 불러오기
+            </button>
+          </div>
         ) : null}
         {example ? (
           <>
@@ -246,6 +268,7 @@ export function CourseLesson({
                 <p>{exampleError}</p>
                 <button
                   type="button"
+                  className="mt-1 min-h-11 font-semibold text-primary"
                   onClick={() => setReload((value) => value + 1)}
                 >
                   다시 불러오기
