@@ -41,6 +41,41 @@ function query(params: Record<string, QueryValue>) {
 
 const id = (value: Id) => encodeURIComponent(String(value));
 
+// Relative upload URLs refer to the Backend API, not the frontend route root.
+// Never attach a login token to an external presigned storage URL.
+function uploadTarget(baseUrl: string, uploadUrl: string) {
+  const raw = uploadUrl.trim();
+  const origin =
+    typeof window === "undefined"
+      ? "https://frontend.invalid"
+      : window.location.origin;
+  const backend = new URL(baseUrl, origin);
+  const path = backend.pathname.replace(/\/$/, "");
+  const absolute = /^(?:https?:)?\/\//i.test(raw);
+  const resolved = absolute
+    ? raw
+    : `${baseUrl.replace(/\/$/, "")}/${raw.replace(/^\//, "")}`;
+  const target = new URL(resolved, origin);
+  if (
+    !["http:", "https:"].includes(target.protocol) ||
+    target.username ||
+    target.password
+  )
+    throw new ApiError(
+      "올바른 업로드 주소가 아닙니다.",
+      502,
+      "INVALID_UPLOAD_URL",
+    );
+  return {
+    url: target.href,
+    authorize:
+      target.origin === backend.origin &&
+      (!path ||
+        target.pathname === path ||
+        target.pathname.startsWith(`${path}/`)),
+  };
+}
+
 function profileImageForm(input: { file: Blob; fileName: string }) {
   const form = new FormData();
   form.set("file", input.file, input.fileName);
@@ -308,13 +343,16 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             body: input,
           },
         ),
-      uploadRecording: (uploadInfo, audio, onProgress) =>
-        upload(
-          uploadInfo.uploadUrl,
+      uploadRecording: (uploadInfo, audio, onProgress) => {
+        const target = uploadTarget(baseUrl, uploadInfo.uploadUrl);
+        return upload(
+          target.url,
           audio,
           uploadInfo.requiredHeaders,
           onProgress,
-        ),
+          target.authorize,
+        );
+      },
       registerRecording: (sessionId, input) =>
         request(`/api/training-sessions/${id(sessionId)}/recordings`, {
           method: "POST",

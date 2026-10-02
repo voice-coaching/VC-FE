@@ -37,6 +37,8 @@ import {
   PracticeInputError,
 } from "@/lib/practice-error";
 import { cn } from "@/lib/utils";
+import { PracticeSessionEntry } from "./practice-session-entry";
+import { getAuthSessionVersion } from "@/lib/api/client";
 
 type Phase =
   | "idle"
@@ -49,7 +51,19 @@ type Phase =
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function PracticeSession({
+export function PracticeSession(props: {
+  content: PracticeContent;
+  localOnly?: boolean;
+  onTitleChange?: (title: string) => void;
+}) {
+  return (
+    <PracticeSessionEntry {...props}>
+      <LegacyPracticeSession {...props} />
+    </PracticeSessionEntry>
+  );
+}
+
+function LegacyPracticeSession({
   content,
   onTitleChange,
   localOnly = false,
@@ -97,6 +111,7 @@ export function PracticeSession({
   const [canCheckAnalysis, setCanCheckAnalysis] = useState(false);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
+  const authEpochRef = useRef(getAuthSessionVersion());
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
@@ -167,6 +182,7 @@ export function PracticeSession({
       const activeSessionId = sessionIdRef.current;
       if (
         activeSessionId &&
+        authEpochRef.current === getAuthSessionVersion() &&
         !completedRef.current &&
         !analysisPendingRef.current &&
         phaseRef.current !== "analyzing"
