@@ -10,7 +10,6 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   useCallback,
@@ -22,6 +21,7 @@ import {
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { AppShell } from "@/components/app-shell";
+import { BackButton } from "@/components/back-button";
 import { pollAnalysis } from "@/lib/analysis-polling";
 import {
   api,
@@ -51,7 +51,6 @@ type LipAnalysisBundle = {
 };
 
 export default function LipPractice() {
-  const router = useRouter();
   const [step, setStep] = useState<LipPracticeStep>("guide");
   const [promptIndex, setPromptIndex] = useState(0);
   const [countdown, setCountdown] = useState(3);
@@ -76,21 +75,33 @@ export default function LipPractice() {
   const clipsRef = useRef<LipClip[]>([]);
   const recordingStartedAtRef = useRef(0);
   const contentByPromptRef = useRef(new Map<number, PracticeContent>());
+  const mounted = useRef(false);
+  const mediaRequest = useRef(0);
+  const mediaBusy = useRef(false);
 
   useEffect(() => {
     clipsRef.current = clips;
   }, [clips]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      mediaRequest.current += 1;
+      mediaBusy.current = false;
       if (stopTimerRef.current !== null)
         window.clearTimeout(stopTimerRef.current);
       const recorder = recorderRef.current;
-      if (recorder?.state === "recording") recorder.stop();
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onstop = null;
+        recorder.onerror = null;
+        if (recorder.state === "recording") recorder.stop();
+      }
       releaseLipResources(streamRef.current, clipsRef.current);
-    },
-    [],
-  );
+      streamRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!previewRef.current || !streamRef.current) return;
@@ -107,6 +118,7 @@ export default function LipPractice() {
   }, []);
 
   const startRecording = useCallback(() => {
+    if (!mounted.current || recorderRef.current?.state === "recording") return;
     const stream = streamRef.current;
     if (!stream || typeof MediaRecorder === "undefined") {
       setError("이 브라우저에서는 영상 녹화를 지원하지 않아요.");
@@ -123,13 +135,16 @@ export default function LipPractice() {
       );
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
+        if (!mounted.current) return;
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onerror = () => {
+        if (!mounted.current) return;
         setError("녹화 중 문제가 발생했어요. 다시 촬영해 주세요.");
         setStep("align");
       };
       recorder.onstop = () => {
+        if (!mounted.current) return;
         const durationMs = Math.max(
           1,
           Date.now() - recordingStartedAtRef.current,
@@ -143,16 +158,17 @@ export default function LipPractice() {
           return;
         }
         const url = URL.createObjectURL(blob);
-        setClips((current) => {
-          const previous = current.find(
-            (clip) => clip.promptIndex === promptIndex,
-          );
-          if (previous) URL.revokeObjectURL(previous.url);
-          return [
-            ...current.filter((clip) => clip.promptIndex !== promptIndex),
-            { promptIndex, blob, url, durationMs },
-          ].sort((a, b) => a.promptIndex - b.promptIndex);
-        });
+        const current = clipsRef.current;
+        const previous = current.find(
+          (clip) => clip.promptIndex === promptIndex,
+        );
+        if (previous) URL.revokeObjectURL(previous.url);
+        const nextClips = [
+          ...current.filter((clip) => clip.promptIndex !== promptIndex),
+          { promptIndex, blob, url, durationMs },
+        ].sort((a, b) => a.promptIndex - b.promptIndex);
+        clipsRef.current = nextClips;
+        setClips(nextClips);
         setAnalyses((current) => {
           const next = { ...current };
           delete next[promptIndex];
@@ -180,35 +196,48 @@ export default function LipPractice() {
   useEffect(() => {
     if (step !== "countdown") return;
     setCountdown(3);
+    let remaining = 3;
+    let startTimer: number | undefined;
     const interval = window.setInterval(() => {
-      setCountdown((value) => {
-        if (value <= 1) {
-          window.clearInterval(interval);
-          window.setTimeout(startRecording, 240);
-          return 0;
-        }
-        return value - 1;
-      });
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining === 0) {
+        window.clearInterval(interval);
+        startTimer = window.setTimeout(startRecording, 240);
+      }
     }, 800);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(startTimer);
+    };
   }, [startRecording, step]);
 
   async function requestMedia() {
+    if (mediaBusy.current || !mounted.current) return;
+    mediaBusy.current = true;
+    const request = ++mediaRequest.current;
     setStep("permission");
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
+      mediaBusy.current = false;
       setError("이 브라우저에서는 카메라와 마이크를 사용할 수 없어요.");
       return;
     }
     try {
       releaseLipResources(streamRef.current, []);
+      streamRef.current = null;
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 720 } },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      if (!mounted.current || request !== mediaRequest.current) {
+        releaseLipResources(stream, []);
+        return;
+      }
       streamRef.current = stream;
       setStep("align");
     } catch (reason) {
+      if (!mounted.current || request !== mediaRequest.current) return;
       const denied =
         reason instanceof DOMException &&
         (reason.name === "NotAllowedError" || reason.name === "SecurityError");
@@ -217,6 +246,8 @@ export default function LipPractice() {
           ? "카메라와 마이크 권한이 필요해요. iPhone 설정의 SPEAK AI에서 권한을 허용해 주세요."
           : "카메라와 마이크를 시작하지 못했어요.",
       );
+    } finally {
+      if (request === mediaRequest.current) mediaBusy.current = false;
     }
   }
 
@@ -408,14 +439,13 @@ export default function LipPractice() {
     <AppShell nav={false} viewportLocked>
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f7f8fa]">
         <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5">
-          <button
-            type="button"
-            onClick={() => router.push("/home")}
-            aria-label="입모양 연습 닫기"
+          <BackButton
+            fallback="/home"
+            label="입모양 연습 닫기"
             className="flex size-11 items-center justify-center rounded-full bg-white/85 shadow-sm backdrop-blur"
           >
             <X className="size-5" />
-          </button>
+          </BackButton>
           <p className="text-sm font-bold">
             {step === "guide" || step === "tips" || step === "setup"
               ? "입모양 연습"
@@ -453,14 +483,14 @@ export default function LipPractice() {
             onAction={() => setStep("setup")}
           />
         ) : step === "setup" ? (
-          <div className="flex min-h-0 flex-1 flex-col px-5 pb-6">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6">
             <h1 className="mt-5 text-[26px] leading-9 font-bold">
               촬영 화면을 설정해요
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               전면 카메라는 거울처럼 표시할 수 있어요.
             </p>
-            <section className="design-card mt-8 !p-4">
+            <section className="design-card mt-8 shrink-0 !p-4">
               <label className="flex min-h-14 items-center justify-between gap-4">
                 <span>
                   <strong className="block text-sm">화면 좌우 반전</strong>
@@ -502,11 +532,13 @@ export default function LipPractice() {
             />
           </div>
         ) : step === "permission" ? (
-          <div className="flex min-h-0 flex-1 flex-col px-5 pb-6 text-center">
-            <span className="mx-auto mt-auto flex size-24 items-center justify-center rounded-[32px] bg-[#eaf4ff] text-primary">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6 text-center">
+            <span className="mx-auto mt-auto flex size-24 shrink-0 items-center justify-center rounded-[32px] bg-[#eaf4ff] text-primary">
               <ShieldCheck className="size-11" />
             </span>
-            <h1 className="mt-7 text-2xl font-bold">권한을 확인하고 있어요</h1>
+            <h1 className="mt-7 text-2xl font-bold">
+              {error ? "권한을 확인해 주세요" : "권한을 확인하고 있어요"}
+            </h1>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
               촬영을 위해 카메라와 마이크를 모두 허용해 주세요.
             </p>
@@ -518,9 +550,9 @@ export default function LipPractice() {
                 {error}
               </p>
             ) : (
-              <span className="mx-auto mt-6 size-7 animate-spin rounded-full border-3 border-primary/20 border-t-primary" />
+              <span className="mx-auto mt-6 size-7 shrink-0 animate-spin rounded-full border-3 border-primary/20 border-t-primary" />
             )}
-            <div className="mt-auto">
+            <div className="mt-auto shrink-0 pt-5">
               {error ? (
                 <button
                   type="button"
@@ -666,18 +698,18 @@ export default function LipPractice() {
               <RotateCcw className="size-4" />
               선택한 문장 다시 촬영
             </button>
-            <button
-              type="button"
-              onClick={() => router.push("/home")}
+            <BackButton
+              fallback="/home"
+              label="입모양 연습 완료"
               className="design-action mt-3"
             >
               완료
-            </button>
+            </BackButton>
           </div>
         ) : (
           <CameraStage mirrored={mirrored} videoRef={previewRef}>
             {step === "align" ? (
-              <div className="absolute inset-x-5 bottom-6 z-10 rounded-[24px] bg-white/94 p-5 text-center shadow-xl backdrop-blur">
+              <div className="absolute inset-x-5 bottom-3 z-10 max-h-[calc(100%_-_24px)] overflow-y-auto overscroll-contain rounded-[24px] bg-white/94 p-5 text-center shadow-xl backdrop-blur">
                 <p className="text-xs font-bold text-primary">
                   문장 {promptIndex + 1}
                 </p>
@@ -704,7 +736,7 @@ export default function LipPractice() {
               </div>
             ) : null}
             {step === "recording" ? (
-              <div className="absolute inset-x-5 bottom-6 z-10 rounded-[24px] bg-black/70 p-5 text-center text-white backdrop-blur">
+              <div className="absolute inset-x-5 bottom-3 z-10 max-h-[calc(100%_-_24px)] overflow-y-auto overscroll-contain rounded-[24px] bg-black/70 p-5 text-center text-white backdrop-blur">
                 <span className="inline-flex items-center gap-2 text-xs font-bold">
                   <span className="size-2 animate-pulse rounded-full bg-red-500" />
                   촬영 중
@@ -803,8 +835,8 @@ function IntroStep({
   onAction: () => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-5 pb-6">
-      <span className="mt-14 flex size-20 items-center justify-center rounded-[28px] bg-[#eaf4ff] text-primary">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6">
+      <span className="mt-14 flex size-20 shrink-0 items-center justify-center rounded-[28px] bg-[#eaf4ff] text-primary">
         {icon}
       </span>
       <p className="mt-7 text-sm font-bold text-primary">{eyebrow}</p>
@@ -830,7 +862,7 @@ function InfoStep({
   onAction: () => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-5 pb-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6">
       <h1 className="mt-6 text-[26px] leading-9 font-bold">{title}</h1>
       <ol className="mt-7 space-y-3">
         {items.map(([heading, body], index) => (
