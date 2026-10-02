@@ -3,13 +3,9 @@
 import { SkeletonBlock } from "@/components/skeleton-block";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import {
-  canonicalApi,
-  canonicalDatabaseId,
-  type CanonicalOrLegacyAnalysis,
-} from "@/lib/api/canonical";
+import { canonicalApi, canonicalDatabaseId } from "@/lib/api/canonical";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
-import { CanonicalAnalysisView } from "@/components/canonical-analysis-view";
+import { canonicalPresentation } from "@/lib/canonical-presentation";
 import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
 import { ReferencePlayer } from "@/components/reference-player";
@@ -27,6 +23,7 @@ import {
 import {
   api,
   type AnalysisSegment,
+  type AnalysisResult,
   type PracticeContent,
   type TrainingHistoryDetail,
 } from "@/lib/api";
@@ -44,7 +41,7 @@ import { removeCachedHistorySession } from "@/lib/history-cache";
 type DetailBundle = {
   detail: TrainingHistoryDetail;
   content: PracticeContent;
-  result: CanonicalOrLegacyAnalysis;
+  result: AnalysisResult;
   segments: AnalysisSegment[];
 };
 
@@ -134,7 +131,7 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
       try {
         const detail = await api.myPage.getTrainingSession(sessionId);
         if (!active()) return;
-        const result = await canonicalApi.getWithLegacyFallback(
+        const result = await canonicalApi.get(
           {
             analysisId: canonicalDatabaseId(detail.analysis.id),
             recordingId: canonicalDatabaseId(detail.recording.id),
@@ -146,18 +143,12 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
         if (!active()) return;
         if (String(content.id) !== String(detail.content.id))
           throw new Error("기록의 콘텐츠를 확인할 수 없습니다.");
-        const segmentPage =
-          result.kind === "legacy" && result.analysis.coaching == null
-            ? await api.analyses.getSegments(detail.analysis.id, {
-                page: 0,
-                size: 100,
-              })
-            : { items: [] };
+        const segmentPage = { items: [] };
         if (active())
           setBundle({
             detail,
             content: { ...content, scriptText: detail.content.scriptText },
-            result,
+            result: canonicalPresentation(result),
             segments: segmentPage.items,
           });
       } catch (reason) {
@@ -303,34 +294,14 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
 
       {bundle && tab === "report" && (
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-          {bundle.result.kind === "canonical" ? (
-            <div className="space-y-4 p-5">
-              <CanonicalAnalysisView
-                data={bundle.result.analysis}
-                currentIdentity={bundle.result.analysis}
-              />
-              <button
-                type="button"
-                className="design-action"
-                onClick={() =>
-                  router.push(
-                    `/practice/${encodeURIComponent(String(bundle.content.id))}?sessionId=${encodeURIComponent(sessionId)}&resumeType=ANALYSIS_RESULT`,
-                  )
-                }
-              >
-                현재 분석 확인·이어가기
-              </button>
-            </div>
-          ) : (
-            <AnalysisView
-              key={String(bundle.result.analysis.id)}
-              analysis={bundle.result.analysis}
-              segments={bundle.segments}
-              content={bundle.content}
-              recordingId={bundle.detail.recording.id}
-              courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
-            />
-          )}
+          <AnalysisView
+            key={String(bundle.result.id)}
+            analysis={bundle.result}
+            segments={bundle.segments}
+            content={bundle.content}
+            recordingId={bundle.detail.recording.id}
+            courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
+          />
         </div>
       )}
 

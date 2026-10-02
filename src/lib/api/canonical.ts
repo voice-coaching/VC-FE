@@ -1,6 +1,5 @@
-import { ApiError, createHttpClient, getAuthSessionVersion } from "./client";
+import { ApiError, createHttpClient } from "./client";
 import type {
-  AnalysisResult,
   AnalysisRequest,
   AnalysisConsentInput,
   Id,
@@ -8,21 +7,8 @@ import type {
 } from "./types";
 import {
   readCanonicalAnalysisView,
-  type CanonicalAnalysisView,
   type CanonicalViewExpectation,
 } from "../canonical-analysis";
-
-export type CanonicalOrLegacyAnalysis =
-  | { kind: "canonical"; analysis: CanonicalAnalysisView }
-  | { kind: "legacy"; analysis: AnalysisResult };
-
-export function isLegacyAnalysis(error: unknown) {
-  return (
-    error instanceof ApiError &&
-    error.status === 404 &&
-    error.code === "CANONICAL_ANALYSIS_NOT_FOUND"
-  );
-}
 
 export const CANONICAL_RESULT_HEADER =
   "voice-coaching.runpod-analysis-result.v4";
@@ -43,7 +29,7 @@ export function canonicalDatabaseId(value: Id): number {
   return id;
 }
 
-/** Separate opt-in client: never changes global headers or legacy method signatures. */
+/** Sole analysis transport. No legacy request/result fallback. */
 export function createCanonicalAnalysisClient(baseUrl: string) {
   const { request } = createHttpClient(baseUrl);
 
@@ -68,40 +54,6 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       },
     );
     return readCanonicalAnalysisView(data, expected);
-  }
-
-  async function getWithLegacyFallback(
-    expected: CanonicalViewExpectation,
-    signal?: AbortSignal,
-  ): Promise<CanonicalOrLegacyAnalysis> {
-    const sessionVersion = getAuthSessionVersion();
-    try {
-      return { kind: "canonical", analysis: await get(expected, signal) };
-    } catch (error) {
-      if (!isLegacyAnalysis(error)) throw error;
-    }
-    if (signal?.aborted) {
-      throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
-    }
-    if (sessionVersion !== getAuthSessionVersion()) {
-      throw new ApiError(
-        "로그인 상태가 변경되었습니다.",
-        409,
-        "AUTH_SESSION_CHANGED",
-      );
-    }
-    return {
-      kind: "legacy",
-      analysis: await request<AnalysisResult>(
-        `/api/analyses/${expected.analysisId}`,
-        {
-          method: "GET",
-          cache: "no-store",
-          signal,
-          endpointErrorsOnly: true,
-        },
-      ),
-    };
   }
 
   function submit(
@@ -134,7 +86,6 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
   }
   return {
     get,
-    getWithLegacyFallback,
     status,
     analyze: (
       sessionId: Id,
