@@ -1,6 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { remainingAudioDuration, resolveAudioDuration } from "./audio-playback";
+import {
+  createPlaybackCoordinator,
+  remainingAudioDuration,
+  resolveAudioDuration,
+} from "./audio-playback";
+
+test("pending audio loads claim exclusive playback until pause, failure or unmount", () => {
+  const playback = createPlaybackCoordinator();
+  const recording = Symbol("recording");
+  const guide = Symbol("guide");
+  let notifications = 0;
+  const unsubscribe = playback.subscribe(() => notifications++);
+  assert.equal(playback.claim(recording), true);
+  assert.equal(playback.claim(guide), false);
+  playback.release(guide);
+  assert.equal(playback.getSnapshot(), recording);
+  playback.release(recording);
+  assert.equal(playback.getSnapshot(), null);
+  assert.equal(playback.claim(guide), true);
+  // Late cleanup from the previous player cannot unlock the new player.
+  playback.release(recording);
+  assert.equal(playback.getSnapshot(), guide);
+  playback.release(guide);
+  assert.equal(notifications, 4);
+  unsubscribe();
+  playback.claim(recording);
+  assert.equal(notifications, 4);
+});
 
 test("zero or incomplete media metadata keeps the recorded duration", () => {
   assert.equal(resolveAudioDuration(0, 6), 6);

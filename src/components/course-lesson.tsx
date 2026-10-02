@@ -182,7 +182,7 @@ export function CourseLesson({
       ref={scrollRef}
       className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
     >
-      <header className="flex items-center justify-between px-5 pt-8 pb-5">
+      <header className="flex h-12 shrink-0 items-center justify-between px-2 py-1">
         <button
           type="button"
           className="flex size-11 items-center justify-center"

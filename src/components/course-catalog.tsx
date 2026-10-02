@@ -387,6 +387,10 @@ function CourseCatalogView({
       updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
         stepsByCourse: nextSteps,
       });
+      if (requestedStep) {
+        setLessonId(String(requestedStep.id));
+        return;
+      }
       const lastStepIndex = steps.findIndex(
         (step) => String(step.id) === String(currentProgress?.lastStepId),
       );
@@ -399,20 +403,12 @@ function CourseCatalogView({
                 : lastStepIndex,
             )
           : steps;
-      const requestedPractice = requestedStep
-        ? steps.find(
-            (step) =>
-              step.stepOrder >= requestedStep.stepOrder &&
-              step.practiceContentId != null,
-          )
-        : undefined;
       const practice =
-        requestedPractice ??
         remainingSteps.find((step) => step.practiceContentId != null) ??
         steps.find((step) => step.practiceContentId != null);
       if (!practice?.practiceContentId)
         throw new Error("이 클래스의 연습 콘텐츠가 아직 준비되지 않았습니다.");
-      setLessonId(String(requestedStep?.id ?? practice.id));
+      setLessonId(String(practice.id));
     } catch (reason) {
       if (requestLifecycle !== lifecycle.current) return;
       setError(
@@ -494,18 +490,11 @@ function CourseCatalogView({
     (requestedLessonStep.completed ||
       firstIncomplete < 0 ||
       steps.indexOf(requestedLessonStep) <= firstIncomplete);
-  const lessonPractice =
-    requestedLessonStep &&
-    steps.find(
-      (step) =>
-        step.stepOrder >= requestedLessonStep.stepOrder &&
-        step.practiceContentId != null,
-    );
   const lesson =
-    selectedCourse && requestedLessonStep && lessonPractice && lessonUnlocked
+    selectedCourse && requestedLessonStep && lessonUnlocked
       ? {
           course: selectedCourse,
-          step: { ...lessonPractice, title: requestedLessonStep.title },
+          step: requestedLessonStep,
           count: steps.length,
         }
       : null;
@@ -731,7 +720,7 @@ function CourseCatalogView({
                           {step.completed ? (
                             <Check className="size-4" />
                           ) : (
-                            index + 1
+                            step.stepOrder
                           )}
                         </span>
                         <span

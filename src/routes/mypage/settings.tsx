@@ -509,11 +509,21 @@ export default function AccountSettings() {
                   value={inquirySubject}
                   onChange={(event) => setInquirySubject(event.target.value)}
                   placeholder="문의 제목"
+                  aria-label="문의 제목"
+                  aria-describedby="inquiry-subject-count"
                   maxLength={100}
                   required
                   className="h-11 w-full rounded-xl border border-[#e5e8eb] px-3 text-sm outline-none focus:border-primary"
                 />
+                <p
+                  id="inquiry-subject-count"
+                  className="text-right text-xs text-[#8b95a1]"
+                >
+                  {inquirySubject.length}/100
+                </p>
                 <textarea
+                  aria-label="문의 내용"
+                  aria-describedby="inquiry-body-count"
                   value={inquiryBody}
                   onChange={(event) => setInquiryBody(event.target.value)}
                   placeholder="문의 내용을 입력해 주세요."
@@ -521,6 +531,12 @@ export default function AccountSettings() {
                   required
                   className="min-h-32 w-full resize-y rounded-xl border border-[#e5e8eb] p-3 text-sm leading-6 outline-none focus:border-primary"
                 />
+                <p
+                  id="inquiry-body-count"
+                  className="text-right text-xs text-[#8b95a1]"
+                >
+                  {inquiryBody.length}/2,000
+                </p>
                 <input
                   type="email"
                   value={inquiryEmail}

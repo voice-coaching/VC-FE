@@ -12,13 +12,6 @@ import type {
   PracticeContent,
 } from "@/lib/api";
 
-const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
-  NEWS: "뉴스 읽기",
-  SENTENCE: "문장 연습",
-  ANNOUNCER: "아나운서 따라 읽기",
-  CLASS_PRACTICE: "클래스",
-};
-
 function scoreText(score: number | null) {
   return score == null ? "—" : String(Math.round(score));
 }
@@ -50,7 +43,6 @@ export function AnalysisView({
   content,
   recordingUrl,
   recordingId,
-  courseMode = false,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -82,10 +74,6 @@ export function AnalysisView({
   const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
   const summary =
     analysis.summaryFeedback?.trim() || "제공된 AI 총평이 없습니다.";
-  const sourceLabel = courseMode
-    ? "클래스"
-    : CONTENT_LABEL[content.contentType];
-
   const scoreRows = useMemo(() => {
     if (analysis.scoreBreakdown?.items.length) {
       return analysis.scoreBreakdown.items.map((item) => ({
@@ -319,16 +307,9 @@ export function AnalysisView({
       <div
         inert={overlay != null}
         aria-hidden={overlay != null}
-        className={`min-w-0 max-w-full space-y-5 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
+        className={`min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
         <section className="flex flex-col items-center gap-4 pt-2">
-          <p className="flex min-w-0 max-w-full items-center gap-2 text-[13px] leading-[18px]">
-            <b className="shrink-0 text-primary">{sourceLabel}</b>
-            <span className="h-2.5 w-px shrink-0 bg-[#e5e8eb]" />
-            <span className="min-w-0 max-w-[240px] truncate font-medium text-[#8b95a1]">
-              {content.title}
-            </span>
-          </p>
           <AnalysisSummary key={summary} text={summary} />
         </section>
 

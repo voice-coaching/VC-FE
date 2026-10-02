@@ -21,6 +21,11 @@ import { categoryLabel } from "@/lib/content-labels";
 import { useCatalogFilters } from "@/hooks/use-catalog-filters";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { refreshCatalogWindow } from "@/lib/catalog-pages";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
 
 const DIFFICULTIES: Array<{ value: Difficulty | ""; label: string }> = [
   { value: "", label: "모든 난이도" },
@@ -121,11 +126,48 @@ export function ContentCatalog({
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [topItems, setTopItems] = useState<PracticeContentSummary[]>([]);
+  const [topLoading, setTopLoading] = useState(type === "NEWS");
+  const [topError, setTopError] = useState(false);
   const generation = useRef(0);
   const loadMoreBusy = useRef(false);
   const scope = `${userId}:${catalogCacheResource(type, category, difficulty)}`;
   const [loadedScope, setLoadedScope] = useState(scope);
   const scrollRef = useHistoryScroll(scope, !loading && loadedScope === scope);
+
+  useEffect(() => {
+    if (type !== "NEWS") return;
+    let active = true;
+    const resource = `news-top-${category || "all"}`;
+    const cached = readUserClientCache<PracticeContentSummary[]>(
+      userId,
+      resource,
+    );
+    setTopItems(cached ?? []);
+    setTopLoading(!cached);
+    setTopError(false);
+    api.content
+      .list({
+        type: "NEWS",
+        category: categoryValues.current[category] ?? (category || undefined),
+        page: 0,
+        size: 5,
+      })
+      .then((result) => {
+        if (!active) return;
+        setTopItems(result.items);
+        writeUserClientCache(userId, resource, result.items);
+      })
+      .catch(() => {
+        if (active && !cached) setTopError(true);
+      })
+      .finally(() => {
+        if (active) setTopLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [type, category, userId, retry]);
 
   useEffect(() => {
     let active = true;
@@ -316,13 +358,23 @@ export function ContentCatalog({
 
       {type === "NEWS" ? (
         <NewsIntro
-          loading={loading}
-          items={items.slice(0, 5)}
+          loading={topLoading}
+          items={topItems}
           category={category}
           categories={categories}
           onCategory={setCategory}
           returnTo={returnTo}
         />
+      ) : null}
+
+      {type === "NEWS" && topError ? (
+        <button
+          type="button"
+          className="mx-5 min-h-11 text-sm text-primary"
+          onClick={() => setRetry((value) => value + 1)}
+        >
+          TOP 뉴스를 불러오지 못했어요. 다시 시도
+        </button>
       ) : null}
 
       {type === "SENTENCE" ? (
@@ -488,52 +540,71 @@ function NewsIntro({
             이번 주 가장 많이 연습한 뉴스예요
           </p>
         </div>
-        <div className="mt-3 flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 pb-5">
-          {loading ? <NewsTopSkeleton /> : null}
-          {items.map((item, index) => (
-            <Link
-              key={String(item.id)}
-              href={practiceHref(item.id, returnTo)}
-              className={`relative h-44 w-[260px] shrink-0 snap-start overflow-hidden rounded-[20px] p-[18px] ${
-                index === 0
-                  ? "bg-[linear-gradient(135deg,#2f6bff,#6f95ff)] text-white"
-                  : "bg-white text-[#191f28]"
-              }`}
-            >
-              <div className="flex gap-1.5">
-                <span
-                  className={`rounded-full px-2 py-1 text-[11px] font-bold ${
+        <Carousel
+          className="mt-3 px-5 pb-5"
+          opts={{
+            align: "start",
+            slidesToScroll: 1,
+            dragFree: false,
+            skipSnaps: false,
+          }}
+          aria-label="TOP 뉴스"
+        >
+          <CarouselContent className="-ml-2">
+            {loading ? (
+              <CarouselItem className="basis-[268px] pl-2">
+                <NewsTopSkeleton />
+              </CarouselItem>
+            ) : null}
+            {items.map((item, index) => (
+              <CarouselItem
+                key={String(item.id)}
+                className="basis-[268px] pl-2"
+              >
+                <Link
+                  href={practiceHref(item.id, returnTo)}
+                  className={`relative block h-44 overflow-hidden rounded-[20px] p-[18px] ${
                     index === 0
-                      ? "bg-white/20 text-white"
-                      : difficultyStyle[item.difficulty]
+                      ? "bg-[linear-gradient(135deg,#2f6bff,#6f95ff)] text-white"
+                      : "bg-white text-[#191f28]"
                   }`}
                 >
-                  {difficultyLabel[item.difficulty]}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-1 text-[11px] font-medium ${index === 0 ? "bg-white/20" : "bg-[#f2f4f6] text-[#6b7684]"}`}
-                >
-                  {categoryLabel(item.category)}
-                </span>
-              </div>
-              <strong className="mt-2 block max-w-[190px] text-base leading-6">
-                {item.title}
-              </strong>
-              <span
-                className={`absolute bottom-[18px] left-[18px] text-xs ${index === 0 ? "text-white/80" : "text-[#8b95a1]"}`}
-              >
-                {categoryLabel(item.category)} · 약{" "}
-                {Math.max(1, Math.ceil(item.estimatedSeconds / 60))}분
-              </span>
-              <span
-                aria-hidden="true"
-                className={`absolute right-4 bottom-[-9px] text-[76px] leading-none font-bold ${index === 0 ? "text-white/20" : "text-[#edf2ff]"}`}
-              >
-                {index + 1}
-              </span>
-            </Link>
-          ))}
-        </div>
+                  <div className="flex gap-1.5">
+                    <span
+                      className={`rounded-full px-2 py-1 text-[11px] font-bold ${
+                        index === 0
+                          ? "bg-white/20 text-white"
+                          : difficultyStyle[item.difficulty]
+                      }`}
+                    >
+                      {difficultyLabel[item.difficulty]}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-1 text-[11px] font-medium ${index === 0 ? "bg-white/20" : "bg-[#f2f4f6] text-[#6b7684]"}`}
+                    >
+                      {categoryLabel(item.category)}
+                    </span>
+                  </div>
+                  <strong className="mt-2 block max-w-[190px] text-base leading-6">
+                    {item.title}
+                  </strong>
+                  <span
+                    className={`absolute bottom-[18px] left-[18px] text-xs ${index === 0 ? "text-white/80" : "text-[#8b95a1]"}`}
+                  >
+                    {categoryLabel(item.category)} · 약{" "}
+                    {Math.max(1, Math.ceil(item.estimatedSeconds / 60))}분
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`absolute right-4 bottom-[-9px] text-[76px] leading-none font-bold ${index === 0 ? "text-white/20" : "text-[#edf2ff]"}`}
+                  >
+                    {index + 1}
+                  </span>
+                </Link>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
       </section>
     </>
   );

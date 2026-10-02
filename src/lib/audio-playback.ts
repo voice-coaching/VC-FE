@@ -18,3 +18,31 @@ export function remainingAudioDuration(duration: number, elapsed: number) {
   if (!Number.isFinite(elapsed) || elapsed <= 0) return duration;
   return Math.max(0, duration - elapsed);
 }
+// Claim before asynchronous URL loading so rapid clicks cannot start two tracks.
+export function createPlaybackCoordinator() {
+  let owner: symbol | null = null;
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
+  return {
+    getSnapshot: () => owner,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    claim(id: symbol) {
+      if (owner !== null && owner !== id) return false;
+      owner = id;
+      notify();
+      return true;
+    },
+    release(id: symbol) {
+      if (owner !== id) return;
+      owner = null;
+      notify();
+    },
+  };
+}
+
+export const referencePlayback = createPlaybackCoordinator();

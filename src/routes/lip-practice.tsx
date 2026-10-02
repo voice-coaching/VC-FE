@@ -471,7 +471,12 @@ export default function LipPractice() {
   }
 
   return (
-    <AppShell nav={false} viewportLocked>
+    <AppShell
+      nav={false}
+      viewportLocked
+      chromeColor="#f2f4f6"
+      bottomChromeColor="#ffffff"
+    >
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f7f8fa]">
         <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5">
           <BackButton

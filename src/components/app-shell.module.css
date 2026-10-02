@@ -31,7 +31,20 @@
 }
 
 .standaloneSafeArea {
+  position: relative;
   padding-bottom: max(34px, env(safe-area-inset-bottom, 0px));
+}
+
+.standaloneSafeArea::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: max(34px, env(safe-area-inset-bottom, 0px));
+  background: var(
+    --app-bottom-background,
+    var(--app-chrome-background, #f5f6f8)
+  );
+  pointer-events: none;
 }
 
 .tabFlow {
@@ -41,8 +54,7 @@
 .tabContent {
   animation-duration: 180ms;
   animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
-  animation-fill-mode: both;
-  will-change: opacity, transform;
+  animation-fill-mode: backwards;
 }
 
 .fromRight {

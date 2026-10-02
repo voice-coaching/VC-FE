@@ -376,8 +376,108 @@ export default function Home() {
   return (
     <AppShell
       viewportLocked
+      className="relative"
       chromeColor={headerCollapsed ? "#f2f4f6" : "#2f6bff"}
     >
+      <header
+        className={`${styles.homeHeader} z-20 bg-[#2f6bff]`}
+        data-state={headerCollapsed ? "hidden" : "visible"}
+        inert={headerCollapsed}
+      >
+        <div className="flex h-16 items-center px-5">
+          <Image
+            src="/figma/home-density/brand.svg"
+            alt="Speak AI"
+            width={23.2}
+            height={32}
+            priority
+          />
+          <span className="min-w-0 flex-1" />
+          <Link
+            href="/home/notifications"
+            aria-label="알림 보기"
+            className="relative flex size-11 items-center justify-end"
+          >
+            <Image
+              src="/figma/home-density/bell.svg"
+              alt=""
+              width={28}
+              height={28}
+            />
+            {hasUnreadNotifications ? (
+              <Image
+                src="/figma/home-density/badge-dot.svg"
+                alt=""
+                width={8}
+                height={8}
+                className="absolute top-[9px] right-0"
+              />
+            ) : null}
+          </Link>
+        </div>
+
+        <section className="mx-5 mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
+          <Link href="/home/streak" className="flex h-full items-center gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline gap-1 whitespace-nowrap">
+                <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
+                  연속 연습
+                </span>
+                <strong className="text-sm leading-5 tracking-[0.203px]">
+                  {streakDays}일째
+                </strong>
+              </span>
+              <span className="mt-2 flex justify-between">
+                {weekDates.map((day) => {
+                  const completed = completedWeekdays.has(day.key);
+                  const dot = completed
+                    ? "/figma/home-density/day-complete-dot.svg"
+                    : day.isToday
+                      ? "/figma/home-density/day-current.svg"
+                      : "/figma/home-density/day-inactive.svg";
+                  return (
+                    <span
+                      key={day.key}
+                      className="flex w-5 flex-col items-center gap-[3px]"
+                    >
+                      <span className="relative size-5">
+                        <Image src={dot} alt="" width={20} height={20} />
+                        {completed ? (
+                          <Image
+                            src="/figma/home-density/day-check.svg"
+                            alt=""
+                            width={14}
+                            height={14}
+                            className="absolute top-[3px] left-[3px]"
+                          />
+                        ) : null}
+                      </span>
+                      <span
+                        className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
+                          day.isToday
+                            ? "font-bold text-white"
+                            : day.isFuture
+                              ? "font-medium text-white/55"
+                              : "font-medium text-white/75"
+                        }`}
+                      >
+                        {day.label}
+                      </span>
+                    </span>
+                  );
+                })}
+              </span>
+            </span>
+            <Image
+              src="/figma/home-density/chevron-streak.svg"
+              alt=""
+              width={18}
+              height={18}
+              className="shrink-0"
+            />
+          </Link>
+        </section>
+      </header>
       <div
         data-scroll-container="home"
         onScroll={(event) => {
@@ -392,108 +492,7 @@ export default function Home() {
         }}
         className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <header
-          className={`${styles.homeHeader} z-20 bg-[#2f6bff]`}
-          data-state={headerCollapsed ? "hidden" : "visible"}
-          inert={headerCollapsed}
-        >
-          <div className="flex h-16 items-center px-5">
-            <Image
-              src="/figma/home-density/brand.svg"
-              alt="Speak AI"
-              width={23.2}
-              height={32}
-              priority
-            />
-            <span className="min-w-0 flex-1" />
-            <Link
-              href="/home/notifications"
-              aria-label="알림 보기"
-              className="relative flex size-11 items-center justify-end"
-            >
-              <Image
-                src="/figma/home-density/bell.svg"
-                alt=""
-                width={28}
-                height={28}
-              />
-              {hasUnreadNotifications ? (
-                <Image
-                  src="/figma/home-density/badge-dot.svg"
-                  alt=""
-                  width={8}
-                  height={8}
-                  className="absolute top-[9px] right-0"
-                />
-              ) : null}
-            </Link>
-          </div>
-
-          <section className="mx-5 mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
-            <Link
-              href="/home/streak"
-              className="flex h-full items-center gap-3"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="flex items-baseline gap-1 whitespace-nowrap">
-                  <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
-                    연속 연습
-                  </span>
-                  <strong className="text-sm leading-5 tracking-[0.203px]">
-                    {streakDays}일째
-                  </strong>
-                </span>
-                <span className="mt-2 flex justify-between">
-                  {weekDates.map((day) => {
-                    const completed = completedWeekdays.has(day.key);
-                    const dot = completed
-                      ? "/figma/home-density/day-complete-dot.svg"
-                      : day.isToday
-                        ? "/figma/home-density/day-current.svg"
-                        : "/figma/home-density/day-inactive.svg";
-                    return (
-                      <span
-                        key={day.key}
-                        className="flex w-5 flex-col items-center gap-[3px]"
-                      >
-                        <span className="relative size-5">
-                          <Image src={dot} alt="" width={20} height={20} />
-                          {completed ? (
-                            <Image
-                              src="/figma/home-density/day-check.svg"
-                              alt=""
-                              width={14}
-                              height={14}
-                              className="absolute top-[3px] left-[3px]"
-                            />
-                          ) : null}
-                        </span>
-                        <span
-                          className={`text-[11px] leading-[14px] tracking-[0.3421px] ${
-                            day.isToday
-                              ? "font-bold text-white"
-                              : day.isFuture
-                                ? "font-medium text-white/55"
-                                : "font-medium text-white/75"
-                          }`}
-                        >
-                          {day.label}
-                        </span>
-                      </span>
-                    );
-                  })}
-                </span>
-              </span>
-              <Image
-                src="/figma/home-density/chevron-streak.svg"
-                alt=""
-                width={18}
-                height={18}
-                className="shrink-0"
-              />
-            </Link>
-          </section>
-        </header>
+        <div className="h-[181px] shrink-0" aria-hidden="true" />
 
         <main className="relative z-10 min-h-full rounded-t-[24px] bg-[#f2f4f6]">
           <div className="relative min-h-full pb-8">
