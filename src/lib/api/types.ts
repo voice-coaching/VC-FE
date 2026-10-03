@@ -454,6 +454,8 @@ export interface AnalysisProgress {
   progressPercent: number;
   failureReason: string | null;
   updatedAt: string;
+  deadlineAt?: string | null;
+  serverTime?: string | null;
 }
 
 export interface SessionAnalysis {

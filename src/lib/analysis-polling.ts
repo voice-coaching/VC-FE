@@ -6,7 +6,7 @@ import {
 } from "./api/client";
 
 export class AnalysisWaitTimeout extends Error {
-  constructor() {
+  constructor(readonly analysisId?: string) {
     super(
       "분석이 예상보다 오래 걸리고 있습니다. 녹음을 다시 보내지 않고 분석 상태를 다시 확인할 수 있습니다.",
     );
@@ -14,7 +14,7 @@ export class AnalysisWaitTimeout extends Error {
   }
 }
 export class AnalysisConnectionUnavailable extends Error {
-  constructor() {
+  constructor(readonly analysisId?: string) {
     super(
       "분석 상태를 확인하지 못했습니다. 녹음을 다시 보내지 않고 상태를 다시 확인해 주세요.",
     );
@@ -71,7 +71,8 @@ export async function pollAnalysis({
   intervalMs?: number;
 }) {
   const now = () => performance.now();
-  const deadline = now() + timeoutMs;
+  let deadline = now() + timeoutMs;
+  let serverDeadline: string | undefined;
   const owner = new AbortController();
   const cancel = () => owner.abort(signal?.reason ?? aborted());
   signal?.addEventListener("abort", cancel, { once: true });
@@ -95,7 +96,7 @@ export async function pollAnalysis({
     while (now() < deadline) {
       if (owner.signal.aborted) throw owner.signal.reason;
       if (outageDeadline !== undefined && now() >= outageDeadline)
-        throw new AnalysisConnectionUnavailable();
+        throw new AnalysisConnectionUnavailable(analysisId);
       const request = new AbortController();
       const stopRequest = () => request.abort(owner.signal.reason);
       owner.signal.addEventListener("abort", stopRequest, { once: true });
@@ -131,7 +132,7 @@ export async function pollAnalysis({
         outageDeadline ??= now() + 90_000;
         onConnectionChange?.(true);
         const remaining = Math.min(deadline, outageDeadline) - now();
-        if (remaining <= 0) throw new AnalysisConnectionUnavailable();
+        if (remaining <= 0) throw new AnalysisConnectionUnavailable(analysisId);
         const backoff =
           Math.min(8_000, 1_000 * 2 ** Math.min(failures++, 3)) *
           (0.8 + Math.random() * 0.4);
@@ -180,13 +181,37 @@ export async function pollAnalysis({
         throw new AnalysisFailed(
           status.failureReason || "음성 분석에 실패했습니다.",
         );
+      if (
+        typeof status.deadlineAt === "string" &&
+        typeof status.serverTime === "string"
+      ) {
+        const remaining =
+          Date.parse(status.deadlineAt) - Date.parse(status.serverTime);
+        if (
+          !Number.isFinite(remaining) ||
+          (serverDeadline !== undefined && serverDeadline !== status.deadlineAt)
+        )
+          throw new ApiError(
+            "분석 제한 시간 응답이 올바르지 않습니다.",
+            502,
+            "ANALYSIS_STATUS_INVALID",
+          );
+        // Use server-relative time, not the device clock. Freeze on first read;
+        // reconnecting never changes the server's execution deadline.
+        if (serverDeadline === undefined) {
+          serverDeadline = status.deadlineAt;
+          deadline =
+            now() + Math.min(3_600_000, Math.max(0, remaining)) + 5_000;
+        }
+      }
       await pause(
         Math.min(intervalMs, Math.max(0, deadline - now())),
         owner.signal,
       );
     }
-    if (outageDeadline !== undefined) throw new AnalysisConnectionUnavailable();
-    throw new AnalysisWaitTimeout();
+    if (outageDeadline !== undefined)
+      throw new AnalysisConnectionUnavailable(analysisId);
+    throw new AnalysisWaitTimeout(analysisId);
   } finally {
     unsubscribe();
     signal?.removeEventListener("abort", cancel);
