@@ -1,4 +1,8 @@
-import { AnalysisFailed, AnalysisWaitTimeout } from "./analysis-polling";
+import {
+  AnalysisFailed,
+  AnalysisWaitTimeout,
+  AnalysisConnectionUnavailable,
+} from "./analysis-polling";
 import { ApiError } from "./api/client";
 import { CanonicalResultUnavailable } from "./canonical-presentation";
 
@@ -31,6 +35,13 @@ export function describePracticeError(
       kind: "waiting",
       title: "분석 결과를 기다리고 있어요",
       hint: "서버에서 분석이 계속될 수 있어요. 기존 분석 상태를 다시 확인해 주세요.",
+    };
+  }
+  if (reason instanceof AnalysisConnectionUnavailable) {
+    return {
+      kind: "network",
+      title: "분석 상태를 확인하지 못했어요",
+      hint: "서버에서 분석이 계속될 수 있어요. 녹음을 다시 보내지 않고 상태를 다시 확인해 주세요.",
     };
   }
   if (reason instanceof AnalysisFailed) {

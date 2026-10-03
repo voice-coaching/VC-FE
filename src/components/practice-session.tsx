@@ -30,11 +30,12 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
+import { createTitleExamSession, titleExamErrorMessage } from "@/lib/title-exam";
 import {
-  createTitleExamSession,
-  titleExamErrorMessage,
-} from "@/lib/title-exam";
-import { pollAnalysis } from "@/lib/analysis-polling";
+  pollAnalysis,
+  AnalysisConnectionUnavailable,
+  AnalysisWaitTimeout,
+} from "@/lib/analysis-polling";
 import {
   describePracticeError,
   PracticeInputError,
@@ -128,6 +129,16 @@ function PracticeSessionBody({
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [connectionRecovering, setConnectionRecovering] = useState(false);
+  const analysisPollRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      analysisPollRef.current?.abort();
+    };
+  }, []);
   const [requestFailure, setRequestFailure] = useState<unknown>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [titleExamResult, setTitleExamResult] =
@@ -255,6 +266,7 @@ function PracticeSessionBody({
 
   useEffect(
     () => () => {
+      analysisPollRef.current?.abort();
       const activeSessionId = sessionIdRef.current;
       if (
         activeSessionId &&
@@ -294,9 +306,9 @@ function PracticeSessionBody({
           selected?.recordingId ?? selected?.id ?? null;
         setRecordingAttempts(attempts);
 
-        let currentStatus;
+        let analysisId: Id;
         try {
-          currentStatus = await canonicalApi.status(resumedSessionId);
+          analysisId = await waitForAnalysis(resumedSessionId);
         } catch (reason) {
           if (
             reason instanceof ApiError &&
@@ -309,22 +321,6 @@ function PracticeSessionBody({
           }
           throw reason;
         }
-        analysisPendingRef.current = true;
-        let analysisId: Id;
-        if (["COMPLETED", "FAILED"].includes(currentStatus.status)) {
-          analysisId = currentStatus.analysisId;
-        } else {
-          analysisId = await pollAnalysis({
-            getStatus: () => {
-              if (!active) throw new Error("Analysis polling stopped");
-              return api.training.getAnalysisStatus(resumedSessionId);
-            },
-            onProgress: (progress) => {
-              if (active) setAnalysisProgress(progress);
-            },
-          });
-        }
-
         if (!active) return;
         const result = await readResult(analysisId);
         if (!active) return;
@@ -372,6 +368,7 @@ function PracticeSessionBody({
 
     return () => {
       active = false;
+      analysisPollRef.current?.abort();
     };
   }, [
     content.id,
@@ -479,22 +476,39 @@ function PracticeSessionBody({
     }
   }
 
-  async function waitForAnalysis(activeSessionId: Id) {
+  async function waitForAnalysis(activeSessionId: Id, expectedAnalysisId?: Id) {
+    if (!mountedRef.current)
+      throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
+    analysisPollRef.current?.abort();
+    const controller = new AbortController();
+    analysisPollRef.current = controller;
+    setConnectionRecovering(false);
     analysisPendingRef.current = true;
     setCanCheckAnalysis(false);
     try {
       return await pollAnalysis({
-        getStatus: () => api.training.getAnalysisStatus(activeSessionId),
+        getStatus: (signal) =>
+          api.training.getAnalysisStatus(activeSessionId, signal),
+        signal: controller.signal,
+        expectedAnalysisId,
+        onConnectionChange: setConnectionRecovering,
         onProgress: setAnalysisProgress,
       });
     } catch (reason) {
+      if (controller.signal.aborted) throw reason;
       setRequestFailure(reason);
       setCanRetryAnalysis(
         reason instanceof CanonicalResultUnavailable &&
           reason.view.actions.canRetry,
       );
-      setCanCheckAnalysis(!(reason instanceof CanonicalResultUnavailable));
+      setCanCheckAnalysis(
+        reason instanceof AnalysisConnectionUnavailable ||
+          reason instanceof AnalysisWaitTimeout,
+      );
       throw reason;
+    } finally {
+      if (analysisPollRef.current === controller)
+        analysisPollRef.current = null;
     }
   }
 
@@ -668,7 +682,10 @@ function PracticeSessionBody({
         await getConsentInput(),
       );
       setPhase("analyzing");
-      const completedAnalysisId = await waitForAnalysis(activeSessionId);
+      const completedAnalysisId = await waitForAnalysis(
+        activeSessionId,
+        requested.analysisId,
+      );
       await loadResult(
         activeSessionId,
         completedAnalysisId ?? requested.analysisId,
@@ -705,7 +722,10 @@ function PracticeSessionBody({
         await getConsentInput(),
         expected,
       );
-      const completedAnalysisId = await waitForAnalysis(sessionId);
+      const completedAnalysisId = await waitForAnalysis(
+        sessionId,
+        requested.analysisId,
+      );
       await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
     } catch (reason) {
       setRequestFailure(reason);
@@ -910,7 +930,7 @@ function PracticeSessionBody({
               <b className="text-xl text-primary">
                 {analysis?.overallScore == null
                   ? "—"
-                  : `${Math.round(analysis.overallScore)}점`}
+                  : `${analysis.overallScore.toFixed(1)}점`}
               </b>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 마지막 점수
@@ -1207,6 +1227,8 @@ function PracticeSessionBody({
               <p className="mt-5 min-h-14 w-full shrink-0 px-5 text-center text-[20px] leading-7 font-bold text-[#191f28]">
                 {phase === "uploading" ? (
                   "음성을 보내고 있어요"
+                ) : connectionRecovering ? (
+                  "연결 복구 중이에요. 기존 분석 상태를 다시 확인하고 있어요."
                 ) : (
                   <AnalysisLoadingMessage />
                 )}

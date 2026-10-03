@@ -433,13 +433,10 @@ export default function LipPractice() {
       requireActive();
       setAnalysisPhase("analyzing");
       const completedAnalysisId = await pollAnalysis({
-        getStatus: () => {
-          requireActive();
-          return api.training.getAnalysisStatus(sessionId);
-        },
-        onProgress: (progress) => {
-          if (mounted.current) setAnalysisProgress(progress);
-        },
+        getStatus: (signal) =>
+          api.training.getAnalysisStatus(sessionId, signal),
+        expectedAnalysisId: requested.analysisId,
+        onProgress: setAnalysisProgress,
       });
       requireActive();
       const analysisId = completedAnalysisId ?? requested.analysisId;

@@ -7,10 +7,50 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code = "API_ERROR",
     public readonly details?: unknown,
+    public readonly retryAfterMs?: number,
+    public readonly upstreamStatus?: number,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+function retryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const ms = /^\d+$/.test(value)
+    ? Number(value) * 1_000
+    : Date.parse(value) - Date.now();
+  return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+}
+
+function browserManagedHeader(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    /^(proxy-|sec-)/.test(lower) ||
+    new Set([
+      "accept-charset",
+      "accept-encoding",
+      "access-control-request-headers",
+      "access-control-request-method",
+      "connection",
+      "content-length",
+      "cookie",
+      "cookie2",
+      "date",
+      "dnt",
+      "expect",
+      "host",
+      "keep-alive",
+      "origin",
+      "referer",
+      "set-cookie",
+      "te",
+      "trailer",
+      "transfer-encoding",
+      "upgrade",
+      "via",
+    ]).has(lower)
+  );
 }
 
 const ACCESS_TOKEN_STORAGE_KEY = "speakai.access-token";
@@ -231,6 +271,7 @@ export function createHttpClient(
       body = JSON.stringify(rawBody);
     }
 
+    let awaitingFetch = true;
     try {
       const response = await fetch(joinUrl(baseUrl, path), {
         ...fetchOptions,
@@ -239,6 +280,7 @@ export function createHttpClient(
         signal: controller.signal,
         credentials: "include",
       });
+      awaitingFetch = false;
       assertCurrentSession(version);
 
       if (response.status === 401 && !skipAuth && !skipRefresh) {
@@ -318,9 +360,20 @@ export function createHttpClient(
       if (response.status === 204) return undefined as T;
 
       const contentType = response.headers.get("content-type") ?? "";
-      const payload = contentType.includes("application/json")
-        ? ((await response.json()) as ApiEnvelope<T>)
-        : null;
+      let payload: ApiEnvelope<T> | null = null;
+      if (contentType.includes("application/json")) {
+        try {
+          payload = (await response.json()) as ApiEnvelope<T>;
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          if (response.ok)
+            throw new ApiError(
+              "서버 응답 형식이 올바르지 않습니다.",
+              response.status,
+              "RESPONSE_INVALID",
+            );
+        }
+      }
       assertCurrentSession(version);
 
       if (!response.ok || !payload?.result) {
@@ -338,6 +391,8 @@ export function createHttpClient(
           response.status,
           payload?.code ?? response.headers.get("x-error-code") ?? "API_ERROR",
           payload?.data,
+          retryAfter(response.headers.get("retry-after")),
+          response.ok ? undefined : response.status,
         );
       }
 
@@ -366,6 +421,12 @@ export function createHttpClient(
           throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
         throw new ApiError("요청 시간이 초과되었습니다.", 408, "TIMEOUT");
       }
+      if (!(awaitingFetch && error instanceof TypeError))
+        throw new ApiError(
+          "서버 응답을 해석하지 못했습니다.",
+          0,
+          "RESPONSE_INVALID",
+        );
       throw new ApiError(
         "네트워크 연결을 확인해 주세요.",
         0,
@@ -398,9 +459,9 @@ export function createHttpClient(
         )
       )
         xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      Object.entries(headers).forEach(([key, value]) =>
-        xhr.setRequestHeader(key, value),
-      );
+      Object.entries(headers).forEach(([key, value]) => {
+        if (!browserManagedHeader(key)) xhr.setRequestHeader(key, value);
+      });
       xhr.timeout = 60_000;
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable)

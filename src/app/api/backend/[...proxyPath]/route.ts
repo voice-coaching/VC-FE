@@ -34,7 +34,10 @@ function unavailableResponse(message: string) {
       data: null,
       code: "UPSTREAM_UNAVAILABLE",
     },
-    { status: 503 },
+    {
+      status: 503,
+      headers: { "Cache-Control": "no-store", "Retry-After": "2" },
+    },
   );
 }
 
@@ -93,7 +96,7 @@ async function proxyRequest(request: Request, context: ProxyContext) {
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(60_000)]),
     });
 
     const responseHeaders = new Headers();
