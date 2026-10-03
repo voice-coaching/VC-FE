@@ -30,6 +30,7 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
+import { createTitleExamSession, titleExamErrorMessage } from "@/lib/title-exam";
 import {
   pollAnalysis,
   AnalysisConnectionUnavailable,
