@@ -33,6 +33,10 @@ requiredHeaders에서 Content-Length를 제외한다. presigned URL의 길이 �
 
 ## 검증과 배포
 
+2026-10-03 운영 반영 준비 중 `main` → `dev` 병합본의 TypeScript 컴파일에서
+`practice-session.tsx`의 `createTitleExamSession`, `titleExamErrorMessage` import
+누락을 확인했다. 기존 `@/lib/title-exam`의 두 함수를 다시 연결했으며 새 기능은 추가하지 않는다.
+
 TypeScript noEmit, 변경 파일 포맷과 정적 검토를 수행한다. 자동 테스트/fixture나
 브라우저 자동화, 실제 음성/GPT 요청은 실행하지 않는다. PR은 dev 대상이며 병합과
 Vercel 운영 배포는 별도다. Backend 배포 보호 변경 및 RunPod 호환 묶음과 함께 인계한다.
