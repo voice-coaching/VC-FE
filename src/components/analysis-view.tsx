@@ -5,6 +5,7 @@ import { useMemo, type ReactNode } from "react";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
+import { CanonicalScoreCriteria } from "@/components/canonical-score-criteria";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -20,7 +21,7 @@ const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
 };
 
 function scoreText(score: number | null) {
-  return score == null ? "—" : String(Math.round(score));
+  return score == null ? "—" : score.toFixed(1);
 }
 
 function segmentText(segment: AnalysisSegment) {
@@ -128,7 +129,10 @@ export function AnalysisView({
           </section>
         </div>
         <div className="space-y-2.5 px-5 pt-3 pb-6">
-          {scoreRows.length ? (
+          {analysis.canonical?.canonicalAnalysis?.score.validity ===
+          "RUBRIC_COMPUTED" ? (
+            <CanonicalScoreCriteria view={analysis.canonical} />
+          ) : scoreRows.length ? (
             scoreRows.map((row) => (
               <details
                 key={row.id}

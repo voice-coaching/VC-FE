@@ -851,7 +851,7 @@ function PracticeSessionBody({
               <b className="text-xl text-primary">
                 {analysis?.overallScore == null
                   ? "—"
-                  : `${Math.round(analysis.overallScore)}점`}
+                  : `${analysis.overallScore.toFixed(1)}점`}
               </b>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 마지막 점수

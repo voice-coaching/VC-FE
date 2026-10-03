@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { canonicalScoreSchema } from "./canonical-score";
 
 // Deployed PUBLIC view allowlist. Safe subtrees follow runpod_result_v4;
 // this is never a parser for the private callback or raw core.
@@ -174,17 +175,7 @@ const canonicalSchema = z
       .strict()
       .nullable(),
     coaching: coachingSchema.nullable(),
-    score: z
-      .object({
-        overallScore: z.null(),
-        validity: z.enum([
-          "INSUFFICIENT_EVIDENCE",
-          "NOT_CALIBRATED",
-          "NOT_AVAILABLE",
-        ]),
-        reason: z.literal("NO_APPROVED_SCORING_CONTRACT"),
-      })
-      .strict(),
+    score: canonicalScoreSchema,
     visual: z
       .object({
         status: z.literal("NOT_CONNECTED"),
@@ -317,6 +308,14 @@ export function readCanonicalAnalysisView(
   }
   if (!canonical) return view;
   const { decision, selection, coaching } = canonical;
+  if (canonical.score.validity === "RUBRIC_COMPUTED") {
+    requireProjection(
+      jobStatus === "COMPLETED" && decision.status === "ACCEPT",
+    );
+  }
+  if (canonical.score.validity === "UNSCORABLE") {
+    requireProjection(jobStatus === "FAILED" && !actions.canComplete);
+  }
   requireProjection(
     decision.status !== "SYSTEM_FAILURE" || jobStatus === "FAILED",
   );
