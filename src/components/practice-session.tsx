@@ -25,6 +25,7 @@ import {
   type CourseDetail,
   type UserTitleExamResult,
 } from "@/lib/api";
+import { SentenceReader } from "@/components/sentence-reader";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
@@ -142,6 +143,7 @@ function PracticeSessionBody({
   );
   const [canCheckAnalysis, setCanCheckAnalysis] = useState(false);
   const [activeSentence, setActiveSentence] = useState(0);
+  const sentenceBoundaries = useRef<number[]>([0]);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const authEpochRef = useRef(getAuthSessionVersion());
@@ -233,15 +235,23 @@ function PracticeSessionBody({
 
   useEffect(() => {
     phaseRef.current = phase;
-    if (recorder.status === "recorded" && phase === "recording")
-      setPhase("review");
+    if (recorder.status === "recorded" && phase === "recording") {
+      if (activeSentence < sentences.length - 1) {
+        setRequestError(
+          "모든 문장을 마치기 전에 녹음이 종료되었습니다. 녹음 시간 제한을 확인하고 처음부터 다시 녹음해 주세요.",
+        );
+        setPhase("error");
+      } else {
+        setPhase("review");
+      }
+    }
     if (
       ["denied", "unsupported", "error"].includes(recorder.status) &&
       phase === "recording"
     ) {
       setPhase("error");
     }
-  }, [phase, recorder.status]);
+  }, [phase, recorder.status, activeSentence, sentences.length]);
 
   useEffect(
     () => () => {
@@ -450,6 +460,8 @@ function PracticeSessionBody({
   }
 
   async function startRecording() {
+    sentenceBoundaries.current = [0];
+    setActiveSentence(0);
     setRequestError(null);
     setRequestFailure(null);
     try {
@@ -726,6 +738,7 @@ function PracticeSessionBody({
         setSegments([]);
       }
       recorder.reset();
+      setActiveSentence(0);
       setRequestError(null);
       setRequestFailure(null);
       setPhase("idle");
@@ -990,27 +1003,11 @@ function PracticeSessionBody({
               )}
             </span>
           </div>
-          <section className="mx-5 shrink-0 rounded-2xl bg-white p-2 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
-            {sentences.map((sentence, index) => {
-              const active = phase === "recording" && index === activeSentence;
-              const pending = phase === "recording" && index > activeSentence;
-              return (
-                <div
-                  key={`${index}-${sentence}`}
-                  className={`flex items-stretch gap-2 rounded-xl px-3 py-2.5 ${active ? "bg-[#edf2ff]" : ""}`}
-                >
-                  {active && (
-                    <span className="w-[3px] shrink-0 rounded-sm bg-[#2f6bff]" />
-                  )}
-                  <p
-                    className={`min-w-0 flex-1 [overflow-wrap:anywhere] text-[16px] leading-6 ${active ? "font-bold text-[#191f28]" : `font-medium ${pending ? "text-[#b0b8c1]" : "text-[#191f28]"}`}`}
-                  >
-                    {sentence}
-                  </p>
-                </div>
-              );
-            })}
-          </section>
+          <SentenceReader
+            sentences={sentences}
+            activeIndex={phase === "recording" ? activeSentence : undefined}
+            className="mx-5 max-h-[clamp(80px,calc(100dvh-440px),360px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+          />
         </>
       )}
 
@@ -1045,7 +1042,7 @@ function PracticeSessionBody({
                 <span className="h-[84px] w-14" aria-hidden="true" />
               </div>
               <p className="text-center text-[14px] leading-5 font-medium text-[#8b95a1]">
-                첫 문장부터 읽고 다음 문장 버튼으로 넘어가요
+                한 문장을 다 읽으면 가운데 문장 녹음 완료 버튼을 눌러 주세요
               </p>
             </div>
           )}
@@ -1085,41 +1082,31 @@ function PracticeSessionBody({
                 <span className="h-[84px] w-14" aria-hidden="true" />
                 <button
                   type="button"
-                  onClick={recorder.stop}
-                  disabled={recorder.status === "stopping"}
+                  onClick={() => {
+                    if (recorder.status !== "recording") return;
+                    if (activeSentence < sentences.length - 1) {
+                      sentenceBoundaries.current[activeSentence + 1] =
+                        recorder.getElapsedMs() / 1_000;
+                      setActiveSentence((current) => current + 1);
+                    } else {
+                      recorder.stop();
+                    }
+                  }}
+                  disabled={recorder.status !== "recording"}
                   className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-55"
-                  aria-label="녹음 종료"
+                  aria-label={
+                    activeSentence < sentences.length - 1
+                      ? "문장 녹음 완료"
+                      : "전체 녹음 완료"
+                  }
                 >
                   <span className="size-6 rounded-md bg-white" />
                 </button>
-                {activeSentence < sentences.length - 1 ? (
-                  <button
-                    type="button"
-                    disabled={recorder.status === "stopping"}
-                    onClick={() => {
-                      setActiveSentence((current) => current + 1);
-                    }}
-                    className="flex flex-col items-center gap-1.5 pt-2.5 disabled:opacity-55"
-                  >
-                    <span className="flex size-14 items-center justify-center rounded-full bg-[#191f28]">
-                      <Image
-                        src="/figma/practice/arrow-right.svg"
-                        alt=""
-                        width={22}
-                        height={22}
-                      />
-                    </span>
-                    <span className="text-[12px] leading-4 font-bold text-[#4e5968]">
-                      다음 문장
-                    </span>
-                  </button>
-                ) : (
-                  <span className="h-[84px] w-14" aria-hidden="true" />
-                )}
+                <span className="h-[84px] w-14" aria-hidden="true" />
               </div>
               <p className="text-[14px] leading-5 font-medium text-[#8b95a1]">
                 {activeSentence < sentences.length - 1
-                  ? "다 읽으면 다음 문장으로 넘어가요"
+                  ? "문장 녹음을 완료하면 다음 문장으로 자동으로 넘어가요"
                   : "다 읽으면 가운데 정지 버튼으로 녹음을 완료해 주세요"}
               </p>
             </div>
@@ -1143,17 +1130,18 @@ function PracticeSessionBody({
                       <p className="min-w-0 flex-1 [overflow-wrap:anywhere] text-[15px] leading-[22px] font-medium text-[#333d4b]">
                         {sentence}
                       </p>
-                      <span
-                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e8f4ff]"
-                        title="문장별 구간 데이터 미제공"
-                      >
-                        <Image
-                          src="/figma/practice/play-small.svg"
-                          alt=""
-                          width={14}
-                          height={14}
+                      <div className="w-28 shrink-0">
+                        <ReferencePlayer
+                          source={recorder.previewUrl ?? undefined}
+                          title={`${index + 1}문장 듣기`}
+                          startSeconds={sentenceBoundaries.current[index] ?? 0}
+                          endSeconds={
+                            sentenceBoundaries.current[index + 1] ??
+                            recorder.durationMs / 1_000
+                          }
+                          buttonTone="neutral"
                         />
-                      </span>
+                      </div>
                     </div>
                   ))}
                 </div>

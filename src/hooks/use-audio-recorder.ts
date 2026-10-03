@@ -428,6 +428,7 @@ export function useAudioRecorder() {
     blob,
     durationMs,
     elapsedMs,
+    getElapsedMs: () => Date.now() - startedAtRef.current,
     previewUrl,
     error,
     start,

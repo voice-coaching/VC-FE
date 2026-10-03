@@ -19,6 +19,8 @@ type ReferencePlayerProps = {
   title?: string;
   source?: string;
   durationSeconds?: number;
+  startSeconds?: number;
+  endSeconds?: number;
   compact?: boolean;
   buttonTone?: "primary" | "neutral";
   variant?: "default" | "guide" | "recording";
@@ -28,7 +30,13 @@ type ReferencePlayerProps = {
 export function ReferencePlayer(props: ReferencePlayerProps) {
   return (
     <ReferencePlayerSession
-      key={JSON.stringify([props.contentId, props.recordingId, props.source])}
+      key={JSON.stringify([
+        props.contentId,
+        props.recordingId,
+        props.source,
+        props.startSeconds,
+        props.endSeconds,
+      ])}
       {...props}
     />
   );
@@ -40,6 +48,8 @@ function ReferencePlayerSession({
   title = "기준 발음 듣기",
   source,
   durationSeconds,
+  startSeconds = 0,
+  endSeconds,
   compact = false,
   buttonTone,
   variant = "default",
@@ -67,6 +77,23 @@ function ReferencePlayerSession({
     durationSeconds && Number.isFinite(durationSeconds) ? durationSeconds : 0;
   const [duration, setDuration] = useState(fallbackDuration);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const player = audio.current;
+    if (!player || endSeconds === undefined) return;
+    const stopAtEnd = () => {
+      if (!player.paused && player.currentTime >= endSeconds) {
+        player.pause();
+        player.currentTime = startSeconds;
+      }
+    };
+    const timer = window.setInterval(stopAtEnd, 40);
+    player.addEventListener("timeupdate", stopAtEnd);
+    return () => {
+      window.clearInterval(timer);
+      player.removeEventListener("timeupdate", stopAtEnd);
+    };
+  }, [startSeconds, endSeconds]);
 
   function syncDuration(player: HTMLAudioElement) {
     setDuration((current) =>
@@ -129,6 +156,13 @@ function ReferencePlayerSession({
         if (!nextUrl) throw new Error("재생할 음성이 없습니다.");
         // This is the sole source owner; React must not reassign src during play().
         if (player.getAttribute("src") !== nextUrl) player.src = nextUrl;
+      }
+      if (
+        player.currentTime < startSeconds ||
+        player.ended ||
+        (endSeconds !== undefined && player.currentTime >= endSeconds)
+      ) {
+        player.currentTime = startSeconds;
       }
       await player.play();
     } catch (reason) {

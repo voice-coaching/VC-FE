@@ -156,7 +156,10 @@ export default function PracticePlan() {
         {
           key: "schedule",
           label: "연습 일정",
-          value: `주 ${draft.weeklySessions}일`,
+          value:
+            draft.weeklySessions === null
+              ? "자유롭게"
+              : `주 ${draft.weeklySessions}일`,
         },
         {
           key: "improvements",
@@ -219,11 +222,14 @@ export default function PracticePlan() {
       value = { ...value, learningSituations: selection };
     }
     if (editing === "schedule") {
+      const schedule = SCHEDULE_OPTIONS.find(
+        (item) => item.value === selection[0],
+      );
       value = {
         ...value,
-        weeklySessions:
-          SCHEDULE_OPTIONS.find((item) => item.value === selection[0])
-            ?.weeklySessions ?? draft.weeklySessions,
+        weeklySessions: schedule
+          ? schedule.weeklySessions
+          : draft.weeklySessions,
       };
     }
 

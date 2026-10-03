@@ -22,6 +22,7 @@ import {
 } from "./auth-session";
 import { readUserClientCache, writeUserClientCache } from "./client-cache";
 import { updateMyPageOverviewCache } from "./my-page-cache";
+import { saveOnboardingPlan } from "./save-onboarding-plan";
 
 export type OnboardingAnswers = UiProfile & {
   improvementAreas: string[];
@@ -67,7 +68,7 @@ function fromApi(profile: ApiProfile, name: string): OnboardingAnswers {
     audioAccessPreference: decodeAudioAccessPreference(
       profile.surveyAnswers.learningSituations,
     ),
-    weeklySessions: profile.weeklyGoalCount ?? 5,
+    weeklySessions: profile.weeklyGoalCount,
     goalDescription: profile.goalText ?? "",
   };
 }
@@ -165,6 +166,9 @@ export function useProfile({ loadExisting = true } = {}) {
       throw new Error("저장된 온보딩 완료 상태를 확인하지 못했습니다.");
     }
 
+    if (stored.weeklyGoalCount !== value.weeklySessions)
+      throw new Error("주간 목표가 저장되지 않았습니다. 다시 시도해 주세요.");
+
     markOnboardingCompleted();
     cachedProfile = value;
     cachedProfileUserId = currentUserId();
@@ -203,16 +207,12 @@ export function useProfile({ loadExisting = true } = {}) {
 
   const updatePlan = useCallback(async (value: OnboardingAnswers) => {
     const input = toApi(value);
-    await api.onboarding.update({
-      goalText: input.goalText,
-      dailyGoalMinutes: input.dailyGoalMinutes,
-      weeklyGoalCount: input.weeklyGoalCount,
-      surveyAnswers: input.surveyAnswers,
-    });
-    cachedProfile = value;
+    const stored = await saveOnboardingPlan(api, input);
+    const saved = fromApi(stored, value.name);
+    cachedProfile = saved;
     cachedProfileUserId = currentUserId();
-    writeUserClientCache(cachedProfileUserId, PROFILE_CACHE_RESOURCE, value);
-    setProfile(value);
+    writeUserClientCache(cachedProfileUserId, PROFILE_CACHE_RESOURCE, saved);
+    setProfile(saved);
   }, []);
 
   return {

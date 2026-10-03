@@ -78,9 +78,11 @@ export const SCHEDULE_OPTIONS = [
     value: "flexible",
     title: "자유롭게 시작할래요",
     description: "정해진 일정 없이 시작",
-    weeklySessions: 3,
+    weeklySessions: null,
   },
-] satisfies Array<DetailedOption<ScheduleId> & { weeklySessions: number }>;
+] satisfies Array<
+  DetailedOption<ScheduleId> & { weeklySessions: number | null }
+>;
 
 export const METHOD_OPTIONS = [
   {
