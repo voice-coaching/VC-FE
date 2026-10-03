@@ -1,5 +1,7 @@
 # API 연동 가이드 (ver.08/07)
 
+2026-10-03 상태 GET의 제한 재시도·취소·업로드 헤더 변경은 [분석 상태 조회 연결 복구](analysis-polling-recovery-20261003.md)를 따른다. 점수/완료 계약은 기존 canonical v4를 유지한다.
+
 기준 문서: [운영 Swagger](https://api.voice-coaching.site/swagger-ui/index.html), [Notion API 명세서(ver.08/07)](https://app.notion.com/p/API-ver-08-07-3b5fd927f58c806db009d42373cbeb2a)
 
 프론트엔드는 `src/lib/api/types.ts`의 `ApiContract`만 사용합니다. `src/lib/api/remote.ts`에는 운영 Swagger 53개와 신규 프로필 사진·칭호 계약 8개를 합친 61개 operation이 정의돼 있습니다. 신규 8개는 백엔드 구현 전까지 [API 연동 보류 항목](API_INTEGRATION_GAPS.md)으로 관리합니다. 응답은 공통 `{ result, message, data }` 래퍼에서 `data`만 반환합니다.

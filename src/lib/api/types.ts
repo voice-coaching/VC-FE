@@ -906,7 +906,10 @@ export interface ApiContract {
       sessionId: Id,
       consent: AnalysisConsentInput,
     ): Promise<AnalysisRequest>;
-    getAnalysisStatus(sessionId: Id): Promise<AnalysisProgress>;
+    getAnalysisStatus(
+      sessionId: Id,
+      signal?: AbortSignal,
+    ): Promise<AnalysisProgress>;
     retryAnalysis(
       sessionId: Id,
       consent: AnalysisConsentInput,
