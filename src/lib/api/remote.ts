@@ -108,12 +108,14 @@ export function createRemoteApi(baseUrl: string): ApiContract {
   async function currentAnalysis(
     sessionId: Id,
     expected?: CanonicalViewIdentity,
+    signal?: AbortSignal,
   ) {
     const [session, status] = await Promise.all([
       request<TrainingSession>(`/api/training-sessions/${id(sessionId)}`, {
+        signal,
         cache: "no-store",
       }),
-      canonical.status(sessionId),
+      canonical.status(sessionId, signal),
     ]);
     if (session.selectedRecordingId == null)
       throw new ApiError(
@@ -121,10 +123,13 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         409,
         "RECORDING_ID_REQUIRED",
       );
-    const view = await canonical.get({
-      analysisId: canonicalDatabaseId(status.analysisId),
-      recordingId: canonicalDatabaseId(session.selectedRecordingId),
-    });
+    const view = await canonical.get(
+      {
+        analysisId: canonicalDatabaseId(status.analysisId),
+        recordingId: canonicalDatabaseId(session.selectedRecordingId),
+      },
+      signal,
+    );
     if (expected && canonicalAttemptKey(view) !== canonicalAttemptKey(expected))
       throw new ApiError(
         "분석 시도가 변경되었습니다. 현재 상태를 다시 확인해 주세요.",
@@ -441,11 +446,11 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           { method: "PATCH" },
         ),
       analyze: canonical.analyze,
-      async getAnalysisStatus(sessionId) {
-        const status = await canonical.status(sessionId);
+      async getAnalysisStatus(sessionId, signal) {
+        const status = await canonical.status(sessionId, signal);
         if (status.status === "FAILED")
           throw new CanonicalResultUnavailable(
-            await currentAnalysis(sessionId),
+            await currentAnalysis(sessionId, undefined, signal),
           );
         return status;
       },

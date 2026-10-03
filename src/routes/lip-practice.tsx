@@ -377,7 +377,9 @@ export default function LipPractice() {
       });
       setAnalysisPhase("analyzing");
       const completedAnalysisId = await pollAnalysis({
-        getStatus: () => api.training.getAnalysisStatus(sessionId),
+        getStatus: (signal) =>
+          api.training.getAnalysisStatus(sessionId, signal),
+        expectedAnalysisId: requested.analysisId,
         onProgress: setAnalysisProgress,
       });
       const analysisId = completedAnalysisId ?? requested.analysisId;
