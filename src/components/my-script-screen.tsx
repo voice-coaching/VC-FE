@@ -62,7 +62,7 @@ export function MyScriptScreen() {
         nav={false}
         viewportLocked
         chromeColor="#f2f4f6"
-        bottomChromeColor="#ffffff"
+        bottomChromeColor="#f2f4f6"
         className="flex flex-col !bg-[#f2f4f6]"
       >
         <TopBar to="/home" title={title} />
