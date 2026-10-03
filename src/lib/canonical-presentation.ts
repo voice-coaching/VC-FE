@@ -10,7 +10,9 @@ export function canonicalPresentation(
   let summary: string;
   if (view.jobStatus === "FAILED") {
     summary =
-      "분석 처리에 실패했습니다. 시스템 실패를 발음 문제로 해석하지 마세요.";
+      core?.score.validity === "UNSCORABLE"
+        ? "채점 근거 또는 점수 응답을 확인하지 못했습니다. 임의 점수는 제공하지 않습니다. 다시 분석해 주세요."
+        : "분석 처리에 실패했습니다. 시스템 실패를 발음 문제로 해석하지 마세요.";
   } else if (core?.decision.status === "REJECT") {
     summary =
       "입력이 분석 조건을 충족하지 못했습니다. 발음 오류라는 뜻은 아닙니다.";
@@ -41,7 +43,10 @@ export function canonicalPresentation(
     outcome: null,
     transcript: null,
     sttConfidence: null,
-    overallScore: null,
+    overallScore:
+      core?.score.validity === "RUBRIC_COMPUTED"
+        ? core.score.overallScore
+        : null,
     pronunciationScore: null,
     intonationScore: null,
     speedWpm: null,
