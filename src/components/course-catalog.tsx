@@ -4,7 +4,7 @@ import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
 import { Check, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
@@ -23,6 +23,9 @@ import type { PracticeExample } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+import { useHistoryPanel } from "@/hooks/use-history-panel";
+import { useHistoryScroll } from "@/hooks/use-history-scroll";
+import { refreshCatalogWindow } from "@/lib/catalog-pages";
 
 type CourseCatalogCache = {
   items: CourseSummary[];
@@ -50,7 +53,27 @@ function mergeProgress(
   }));
 }
 
-export function CourseCatalog({
+type CourseCatalogProps = {
+  type?: CourseType;
+  title: string;
+  description: string;
+};
+
+export function CourseCatalog(props: CourseCatalogProps) {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <CourseListSkeleton />
+        </AppShell>
+      }
+    >
+      <CourseCatalogView {...props} />
+    </Suspense>
+  );
+}
+
+function CourseCatalogView({
   type,
   title,
   description,
@@ -61,11 +84,6 @@ export function CourseCatalog({
 }) {
   const router = useRouter();
   const userId = getAuthenticatedUserId();
-  const [lesson, setLesson] = useState<{
-    course: CourseSummary;
-    step: CourseStep;
-    count: number;
-  } | null>(null);
   const activeType = type ?? "PRONUNCIATION";
   const cacheResource = cacheResources.courseCatalog(activeType);
   const [initialCache] = useState(() =>
@@ -81,19 +99,47 @@ export function CourseCatalog({
   );
   const [loading, setLoading] = useState(initialCache === null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const listGeneration = useRef(0);
+  const loadMoreBusy = useRef(false);
   const [page, setPage] = useState(initialCache?.page ?? 0);
   const [hasNext, setHasNext] = useState(initialCache?.hasNext ?? false);
   const [progressByCourse, setProgressByCourse] = useState<
     Record<string, UserCourseProgress>
   >(initialCache?.progressByCourse ?? {});
   const [startingId, setStartingId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useHistoryPanel(
+    "course",
+    items.map((item) => String(item.id)),
+  );
+  const [lessonId, setLessonId] = useHistoryPanel(
+    "lesson",
+    (expandedId ? (stepsByCourse[expandedId] ?? []) : []).map((step) =>
+      String(step.id),
+    ),
+  );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailsByCourse, setDetailsByCourse] = useState<
     Record<string, CourseDetail>
   >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
+  const startBusy = useRef(false);
+  const lifecycle = useRef(0);
+
+  useEffect(() => {
+    lifecycle.current += 1;
+    startBusy.current = false;
+    setStartingId(null);
+    setDetailError(null);
+    setError(null);
+    return () => {
+      lifecycle.current += 1;
+    };
+  }, [activeType, userId, expandedId]);
 
   useEffect(() => {
     setIndicatorType(activeType);
@@ -141,6 +187,11 @@ export function CourseCatalog({
 
   useEffect(() => {
     let active = true;
+    listGeneration.current += 1;
+    loadMoreBusy.current = false;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+    setRefreshing(true);
     const cached = readUserClientCache<CourseCatalogCache>(
       userId,
       cacheResource,
@@ -164,16 +215,21 @@ export function CourseCatalog({
     }
     setError(null);
     Promise.all([
-      api.courses.list({
-        type: activeType,
-        status: "PUBLISHED",
-        page: 0,
-        size: 20,
-      }),
+      refreshCatalogWindow(
+        (page) =>
+          api.courses.list({
+            type: activeType,
+            status: "PUBLISHED",
+            page,
+            size: 20,
+          }),
+        cached?.page ?? 0,
+        () => active,
+      ),
       api.courses.getMyProgress(),
     ])
       .then(([result, userProgress]) => {
-        if (!active) return;
+        if (!active || !result) return;
         const byCourse = progressMap(userProgress);
         const nextItems = mergeProgress(result.items, byCourse);
         const nextHasNext =
@@ -182,13 +238,17 @@ export function CourseCatalog({
         setItems(nextItems);
         setPage(result.page);
         setHasNext(nextHasNext);
+        const currentCache = readUserClientCache<CourseCatalogCache>(
+          userId,
+          cacheResource,
+        );
         updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
           items: nextItems,
           page: result.page,
           hasNext: nextHasNext,
           progressByCourse: byCourse,
-          detailsByCourse: cached?.detailsByCourse ?? {},
-          stepsByCourse: cached?.stepsByCourse ?? {},
+          detailsByCourse: currentCache?.detailsByCourse ?? {},
+          stepsByCourse: currentCache?.stepsByCourse ?? {},
         });
         void Promise.allSettled(
           result.items
@@ -204,7 +264,8 @@ export function CourseCatalog({
             ),
           );
           const nextDetails = {
-            ...(cached?.detailsByCourse ?? {}),
+            ...(readUserClientCache<CourseCatalogCache>(userId, cacheResource)
+              ?.detailsByCourse ?? {}),
             ...loadedDetails,
           };
           setDetailsByCourse(nextDetails);
@@ -223,15 +284,23 @@ export function CourseCatalog({
               : "클래스를 불러오지 못했습니다.",
           ),
       )
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
     return () => {
       active = false;
+      listGeneration.current += 1;
     };
   }, [activeType, cacheResource, userId, retry]);
 
   async function loadMore() {
+    if (loadMoreBusy.current || refreshing || !hasNext) return;
+    loadMoreBusy.current = true;
+    const requestGeneration = listGeneration.current;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const result = await api.courses.list({
         type: activeType,
@@ -239,14 +308,12 @@ export function CourseCatalog({
         page: page + 1,
         size: 20,
       });
-      setItems((current) => [
-        ...current,
-        ...mergeProgress(result.items, progressByCourse),
-      ]);
-      const nextItems = [
-        ...items,
-        ...mergeProgress(result.items, progressByCourse),
-      ];
+      if (requestGeneration !== listGeneration.current) return;
+      const merged = new Map(items.map((item) => [String(item.id), item]));
+      for (const item of mergeProgress(result.items, progressByCourse))
+        merged.set(String(item.id), item);
+      const nextItems = [...merged.values()];
+      setItems(nextItems);
       const nextHasNext =
         result.hasNext ?? result.page + 1 < (result.totalPages ?? 0);
       setPage(result.page);
@@ -257,17 +324,24 @@ export function CourseCatalog({
         hasNext: nextHasNext,
       });
     } catch (reason) {
-      setError(
+      if (requestGeneration !== listGeneration.current) return;
+      setLoadMoreError(
         reason instanceof Error
           ? reason.message
           : "클래스를 더 불러오지 못했습니다.",
       );
     } finally {
-      setLoadingMore(false);
+      if (requestGeneration === listGeneration.current) {
+        loadMoreBusy.current = false;
+        setLoadingMore(false);
+      }
     }
   }
 
   async function start(course: CourseSummary, requestedStep?: CourseStep) {
+    if (startBusy.current) return;
+    startBusy.current = true;
+    const requestLifecycle = lifecycle.current;
     setStartingId(String(course.id));
     setError(null);
     try {
@@ -298,11 +372,13 @@ export function CourseCatalog({
       }
       replayFromStart =
         replayFromStart || currentProgress?.status === "COMPLETED";
+      if (requestLifecycle !== lifecycle.current) return;
 
       const steps = [
         ...(stepsByCourse[String(course.id)] ??
           (await api.courses.getSteps(course.id))),
       ].sort((a, b) => a.stepOrder - b.stepOrder);
+      if (requestLifecycle !== lifecycle.current) return;
       const nextSteps = {
         ...stepsByCourse,
         [String(course.id)]: steps,
@@ -311,6 +387,10 @@ export function CourseCatalog({
       updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
         stepsByCourse: nextSteps,
       });
+      if (requestedStep) {
+        setLessonId(String(requestedStep.id));
+        return;
+      }
       const lastStepIndex = steps.findIndex(
         (step) => String(step.id) === String(currentProgress?.lastStepId),
       );
@@ -323,85 +403,105 @@ export function CourseCatalog({
                 : lastStepIndex,
             )
           : steps;
-      const requestedPractice = requestedStep
-        ? steps.find(
-            (step) =>
-              step.stepOrder >= requestedStep.stepOrder &&
-              step.practiceContentId != null,
-          )
-        : undefined;
       const practice =
-        requestedPractice ??
         remainingSteps.find((step) => step.practiceContentId != null) ??
         steps.find((step) => step.practiceContentId != null);
       if (!practice?.practiceContentId)
         throw new Error("이 클래스의 연습 콘텐츠가 아직 준비되지 않았습니다.");
-      setLesson({
-        course,
-        step: requestedStep
-          ? { ...practice, title: requestedStep.title }
-          : practice,
-        count: steps.length,
-      });
+      setLessonId(String(practice.id));
     } catch (reason) {
+      if (requestLifecycle !== lifecycle.current) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "클래스를 시작하지 못했습니다.",
       );
     } finally {
-      setStartingId(null);
+      if (requestLifecycle === lifecycle.current) {
+        startBusy.current = false;
+        setStartingId(null);
+      }
     }
   }
 
-  async function toggleDetails(course: CourseSummary) {
-    const key = String(course.id);
-    if (expandedId === key) {
-      setExpandedId(null);
-      return;
-    }
-    setExpandedId(key);
+  useEffect(() => {
+    if (!expandedId) return;
+    let active = true;
+    const key = expandedId;
     const cachedDetail = detailsByCourse[key];
     const cachedSteps = stepsByCourse[key];
-    if (cachedDetail && cachedSteps) return;
+    if (cachedDetail && cachedSteps) {
+      setDetailLoadingId(null);
+      return;
+    }
 
     setDetailLoadingId(key);
-    setError(null);
-    try {
-      const [detail, steps] = await Promise.all([
-        cachedDetail
-          ? Promise.resolve(cachedDetail)
-          : api.courses.get(course.id),
-        cachedSteps
-          ? Promise.resolve(cachedSteps)
-          : api.courses.getSteps(course.id),
-      ]);
-      const nextSteps = {
-        ...stepsByCourse,
-        [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
-      };
-      const nextDetails = { ...detailsByCourse, [key]: detail };
-      setStepsByCourse(nextSteps);
-      setDetailsByCourse(nextDetails);
-      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-        stepsByCourse: nextSteps,
-        detailsByCourse: nextDetails,
+    setDetailError(null);
+    void Promise.all([
+      cachedDetail ? Promise.resolve(cachedDetail) : api.courses.get(key),
+      cachedSteps ? Promise.resolve(cachedSteps) : api.courses.getSteps(key),
+    ])
+      .then(([detail, steps]) => {
+        if (!active) return;
+        const nextSteps = {
+          ...stepsByCourse,
+          [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
+        };
+        const nextDetails = { ...detailsByCourse, [key]: detail };
+        setStepsByCourse(nextSteps);
+        setDetailsByCourse(nextDetails);
+        updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+          stepsByCourse: nextSteps,
+          detailsByCourse: nextDetails,
+        });
+      })
+      .catch((reason) => {
+        if (!active) return;
+        setDetailError(
+          reason instanceof Error
+            ? reason.message
+            : "클래스 상세를 불러오지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        if (active) setDetailLoadingId(null);
       });
-    } catch (reason) {
-      setExpandedId(null);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "클래스 상세를 불러오지 못했습니다.",
-      );
-    } finally {
-      setDetailLoadingId(null);
-    }
-  }
+    return () => {
+      active = false;
+    };
+  }, [
+    expandedId,
+    detailsByCourse,
+    stepsByCourse,
+    cacheResource,
+    userId,
+    detailRetry,
+  ]);
 
   const selectedCourse = items.find((item) => String(item.id) === expandedId);
   const detail = expandedId ? detailsByCourse[expandedId] : undefined;
   const steps = expandedId ? (stepsByCourse[expandedId] ?? []) : [];
+  const requestedLessonStep = steps.find(
+    (step) => String(step.id) === lessonId,
+  );
+  const firstIncomplete = steps.findIndex((step) => !step.completed);
+  const lessonUnlocked =
+    requestedLessonStep &&
+    (requestedLessonStep.completed ||
+      firstIncomplete < 0 ||
+      steps.indexOf(requestedLessonStep) <= firstIncomplete);
+  const lesson =
+    selectedCourse && requestedLessonStep && lessonUnlocked
+      ? {
+          course: selectedCourse,
+          step: requestedLessonStep,
+          count: steps.length,
+        }
+      : null;
+  const scrollRef = useHistoryScroll(
+    `${userId}:courses:${activeType}:${expandedId ?? "list"}`,
+    !loading && !lesson,
+  );
   const level = (value: CourseSummary["difficulty"]) =>
     ({ BEGINNER: "초급", INTERMEDIATE: "중급", ADVANCED: "고급" })[value];
 
@@ -419,12 +519,12 @@ export function CourseCatalog({
           step={lesson.step}
           stepCount={lesson.count}
           description={detailsByCourse[String(lesson.course.id)]?.description}
-          onClose={() => setLesson(null)}
+          onClose={() => setLessonId(null)}
           onPractice={(example: PracticeExample, revision: number) => {
             const params = new URLSearchParams({
               courseId: String(lesson.course.id),
               courseStepId: String(lesson.step.id),
-              returnTo: type ? `/class/${type.toLowerCase()}` : "/class",
+              returnTo: `${window.location.pathname}${window.location.search}`,
               exampleId: example.id,
               exampleRevision: String(revision),
             });
@@ -475,7 +575,10 @@ export function CourseCatalog({
           {selectedCourse?.title ?? "클래스"}
         </h1>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
+      >
         <div className={selectedCourse ? "px-5 pb-6" : "pb-6"}>
           <p className="sr-only">
             {title} · {description}
@@ -547,6 +650,21 @@ export function CourseCatalog({
               ) : null}
             </div>
           )}
+          {selectedCourse && detailError ? (
+            <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
+              <p role="alert">{detailError}</p>
+              <button
+                type="button"
+                className="mt-1 min-h-11 font-semibold text-primary"
+                onClick={() => {
+                  setDetailError(null);
+                  setDetailRetry((value) => value + 1);
+                }}
+              >
+                클래스 상세 다시 불러오기
+              </button>
+            </div>
+          ) : null}
           {selectedCourse ? (
             <>
               <div className="flex gap-3 pt-2 text-xs font-medium">
@@ -602,7 +720,7 @@ export function CourseCatalog({
                           {step.completed ? (
                             <Check className="size-4" />
                           ) : (
-                            index + 1
+                            step.stepOrder
                           )}
                         </span>
                         <span
@@ -633,7 +751,7 @@ export function CourseCatalog({
                   <button
                     key={String(course.id)}
                     type="button"
-                    onClick={() => void toggleDetails(course)}
+                    onClick={() => setExpandedId(String(course.id))}
                     className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
                   >
                     <span
@@ -687,14 +805,26 @@ export function CourseCatalog({
                   조건에 맞는 클래스가 없습니다.
                 </p>
               )}
+              {loadMoreError && (
+                <p
+                  role="alert"
+                  className="rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
+                >
+                  {loadMoreError}
+                </p>
+              )}
               {hasNext && (
                 <button
                   type="button"
-                  disabled={loadingMore}
+                  disabled={loadingMore || refreshing}
                   onClick={() => void loadMore()}
                   className="design-action"
                 >
-                  {loadingMore ? "불러오는 중…" : "클래스 더 보기"}
+                  {loadingMore
+                    ? "불러오는 중…"
+                    : loadMoreError
+                      ? "클래스 더 불러오기 재시도"
+                      : "클래스 더 보기"}
                 </button>
               )}
             </div>

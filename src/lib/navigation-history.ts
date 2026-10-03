@@ -34,6 +34,10 @@ export function canNavigateBack(state: unknown): boolean {
   return (readEntry(state)?.depth ?? 0) > 0;
 }
 
+export function navigationDepth(state: unknown): number | null {
+  return readEntry(state)?.depth ?? null;
+}
+
 export function navigationEntryId(state: unknown): string | null {
   return readEntry(state)?.id ?? null;
 }

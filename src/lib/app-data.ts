@@ -8,7 +8,7 @@ export interface OnboardingProfile {
   goals: Goal[];
   level: Level;
   minutesPerDay: number;
-  weeklySessions: number;
+  weeklySessions: number | null;
 }
 
 export const GOAL_LABELS: Record<Goal, string> = {

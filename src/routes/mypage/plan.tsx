@@ -1,9 +1,11 @@
 "use client";
 
+import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
+
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { MyPageHead, MyProfileBand } from "@/components/my-page-frame";
 import layout from "@/components/my-page-layout.module.css";
@@ -78,6 +80,8 @@ export default function PracticePlan() {
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [examStarting, setExamStarting] = useState(false);
+  const examRequestKey = useRef<string | null>(null);
+  const examRequestBusy = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -117,6 +121,8 @@ export default function PracticePlan() {
           "ABSOLUTE_BEGINNER",
           statsResult.value.totalSessionCount,
         );
+        // Only the title API can grant exam eligibility.
+        if (fallback.next) fallback.next.eligible = false;
         setTitleProgress(fallback);
         updateMyPageOverviewCache({ titleProgress: fallback });
       }
@@ -150,7 +156,10 @@ export default function PracticePlan() {
         {
           key: "schedule",
           label: "연습 일정",
-          value: `주 ${draft.weeklySessions}일`,
+          value:
+            draft.weeklySessions === null
+              ? "자유롭게"
+              : `주 ${draft.weeklySessions}일`,
         },
         {
           key: "improvements",
@@ -213,11 +222,14 @@ export default function PracticePlan() {
       value = { ...value, learningSituations: selection };
     }
     if (editing === "schedule") {
+      const schedule = SCHEDULE_OPTIONS.find(
+        (item) => item.value === selection[0],
+      );
       value = {
         ...value,
-        weeklySessions:
-          SCHEDULE_OPTIONS.find((item) => item.value === selection[0])
-            ?.weeklySessions ?? draft.weeklySessions,
+        weeklySessions: schedule
+          ? schedule.weeklySessions
+          : draft.weeklySessions,
       };
     }
 
@@ -245,20 +257,19 @@ export default function PracticePlan() {
   }
 
   async function startTitleExam() {
+    if (examRequestBusy.current) return;
+    examRequestBusy.current = true;
+    examRequestKey.current ??= crypto.randomUUID();
     setExamStarting(true);
     setError(null);
     try {
-      const exam = await api.users.createTitleExam();
       router.push(
-        `/practice/${encodeURIComponent(String(exam.practiceContentId))}?titleExamId=${encodeURIComponent(String(exam.id))}&returnTo=%2Fmypage%2Fplan&start=1`,
+        await prepareTitleExam(api, "/mypage/plan", examRequestKey.current),
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "승급 시험을 시작하지 못했습니다.",
-      );
+      setError(titleExamErrorMessage(reason));
       setExamStarting(false);
+      examRequestBusy.current = false;
     }
   }
 
@@ -366,26 +377,29 @@ export default function PracticePlan() {
             setEditing(null);
           }
         }}
-        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto rounded-t-[28px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-black/40"
+        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto rounded-t-[24px] bg-white px-6 pt-3 pb-[calc(20px+env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-black/40"
       >
-        <div className="mb-5 flex min-h-10 items-center justify-between">
+        <div
+          className="mx-auto mb-5 h-1 w-10 rounded-full bg-[#e5e8eb]"
+          aria-hidden="true"
+        />
+        <div className="mb-5">
           <h2 id="plan-sheet-title" className="text-[20px] leading-7 font-bold">
             {editing === "purpose"
-              ? "목표"
+              ? "무엇을 위해 연습하고 싶나요?"
               : editing === "improvements"
-                ? "집중할 부분"
+                ? "어떤 점을 개선하고 싶나요?"
                 : editing === "schedule"
-                  ? "연습 일정"
-                  : "연습 방식"}
+                  ? "일주일에 며칠 정도 연습할까요?"
+                  : "어떤 방식으로 연습하고 싶나요?"}
           </h2>
-          <button
-            type="button"
-            onClick={() => setEditing(null)}
-            aria-label="닫기"
-            className="flex size-10 items-center justify-center"
-          >
-            <X className="size-5" />
-          </button>
+          {editing === "improvements" || editing === "methods" ? (
+            <p className="mt-1 text-[13px] text-[#8b95a1]">
+              {editing === "improvements"
+                ? "최대 3개까지 고를 수 있어요"
+                : "여러 개를 골라도 돼요"}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2">
           {options.map((option) => {
@@ -425,7 +439,11 @@ export default function PracticePlan() {
                     </span>
                   ) : null}
                 </span>
-                {selected ? <Check className="size-5 text-primary" /> : null}
+                {selected ? (
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                    <Check className="size-3.5" />
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -439,9 +457,9 @@ export default function PracticePlan() {
           type="button"
           disabled={!selection.length || saving}
           onClick={() => void apply()}
-          className="mt-6 h-14 w-full rounded-2xl bg-primary text-[15px] font-bold text-white disabled:bg-[#dfe3e7]"
+          className="mt-6 h-14 w-full rounded-full bg-primary text-[16px] font-bold text-white disabled:bg-[#dfe3e7]"
         >
-          {saving ? "저장 중…" : "변경하기"}
+          {saving ? "저장 중…" : "변경 저장"}
         </button>
       </dialog>
     </AppShell>

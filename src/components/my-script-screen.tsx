@@ -4,8 +4,10 @@ import { useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PracticeSession } from "@/components/practice-session";
 import { TopBar } from "@/components/top-bar";
+import { SentenceReader } from "@/components/sentence-reader";
 import { api, type PracticeContent } from "@/lib/api";
 import { splitSentences } from "@/lib/sentences";
+import { CUSTOM_SCRIPT_LIMIT } from "@/lib/custom-draft";
 
 export function MyScriptScreen() {
   const [text, setText] = useState("");
@@ -17,9 +19,11 @@ export function MyScriptScreen() {
   const request = useRef<{ text: string; key: string } | null>(null);
   const saveInFlight = useRef(false);
   const sentences = splitSentences(text);
+  const characterCount = text.length;
+  const tooLong = characterCount > CUSTOM_SCRIPT_LIMIT;
 
   async function startPractice() {
-    if (saveInFlight.current) return;
+    if (saveInFlight.current || !text.trim() || tooLong) return;
     saveInFlight.current = true;
     setSaving(true);
     setSaveError(null);
@@ -57,6 +61,8 @@ export function MyScriptScreen() {
       <AppShell
         nav={false}
         viewportLocked
+        chromeColor="#f2f4f6"
+        bottomChromeColor="#f2f4f6"
         className="flex flex-col !bg-[#f2f4f6]"
       >
         <TopBar to="/home" title={title} />
@@ -75,6 +81,8 @@ export function MyScriptScreen() {
     <AppShell
       nav={false}
       viewportLocked
+      chromeColor="#f2f4f6"
+      bottomChromeColor="#ffffff"
       className="flex flex-col !bg-[#f2f4f6]"
     >
       <TopBar
@@ -97,31 +105,43 @@ export function MyScriptScreen() {
           >
             원고
           </label>
-          <div className="relative mt-2 h-[196px] rounded-xl bg-white">
+          <div
+            className={`relative mt-2 h-[196px] rounded-xl bg-white ${tooLong ? "ring-2 ring-red-500" : "focus-within:ring-2 focus-within:ring-[#2f6bff]"}`}
+          >
             <textarea
               id="custom-script"
               value={text}
+              maxLength={CUSTOM_SCRIPT_LIMIT}
               onChange={(event) => setText(event.target.value)}
-              maxLength={300}
+              aria-invalid={tooLong}
+              aria-describedby="custom-script-count custom-script-help"
               placeholder="여기에 원고를 붙여넣어 주세요"
-              className="h-full w-full resize-none rounded-xl bg-transparent px-4 pt-3.5 pb-10 text-[16px] leading-6 text-[#191f28] outline-none placeholder:text-[#b0b8c1] focus:ring-2 focus:ring-[#2f6bff]"
+              className="h-[calc(100%-40px)] w-full resize-none rounded-t-xl bg-transparent px-4 pt-3.5 text-[16px] leading-6 text-[#191f28] outline-none placeholder:text-[#b0b8c1]"
             />
-            <span className="pointer-events-none absolute right-4 bottom-3.5 text-[12px] leading-4 font-medium text-[#b0b8c1]">
-              {text.length}/300
+            <span
+              id="custom-script-count"
+              className={`pointer-events-none absolute right-4 bottom-3.5 text-[12px] leading-4 font-medium ${tooLong ? "text-red-600" : "text-[#b0b8c1]"}`}
+            >
+              {characterCount}/{CUSTOM_SCRIPT_LIMIT}
             </span>
           </div>
-          <p className="mt-2 text-[12px] leading-4 text-[#4e5968]">
-            {text.trim()
-              ? `${sentences.length}문장으로 나눠서 연습해요`
-              : "문장 단위로 나눠서 연습해요"}
+          <p
+            id="custom-script-help"
+            className={`mt-2 text-[12px] leading-4 ${tooLong ? "text-red-600" : "text-[#4e5968]"}`}
+          >
+            {tooLong
+              ? "원고는 300자 이내로 입력해 주세요."
+              : text.trim()
+                ? `${sentences.length}문장으로 나눠서 연습해요`
+                : "문장 단위로 나눠서 연습해요"}
           </p>
         </main>
       ) : (
-        <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-6">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 pt-3 pb-4">
           <h2 className="text-[22px] leading-[30px] font-bold tracking-[-0.43px] text-[#191f28]">
             이렇게 나눠서 연습할게요
           </h2>
-          <div className="mt-5 flex items-center">
+          <div className="mt-5 flex shrink-0 items-center">
             <p className="text-[14px] leading-5 font-medium text-[#4e5968]">
               전체 문장
             </p>
@@ -134,21 +154,7 @@ export function MyScriptScreen() {
               </span>
             </p>
           </div>
-          <ol className="mt-2 space-y-2.5">
-            {sentences.map((sentence, index) => (
-              <li
-                key={`${index}-${sentence}`}
-                className="flex items-start gap-3 rounded-xl bg-white p-3.5 shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
-              >
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#edf2ff] text-[12px] leading-4 font-bold text-[#2f6bff]">
-                  {index + 1}
-                </span>
-                <span className="text-[15px] leading-[22px] font-medium text-[#191f28]">
-                  {sentence}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <SentenceReader sentences={sentences} className="mt-2 flex-1" />
         </main>
       )}
 
@@ -160,7 +166,7 @@ export function MyScriptScreen() {
         )}
         <button
           type="button"
-          disabled={!text.trim() || saving}
+          disabled={!text.trim() || tooLong || saving}
           onClick={() =>
             stage === "input" ? setStage("confirm") : void startPractice()
           }

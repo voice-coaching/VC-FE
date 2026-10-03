@@ -10,11 +10,12 @@ import {
   resetAuthSession,
 } from "@/lib/auth-session";
 import { hasAcceptedTerms } from "@/lib/terms-flow";
+import { sessionRouteRedirect } from "@/lib/session-route";
 
 const PROTECTED_PREFIXES = [
   "/home",
   "/onboarding",
-  "/terms/complete",
+  "/terms",
   "/news",
   "/sentences",
   "/my-script",
@@ -34,9 +35,13 @@ function isProtectedPath(pathname: string) {
 function canOpenPath(pathname: string) {
   const session = getAuthSessionSnapshot();
   if (session.status !== "authenticated") return false;
-  return session.onboardingCompleted
-    ? pathname !== "/onboarding"
-    : pathname === "/onboarding" && hasAcceptedTerms(session.userId);
+  return (
+    sessionRouteRedirect(
+      pathname,
+      session.onboardingCompleted,
+      hasAcceptedTerms(session.userId),
+    ) === null
+  );
 }
 
 export function SessionGate({ children }: { children: ReactNode }) {
@@ -60,18 +65,15 @@ export function SessionGate({ children }: { children: ReactNode }) {
       return;
     }
     if (cachedSession.status === "authenticated") {
-      if (cachedSession.onboardingCompleted && pathname === "/onboarding") {
-        router.replace("/home");
+      const destination = sessionRouteRedirect(
+        pathname,
+        cachedSession.onboardingCompleted,
+        hasAcceptedTerms(cachedSession.userId),
+      );
+      if (destination) {
+        setStatus("checking");
+        router.replace(destination);
         return;
-      }
-      if (!cachedSession.onboardingCompleted) {
-        const destination = hasAcceptedTerms(cachedSession.userId)
-          ? "/onboarding"
-          : "/terms";
-        if (pathname !== destination) {
-          router.replace(destination);
-          return;
-        }
       }
       setStatus("ready");
       return;
@@ -99,18 +101,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
         if (!active) return;
         markAuthenticatedUser({ ...user, onboardingCompleted });
-        if (onboardingCompleted && pathname === "/onboarding") {
-          router.replace("/home");
+        const destination = sessionRouteRedirect(
+          pathname,
+          onboardingCompleted,
+          hasAcceptedTerms(user.id),
+        );
+        if (destination) {
+          router.replace(destination);
           return;
-        }
-        if (!onboardingCompleted) {
-          const destination = hasAcceptedTerms(user.id)
-            ? "/onboarding"
-            : "/terms";
-          if (pathname !== destination) {
-            router.replace(destination);
-            return;
-          }
         }
         setStatus("ready");
       })
@@ -138,7 +136,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
   return (
     <main className="flex min-h-dvh items-center justify-center px-6 text-center">
-      {status === "checking" ? (
+      {status !== "error" ? (
         <LoadingOverlay label="로그인 상태를 확인하는 중…" />
       ) : (
         <div>

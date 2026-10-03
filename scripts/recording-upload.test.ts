@@ -117,7 +117,7 @@ test("relative backend upload URLs go through the proxy with the access token", 
   assert.equal(FakeXMLHttpRequest.latest?.method, "PUT");
   assert.equal(
     FakeXMLHttpRequest.latest?.url,
-    "/api/backend/api/recordings/upload/1",
+    "https://frontend.invalid/api/backend/api/recordings/upload/1",
   );
   assert.equal(
     FakeXMLHttpRequest.latest?.headers.get("Authorization"),

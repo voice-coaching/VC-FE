@@ -286,7 +286,11 @@ export default function HomeStreak() {
                   이번 주 목표
                 </strong>
                 <span className="mt-0.5 flex items-center text-xs leading-4 font-medium text-[#8b95a1]">
-                  {weeklyGoal > 0 ? `주 ${weeklyGoal}일 연습` : "목표 미설정"}
+                  {weeklyGoal > 0
+                    ? `주 ${weeklyGoal}일 연습`
+                    : profile
+                      ? "자유롭게 연습"
+                      : "목표 미설정"}
                   <ChevronRight className="size-4" />
                 </span>
               </button>
@@ -295,13 +299,13 @@ export default function HomeStreak() {
                   {weeklyCompleted}
                 </strong>
                 <span className="text-xs leading-4 font-medium text-[#8b95a1]">
-                  /{weeklyGoal || 0}일
+                  {weeklyGoal > 0 ? `/${weeklyGoal}일` : "일 연습"}
                 </span>
               </p>
             </div>
 
             <div className="mt-3.5 flex gap-1.5">
-              {goalDays.slice(0, weeklyGoal > 0 ? weeklyGoal : 5).map((day) => (
+              {goalDays.slice(0, weeklyGoal > 0 ? weeklyGoal : 7).map((day) => (
                 <span
                   key={day.label}
                   className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
@@ -333,7 +337,9 @@ export default function HomeStreak() {
               />
               <p className="text-[13px] leading-[18px] font-medium text-[#4e5968]">
                 {weeklyGoal === 0
-                  ? "연습 목표를 설정해 보세요"
+                  ? profile
+                    ? "정해진 목표 없이 자유롭게 연습해요"
+                    : "연습 목표를 설정해 보세요"
                   : remainingGoal === 0
                     ? "이번 주 목표를 달성했어요"
                     : `${remainingGoal}일만 더 하면 이번 주 목표 달성이에요`}
@@ -495,7 +501,12 @@ export default function HomeStreak() {
               </button>
             </div>
             <p className="mt-4 rounded-2xl bg-[#f7f8fa] p-4 text-sm leading-6 text-[#4e5968]">
-              현재 목표는 {weeklyGoal > 0 ? `주 ${weeklyGoal}일` : "설정 전"}
+              현재 목표는{" "}
+              {weeklyGoal > 0
+                ? `주 ${weeklyGoal}일`
+                : profile
+                  ? "자유 일정"
+                  : "설정 전"}
               이에요. 목표 변경은 마이페이지의 연습 계획에서 할 수 있어요.
             </p>
             <a

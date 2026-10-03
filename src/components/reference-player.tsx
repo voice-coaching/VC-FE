@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
 import { api, type Id, type ReferenceAudio } from "@/lib/api";
 import {
   remainingAudioDuration,
   resolveAudioDuration,
+  referencePlayback,
 } from "@/lib/audio-playback";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
@@ -18,6 +19,8 @@ type ReferencePlayerProps = {
   title?: string;
   source?: string;
   durationSeconds?: number;
+  startSeconds?: number;
+  endSeconds?: number;
   compact?: boolean;
   buttonTone?: "primary" | "neutral";
   variant?: "default" | "guide" | "recording";
@@ -27,7 +30,13 @@ type ReferencePlayerProps = {
 export function ReferencePlayer(props: ReferencePlayerProps) {
   return (
     <ReferencePlayerSession
-      key={JSON.stringify([props.contentId, props.recordingId, props.source])}
+      key={JSON.stringify([
+        props.contentId,
+        props.recordingId,
+        props.source,
+        props.startSeconds,
+        props.endSeconds,
+      ])}
       {...props}
     />
   );
@@ -39,12 +48,25 @@ function ReferencePlayerSession({
   title = "기준 발음 듣기",
   source,
   durationSeconds,
+  startSeconds = 0,
+  endSeconds,
   compact = false,
   buttonTone,
   variant = "default",
   disabled = false,
 }: ReferencePlayerProps) {
   const audio = useRef<HTMLAudioElement>(null);
+  const [playbackId] = useState(() => Symbol("reference-player"));
+  const owner = useSyncExternalStore(
+    referencePlayback.subscribe,
+    referencePlayback.getSnapshot,
+    () => null,
+  );
+  const playbackBlocked = owner !== null && owner !== playbackId;
+  const releasePlayback = () => {
+    setPlaying(false);
+    referencePlayback.release(playbackId);
+  };
   const sequence = useRef(0);
   const busy = useRef(false);
   const [playing, setPlaying] = useState(false);
@@ -55,6 +77,23 @@ function ReferencePlayerSession({
     durationSeconds && Number.isFinite(durationSeconds) ? durationSeconds : 0;
   const [duration, setDuration] = useState(fallbackDuration);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const player = audio.current;
+    if (!player || endSeconds === undefined) return;
+    const stopAtEnd = () => {
+      if (!player.paused && player.currentTime >= endSeconds) {
+        player.pause();
+        player.currentTime = startSeconds;
+      }
+    };
+    const timer = window.setInterval(stopAtEnd, 40);
+    player.addEventListener("timeupdate", stopAtEnd);
+    return () => {
+      window.clearInterval(timer);
+      player.removeEventListener("timeupdate", stopAtEnd);
+    };
+  }, [startSeconds, endSeconds]);
 
   function syncDuration(player: HTMLAudioElement) {
     setDuration((current) =>
@@ -72,8 +111,9 @@ function ReferencePlayerSession({
       player?.pause();
       player?.removeAttribute("src");
       player?.load();
+      referencePlayback.release(playbackId);
     };
-  }, []);
+  }, [playbackId]);
 
   async function toggle() {
     const player = audio.current;
@@ -82,6 +122,7 @@ function ReferencePlayerSession({
       player.pause();
       return;
     }
+    if (disabled || !referencePlayback.claim(playbackId)) return;
     busy.current = true;
     const attempt = ++sequence.current;
     setLoading(true);
@@ -116,10 +157,18 @@ function ReferencePlayerSession({
         // This is the sole source owner; React must not reassign src during play().
         if (player.getAttribute("src") !== nextUrl) player.src = nextUrl;
       }
+      if (
+        player.currentTime < startSeconds ||
+        player.ended ||
+        (endSeconds !== undefined && player.currentTime >= endSeconds)
+      ) {
+        player.currentTime = startSeconds;
+      }
       await player.play();
     } catch (reason) {
       if (attempt !== sequence.current) return;
       setPlaying(false);
+      referencePlayback.release(playbackId);
       player.removeAttribute("src");
       setError(
         reason instanceof Error && reason.name === "AbortError"
@@ -148,13 +197,16 @@ function ReferencePlayerSession({
         <audio
           ref={audio}
           onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
-          onError={() => setError("가이드 음성을 불러오지 못했습니다.")}
+          onPause={releasePlayback}
+          onEnded={releasePlayback}
+          onError={() => {
+            releasePlayback();
+            setError("가이드 음성을 불러오지 못했습니다.");
+          }}
         />
         <button
           type="button"
-          disabled={disabled || loading}
+          disabled={disabled || loading || playbackBlocked}
           onClick={() => void toggle()}
           aria-label={playing ? "가이드 일시 정지" : "가이드 듣기"}
           className="flex size-14 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(26,33,48,0.06)] disabled:opacity-45"
@@ -183,20 +235,23 @@ function ReferencePlayerSession({
         <audio
           ref={audio}
           onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
+          onPause={releasePlayback}
           onEnded={() => {
-            setPlaying(false);
+            releasePlayback();
             setElapsed(0);
           }}
           onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
           onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
           onDurationChange={(event) => syncDuration(event.currentTarget)}
-          onError={() => setError("녹음 음성을 불러오지 못했습니다.")}
+          onError={() => {
+            releasePlayback();
+            setError("녹음 음성을 불러오지 못했습니다.");
+          }}
         />
         <div className="flex h-14 items-center gap-3 rounded-full bg-white py-2 pr-[18px] pl-2 shadow-[0_2px_4px_rgba(26,33,48,0.06)]">
           <button
             type="button"
-            disabled={disabled || loading}
+            disabled={disabled || loading || playbackBlocked}
             onClick={() => void toggle()}
             aria-label={playing ? "전체 녹음 일시 정지" : "전체 녹음 재생"}
             className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-45"
@@ -259,23 +314,23 @@ function ReferencePlayerSession({
         ref={audio}
         loop={repeat}
         onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPause={releasePlayback}
         onEnded={() => {
-          setPlaying(false);
+          releasePlayback();
           setElapsed(0);
         }}
         onTimeUpdate={(event) => setElapsed(event.currentTarget.currentTime)}
         onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
         onDurationChange={(event) => syncDuration(event.currentTarget)}
         onError={() => {
-          setPlaying(false);
+          releasePlayback();
           setError("음성을 불러오지 못했습니다. 다시 재생해 주세요.");
         }}
       />
       {buttonTone ? (
         <button
           type="button"
-          disabled={disabled || loading}
+          disabled={disabled || loading || playbackBlocked}
           onClick={() => void toggle()}
           className={`flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14px] leading-5 font-bold disabled:opacity-60 ${
             buttonTone === "primary"
@@ -283,16 +338,20 @@ function ReferencePlayerSession({
               : "bg-[#f2f4f6] text-[#4e5968]"
           }`}
         >
-          <Image
-            src={
-              buttonTone === "primary"
-                ? "/figma/report/play.svg"
-                : "/figma/report/headphones.svg"
-            }
-            alt=""
-            width={18}
-            height={18}
-          />
+          {playing ? (
+            <Pause className="size-[18px]" aria-hidden="true" />
+          ) : (
+            <Image
+              src={
+                buttonTone === "primary"
+                  ? "/figma/report/play.svg"
+                  : "/figma/report/headphones.svg"
+              }
+              alt=""
+              width={18}
+              height={18}
+            />
+          )}
           {loading ? "불러오는 중…" : playing ? "일시 정지" : title}
         </button>
       ) : compact ? (
@@ -300,7 +359,7 @@ function ReferencePlayerSession({
           <button
             type="button"
             aria-label={playing ? "내 녹음 일시 정지" : "내 녹음 재생"}
-            disabled={disabled || loading}
+            disabled={disabled || loading || playbackBlocked}
             onClick={() => void toggle()}
             className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#2f6bff]"
           >
@@ -346,7 +405,7 @@ function ReferencePlayerSession({
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={loading}
+              disabled={disabled || loading || playbackBlocked}
               onClick={() => void toggle()}
               className="design-action !min-h-12 !rounded-xl !text-sm"
             >

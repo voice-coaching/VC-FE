@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, type ReactNode } from "react";
 import { canNavigateBack } from "@/lib/navigation-history";
-import { safeInternalPath } from "@/lib/navigation";
+import { requestNavigation, safeInternalPath } from "@/lib/navigation";
 
 export function BackButton({
   fallback,
@@ -27,8 +27,10 @@ export function BackButton({
         const now = Date.now();
         if (now - lastClick.current < 500) return;
         lastClick.current = now;
-        if (canNavigateBack(window.history.state)) router.back();
-        else router.replace(safeInternalPath(fallback, "/home"));
+        requestNavigation(() => {
+          if (canNavigateBack(window.history.state)) router.back();
+          else router.replace(safeInternalPath(fallback, "/home"));
+        });
       }}
     >
       {children}

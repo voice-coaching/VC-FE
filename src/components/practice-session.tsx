@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Check, CircleAlert } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,6 +25,7 @@ import {
   type CourseDetail,
   type UserTitleExamResult,
 } from "@/lib/api";
+import { SentenceReader } from "@/components/sentence-reader";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
@@ -41,6 +48,7 @@ import {
 import { canonicalApi } from "@/lib/api/canonical";
 import { CanonicalResultUnavailable } from "@/lib/canonical-presentation";
 import { splitSentences } from "@/lib/sentences";
+import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
 import { cacheResources } from "@/lib/cache-resources";
@@ -135,6 +143,9 @@ function PracticeSessionBody({
   const [titleExamResult, setTitleExamResult] =
     useState<UserTitleExamResult | null>(null);
   const [titleExamError, setTitleExamError] = useState<string | null>(null);
+  const [titleExamSubmitting, setTitleExamSubmitting] = useState(false);
+  const titleExamAnalysisId = useRef<Id | null>(null);
+  const titleExamSubmitBusy = useRef(false);
   const [canRetryAnalysis, setCanRetryAnalysis] = useState(false);
   const [loadingNext, setLoadingNext] = useState(false);
   const [recordingAttempts, setRecordingAttempts] = useState<VoiceRecording[]>(
@@ -142,6 +153,7 @@ function PracticeSessionBody({
   );
   const [canCheckAnalysis, setCanCheckAnalysis] = useState(false);
   const [activeSentence, setActiveSentence] = useState(0);
+  const sentenceBoundaries = useRef<number[]>([0]);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const authEpochRef = useRef(getAuthSessionVersion());
@@ -150,11 +162,42 @@ function PracticeSessionBody({
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
   const recorder = useAudioRecorder();
+  const discardGuard = useRecordingDiscardGuard(
+    phase === "recording" ||
+      phase === "review" ||
+      recorder.status === "requesting",
+    true,
+  );
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
   const analysisLearningFocus =
-    content.learningFocus === "BOTH" ? "PRONUNCIATION" : content.learningFocus;
+    titleExamId || content.learningFocus === "BOTH"
+      ? "PRONUNCIATION"
+      : content.learningFocus;
+  const submitTitleExamResult = useCallback(
+    async (analysisId: Id) => {
+      if (!titleExamId || titleExamSubmitBusy.current) return;
+      titleExamAnalysisId.current = analysisId;
+      titleExamSubmitBusy.current = true;
+      setTitleExamSubmitting(true);
+      setTitleExamError(null);
+      try {
+        const result = await api.users.submitTitleExam(titleExamId, analysisId);
+        if (authEpochRef.current !== getAuthSessionVersion()) return;
+        setTitleExamResult(result);
+        // Completion is cached before grading; promotion must invalidate it again.
+        invalidateLearningCaches();
+      } catch (reason) {
+        setTitleExamError(titleExamErrorMessage(reason));
+      } finally {
+        titleExamSubmitBusy.current = false;
+        setTitleExamSubmitting(false);
+      }
+    },
+    [titleExamId],
+  );
+
   const sentences = splitSentences(content.scriptText);
   useEffect(() => {
     if (!courseId) return;
@@ -202,15 +245,23 @@ function PracticeSessionBody({
 
   useEffect(() => {
     phaseRef.current = phase;
-    if (recorder.status === "recorded" && phase === "recording")
-      setPhase("review");
+    if (recorder.status === "recorded" && phase === "recording") {
+      if (activeSentence < sentences.length - 1) {
+        setRequestError(
+          "모든 문장을 마치기 전에 녹음이 종료되었습니다. 녹음 시간 제한을 확인하고 처음부터 다시 녹음해 주세요.",
+        );
+        setPhase("error");
+      } else {
+        setPhase("review");
+      }
+    }
     if (
       ["denied", "unsupported", "error"].includes(recorder.status) &&
       phase === "recording"
     ) {
       setPhase("error");
     }
-  }, [phase, recorder.status]);
+  }, [phase, recorder.status, activeSentence, sentences.length]);
 
   useEffect(
     () => () => {
@@ -249,6 +300,7 @@ function PracticeSessionBody({
         }
         if (!active) return;
         const selected = attempts.find((item) => item.selected);
+        completedRef.current = resumedSession.status === "COMPLETED";
         selectedRecordingRef.current =
           selected?.recordingId ?? selected?.id ?? null;
         setRecordingAttempts(attempts);
@@ -294,6 +346,7 @@ function PracticeSessionBody({
           analysisPendingRef.current = false;
         }
         analysisPendingRef.current = false;
+        if (titleExamId) await submitTitleExamResult(analysisId);
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
@@ -316,10 +369,26 @@ function PracticeSessionBody({
       active = false;
       analysisPollRef.current?.abort();
     };
-  }, [content.id, resumeType, resumedSessionId]);
+  }, [
+    content.id,
+    resumeType,
+    resumedSessionId,
+    titleExamId,
+    submitTitleExamResult,
+  ]);
 
   async function ensureSession() {
     if (sessionId) return sessionId;
+    if (titleExamId) {
+      const createdId = await createTitleExamSession(
+        api,
+        titleExamId,
+        content.id,
+      );
+      setSessionId(createdId);
+      sessionIdRef.current = createdId;
+      return createdId;
+    }
     const session = await api.training.create({
       contentId: content.id,
       courseStepId: courseStepId || null,
@@ -334,15 +403,10 @@ function PracticeSessionBody({
   }
 
   async function getAnalysisCapabilities() {
-    if (
-      courseId ||
-      courseStepId ||
-      titleExamId ||
-      content.contentType === "CLASS_PRACTICE"
-    )
+    if (courseId || courseStepId || content.contentType === "CLASS_PRACTICE")
       throw new PracticeInputError(
         "unsupported",
-        "현재 서버의 분석 계약은 단독 음성 발음 연습만 지원합니다. 클래스·승급 시험 분석은 아직 지원하지 않습니다.",
+        "현재 서버의 분석 계약은 클래스 분석을 아직 지원하지 않습니다.",
       );
     if (capabilitiesRef.current) return capabilitiesRef.current;
     const userId = getAuthenticatedUserId();
@@ -392,6 +456,8 @@ function PracticeSessionBody({
   }
 
   async function startRecording() {
+    sentenceBoundaries.current = [0];
+    setActiveSentence(0);
     setRequestError(null);
     setRequestFailure(null);
     try {
@@ -526,19 +592,7 @@ function PracticeSessionBody({
         setCourseFinished(true);
       }
     }
-    if (titleExamId) {
-      try {
-        setTitleExamResult(
-          await api.users.submitTitleExam(titleExamId, analysisId),
-        );
-      } catch (reason) {
-        setTitleExamError(
-          reason instanceof Error
-            ? reason.message
-            : "승급 시험 결과를 저장하지 못했습니다.",
-        );
-      }
-    }
+    if (titleExamId) await submitTitleExamResult(analysisId);
     setPhase("result");
   }
 
@@ -703,6 +757,7 @@ function PracticeSessionBody({
         setSegments([]);
       }
       recorder.reset();
+      setActiveSentence(0);
       setRequestError(null);
       setRequestFailure(null);
       setPhase("idle");
@@ -937,6 +992,7 @@ function PracticeSessionBody({
 
   return (
     <div className="flex min-h-full flex-col bg-[#f2f4f6]">
+      {discardGuard.dialog}
       {localOnly && (
         <p className="mx-5 mb-3 rounded-xl bg-[#edf2ff] px-4 py-3 text-xs leading-5 text-[#1f55e0]">
           내 문장 체험 · 녹음은 이 기기에서만 재생됩니다. AI 분석은 서버에
@@ -966,27 +1022,11 @@ function PracticeSessionBody({
               )}
             </span>
           </div>
-          <section className="mx-5 shrink-0 rounded-2xl bg-white p-2 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
-            {sentences.map((sentence, index) => {
-              const active = phase === "recording" && index === activeSentence;
-              const pending = phase === "recording" && index > activeSentence;
-              return (
-                <div
-                  key={`${index}-${sentence}`}
-                  className={`flex items-stretch gap-2 rounded-xl px-3 py-2.5 ${active ? "bg-[#edf2ff]" : ""}`}
-                >
-                  {active && (
-                    <span className="w-[3px] shrink-0 rounded-sm bg-[#2f6bff]" />
-                  )}
-                  <p
-                    className={`flex-1 text-[16px] leading-6 ${active ? "font-bold text-[#191f28]" : `font-medium ${pending ? "text-[#b0b8c1]" : "text-[#191f28]"}`}`}
-                  >
-                    {sentence}
-                  </p>
-                </div>
-              );
-            })}
-          </section>
+          <SentenceReader
+            sentences={sentences}
+            activeIndex={phase === "recording" ? activeSentence : undefined}
+            className="mx-5 max-h-[clamp(80px,calc(100dvh-440px),360px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+          />
         </>
       )}
 
@@ -1021,7 +1061,7 @@ function PracticeSessionBody({
                 <span className="h-[84px] w-14" aria-hidden="true" />
               </div>
               <p className="text-center text-[14px] leading-5 font-medium text-[#8b95a1]">
-                첫 문장부터 읽고 다음 문장 버튼으로 넘어가요
+                한 문장을 다 읽으면 가운데 문장 녹음 완료 버튼을 눌러 주세요
               </p>
             </div>
           )}
@@ -1050,45 +1090,43 @@ function PracticeSessionBody({
                   width={8}
                   height={8}
                 />
+                <span>
+                  {recorder.status === "stopping"
+                    ? "녹음 마무리 중"
+                    : "녹음 중"}
+                </span>
                 {formatElapsed(recorder.elapsedMs)}
               </p>
               <div className="flex items-start gap-9">
                 <span className="h-[84px] w-14" aria-hidden="true" />
                 <button
                   type="button"
-                  onClick={recorder.stop}
-                  disabled={recorder.status === "stopping"}
+                  onClick={() => {
+                    if (recorder.status !== "recording") return;
+                    if (activeSentence < sentences.length - 1) {
+                      sentenceBoundaries.current[activeSentence + 1] =
+                        recorder.getElapsedMs() / 1_000;
+                      setActiveSentence((current) => current + 1);
+                    } else {
+                      recorder.stop();
+                    }
+                  }}
+                  disabled={recorder.status !== "recording"}
                   className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-55"
-                  aria-label="녹음 종료"
+                  aria-label={
+                    activeSentence < sentences.length - 1
+                      ? "문장 녹음 완료"
+                      : "전체 녹음 완료"
+                  }
                 >
                   <span className="size-6 rounded-md bg-white" />
                 </button>
-                <button
-                  type="button"
-                  disabled={recorder.status === "stopping"}
-                  onClick={() => {
-                    if (activeSentence >= sentences.length - 1) recorder.stop();
-                    else setActiveSentence((current) => current + 1);
-                  }}
-                  className="flex flex-col items-center gap-1.5 pt-2.5 disabled:opacity-55"
-                >
-                  <span className="flex size-14 items-center justify-center rounded-full bg-[#191f28]">
-                    <Image
-                      src="/figma/practice/arrow-right.svg"
-                      alt=""
-                      width={22}
-                      height={22}
-                    />
-                  </span>
-                  <span className="text-[12px] leading-4 font-bold text-[#4e5968]">
-                    {activeSentence >= sentences.length - 1
-                      ? "녹음 완료"
-                      : "다음 문장"}
-                  </span>
-                </button>
+                <span className="h-[84px] w-14" aria-hidden="true" />
               </div>
               <p className="text-[14px] leading-5 font-medium text-[#8b95a1]">
-                다 읽으면 다음 문장으로 넘어가요
+                {activeSentence < sentences.length - 1
+                  ? "문장 녹음을 완료하면 다음 문장으로 자동으로 넘어가요"
+                  : "다 읽으면 가운데 정지 버튼으로 녹음을 완료해 주세요"}
               </p>
             </div>
           )}
@@ -1108,20 +1146,21 @@ function PracticeSessionBody({
                       key={`${index}-${sentence}`}
                       className="flex items-center gap-2 rounded-xl py-3 pr-2 pl-3"
                     >
-                      <p className="min-w-0 flex-1 text-[15px] leading-[22px] font-medium text-[#333d4b]">
+                      <p className="min-w-0 flex-1 [overflow-wrap:anywhere] text-[15px] leading-[22px] font-medium text-[#333d4b]">
                         {sentence}
                       </p>
-                      <span
-                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e8f4ff]"
-                        title="문장별 구간 데이터 미제공"
-                      >
-                        <Image
-                          src="/figma/practice/play-small.svg"
-                          alt=""
-                          width={14}
-                          height={14}
+                      <div className="w-28 shrink-0">
+                        <ReferencePlayer
+                          source={recorder.previewUrl ?? undefined}
+                          title={`${index + 1}문장 듣기`}
+                          startSeconds={sentenceBoundaries.current[index] ?? 0}
+                          endSeconds={
+                            sentenceBoundaries.current[index + 1] ??
+                            recorder.durationMs / 1_000
+                          }
+                          buttonTone="neutral"
                         />
-                      </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1299,7 +1338,7 @@ function PracticeSessionBody({
               <p className="mt-2 text-sm text-[#6b7684]">
                 {titleExamResult.passed
                   ? "새 칭호는 마이페이지에 바로 반영됩니다."
-                  : "학습 횟수는 유지되며 언제든 다시 응시할 수 있어요."}
+                  : "마이페이지에서 다음 응시 가능 여부를 확인해 주세요."}
               </p>
               <button
                 type="button"
@@ -1311,12 +1350,23 @@ function PracticeSessionBody({
             </section>
           )}
           {titleExamError && (
-            <p
+            <div
               role="alert"
               className="rounded-2xl bg-destructive/10 px-4 py-3 text-xs text-destructive"
             >
               {titleExamError}
-            </p>
+              <button
+                type="button"
+                disabled={titleExamSubmitting}
+                onClick={() => {
+                  if (titleExamAnalysisId.current != null)
+                    void submitTitleExamResult(titleExamAnalysisId.current);
+                }}
+                className="mt-3 block min-h-11 w-full rounded-xl border border-current font-semibold disabled:opacity-50"
+              >
+                {titleExamSubmitting ? "채점 확인 중…" : "채점 다시 확인"}
+              </button>
+            </div>
           )}
           <AnalysisView
             analysis={analysis}
@@ -1338,7 +1388,9 @@ function PracticeSessionBody({
               type="button"
               disabled={loadingNext}
               onClick={() =>
-                courseId ? void goToNextContent() : router.push("/home")
+                courseId
+                  ? void goToNextContent()
+                  : router.push(titleExamId ? "/mypage" : "/home")
               }
               className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white disabled:opacity-50"
             >

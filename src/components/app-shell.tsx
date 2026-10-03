@@ -49,6 +49,7 @@ export function AppShell({
   className,
   viewportLocked = false,
   chromeColor,
+  bottomChromeColor,
   mainRef,
 }: {
   children: ReactNode;
@@ -56,6 +57,7 @@ export function AppShell({
   className?: string;
   viewportLocked?: boolean;
   chromeColor?: string;
+  bottomChromeColor?: string;
   mainRef?: Ref<HTMLElement>;
 }) {
   const pathname = usePathname();
@@ -76,8 +78,11 @@ export function AppShell({
   return (
     <div
       style={
-        chromeColor
-          ? ({ "--app-chrome-background": chromeColor } as CSSProperties)
+        chromeColor || bottomChromeColor
+          ? ({
+              "--app-chrome-background": chromeColor,
+              "--app-bottom-background": bottomChromeColor,
+            } as CSSProperties)
           : undefined
       }
       className={cn(

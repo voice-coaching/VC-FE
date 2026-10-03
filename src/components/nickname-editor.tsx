@@ -81,7 +81,7 @@ export function NicknameEditor({
         setOpen(nextOpen);
       }}
     >
-      <div className="mt-5 flex max-w-full items-center justify-center px-5 text-[#191f28]">
+      <div className="relative mt-5 flex max-w-full items-center justify-center px-11 text-[#191f28]">
         <h2
           className="min-w-0 break-all text-[20px] leading-7 font-bold"
           aria-live="polite"
@@ -93,7 +93,7 @@ export function NicknameEditor({
             type="button"
             aria-label="닉네임 변경"
             disabled={!displayName}
-            className="-my-2 flex size-11 shrink-0 items-center justify-center rounded-full text-[#4e5968] hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
+            className="absolute right-0 top-1/2 -translate-y-1/2 flex size-11 shrink-0 items-center justify-center rounded-full text-[#4e5968] hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
           >
             <Pencil className="size-4" aria-hidden="true" />
           </button>

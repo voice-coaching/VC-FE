@@ -1,4 +1,5 @@
 export const CATEGORY_LABELS: Record<string, string> = {
+  EXAMPLE_QUESTION: "예시문제",
   ECONOMY: "경제",
   SOCIETY: "사회",
   SOCIAL: "사회",

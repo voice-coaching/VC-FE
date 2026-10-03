@@ -335,14 +335,27 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
               취소
             </AlertDialogCancel>
             <AlertDialogAction
-              className="min-h-12 rounded-full bg-red-500 text-white"
-              disabled={deleting || !bundle}
+              className={`min-h-12 rounded-full text-white ${deleteError ? "bg-primary" : "bg-red-500"}`}
+              disabled={deleting || (!bundle && !deleteError)}
               onClick={(event) => {
                 event.preventDefault();
+                if (deleteError) {
+                  // The failed DELETE may have reached the server. Re-read
+                  // and validate current data before offering deletion again.
+                  setConfirmDelete(false);
+                  setDeleteError(null);
+                  setError(null);
+                  setRetry((value) => value + 1);
+                  return;
+                }
                 void deleteHistory();
               }}
             >
-              {deleting ? "삭제 중…" : "삭제"}
+              {deleting
+                ? "삭제 중…"
+                : deleteError
+                  ? "현재 기록 다시 확인"
+                  : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
