@@ -21,16 +21,10 @@ export function canonicalPresentation(
     coaching?.adapterStatus === "READY"
   ) {
     summary = coaching.items
-      .map(({ candidate, expression }) =>
-        [
-          `‘${candidate.expectedPhone}’ 발음 연습 · 모델 관측 기반 검토이며 확정된 발음 오류가 아닙니다.`,
-          expression.explanation,
-          expression.action,
-          expression.practice,
-          expression.selfCheck,
-        ].join("\n"),
-      )
-      .join("\n\n");
+      // H5 validates one short action per candidate on the server. Keep the
+      // complete expressions/evidence in canonical; do not expand the summary.
+      .map(({ expression }) => expression.action)
+      .join("\n");
   } else if (
     core?.decision.status === "ACCEPT" &&
     core.feedbackDeliveryAllowed
