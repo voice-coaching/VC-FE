@@ -33,7 +33,11 @@ export function canonicalDatabaseId(value: Id): number {
 export function createCanonicalAnalysisClient(baseUrl: string) {
   const { request } = createHttpClient(baseUrl);
 
-  async function get(expected: CanonicalViewExpectation, signal?: AbortSignal) {
+  async function get(
+    expected: CanonicalViewExpectation,
+    signal?: AbortSignal,
+    waitSeconds = 0,
+  ) {
     if (
       !Number.isSafeInteger(expected.analysisId) ||
       expected.analysisId <= 0
@@ -45,7 +49,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       );
     }
     const data = await request<unknown>(
-      `/api/v3/analyses/${expected.analysisId}`,
+      `/api/v3/analyses/${expected.analysisId}${waitSeconds ? `?waitSeconds=${waitSeconds}` : ""}`,
       { method: "GET", cache: "no-store", signal, endpointErrorsOnly: true },
     );
     const view = readCanonicalAnalysisView(data, expected);
