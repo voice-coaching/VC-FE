@@ -1,7 +1,7 @@
 import type { AnalysisResult } from "./api/types";
 import type { CanonicalAnalysisView } from "./canonical-analysis";
 
-/** Existing screen model only. Never converts v4 into a legacy API contract. */
+/** Existing screen model only. Never converts v5 into a legacy API contract. */
 export function canonicalPresentation(
   view: CanonicalAnalysisView,
 ): AnalysisResult {
