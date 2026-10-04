@@ -448,6 +448,7 @@ export interface AnalysisRequest {
 }
 
 export interface AnalysisProgress {
+  resultAvailable?: boolean;
   analysisId: Id;
   status: AnalysisStatus;
   stage: string;
