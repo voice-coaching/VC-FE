@@ -1,5 +1,7 @@
 # 분석 상태 조회 연결 복구
 
+2026-10-04 후속: [서버 deadline·같은 시도 재조회](analysis-deadline-20261004.md). 아래 10분 전체 예산은 deadline 필드를 제공하지 않는 구 Backend의 fallback이며, 새 서버에서는 최초 상태의 서버 상대 기한을 사용한다.
+
 2026-10-03 구현. 상태 GET의 일시적인 502가 분석 자체의 실패로 표시되던 경로를 수정한다.
 `/api/backend` → AWS Backend → RunPod 구조와 canonical v4 결과/완료 조건을 유지한다.
 

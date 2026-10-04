@@ -30,7 +30,10 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
-import { createTitleExamSession, titleExamErrorMessage } from "@/lib/title-exam";
+import {
+  createTitleExamSession,
+  titleExamErrorMessage,
+} from "@/lib/title-exam";
 import {
   pollAnalysis,
   AnalysisConnectionUnavailable,
@@ -156,6 +159,7 @@ function PracticeSessionBody({
   const [activeSentence, setActiveSentence] = useState(0);
   const sentenceBoundaries = useRef<number[]>([0]);
   const analysisPendingRef = useRef(resumeType === "ANALYSIS_STATUS");
+  const waitingAnalysisRef = useRef<Id | undefined>(undefined);
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const authEpochRef = useRef(getAuthSessionVersion());
   const selectedRecordingRef = useRef<Id | null>(null);
@@ -477,6 +481,7 @@ function PracticeSessionBody({
   }
 
   async function waitForAnalysis(activeSessionId: Id, expectedAnalysisId?: Id) {
+    waitingAnalysisRef.current = expectedAnalysisId;
     if (!mountedRef.current)
       throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
     analysisPollRef.current?.abort();
@@ -496,6 +501,11 @@ function PracticeSessionBody({
       });
     } catch (reason) {
       if (controller.signal.aborted) throw reason;
+      if (
+        reason instanceof AnalysisConnectionUnavailable ||
+        reason instanceof AnalysisWaitTimeout
+      )
+        waitingAnalysisRef.current = reason.analysisId ?? expectedAnalysisId;
       setRequestFailure(reason);
       setCanRetryAnalysis(
         reason instanceof CanonicalResultUnavailable &&
@@ -519,7 +529,10 @@ function PracticeSessionBody({
     setCanCheckAnalysis(false);
     setPhase("analyzing");
     try {
-      const analysisId = await waitForAnalysis(sessionId);
+      const analysisId = await waitForAnalysis(
+        sessionId,
+        waitingAnalysisRef.current,
+      );
       await loadResult(sessionId, analysisId);
     } catch (reason) {
       setRequestFailure(reason);
