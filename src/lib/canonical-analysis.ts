@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { canonicalScoreSchema } from "./canonical-score";
 
-// Deployed PUBLIC view allowlist. Safe subtrees follow runpod_result_v4;
+// Deployed PUBLIC view allowlist. Safe subtrees follow runpod_result_v5;
 // this is never a parser for the private callback or raw core.
 export const CANONICAL_VIEW_SCHEMA =
-  "voice-coaching.canonical-analysis-view.v1";
-export const CANONICAL_PROFILE = "CANONICAL_FROZEN_20260928_V4";
+  "voice-coaching.canonical-analysis-view.v2";
+export const HANDOFF_VIEW_SCHEMA = "voice-coaching.canonical-analysis-view.v2";
+export const HANDOFF_PROFILE = "CANONICAL_HANDOFF_20261004_V5";
+export const CANONICAL_PROFILE = "CANONICAL_HANDOFF_20261004_V5";
 
 const text = z.string().min(1);
 const code = text.max(256).regex(/^[A-Za-z0-9_.:-]+$/);
@@ -204,13 +206,13 @@ const actionsSchema = z
 
 const projectionSchema = z
   .object({
-    schemaVersion: z.literal(CANONICAL_VIEW_SCHEMA),
+    schemaVersion: z.literal(HANDOFF_VIEW_SCHEMA),
     analysisId: databaseId,
     recordingId: databaseId,
     requestId: z.string().uuid(),
     executionId: z.string().uuid(),
     jobStatus: z.enum(["PENDING", "PROCESSING", "COMPLETED", "FAILED"]),
-    analysisProfile: z.literal(CANONICAL_PROFILE),
+    analysisProfile: z.literal(HANDOFF_PROFILE),
     canonicalAnalysis: canonicalSchema.nullable(),
     serviceFailure: z
       .object({ origin: code, code, stage: code })
@@ -269,6 +271,12 @@ export function readCanonicalAnalysisView(
   const parsed = projectionSchema.safeParse(input);
   if (!parsed.success) throw new CanonicalProjectionError();
   const view = parsed.data;
+  requireProjection(
+    (view.schemaVersion === CANONICAL_VIEW_SCHEMA &&
+      view.analysisProfile === CANONICAL_PROFILE) ||
+      (view.schemaVersion === HANDOFF_VIEW_SCHEMA &&
+        view.analysisProfile === HANDOFF_PROFILE),
+  );
   for (const field of [
     "analysisId",
     "recordingId",

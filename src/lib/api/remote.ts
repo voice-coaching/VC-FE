@@ -497,7 +497,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
       async getSegments(analysisId, filters = {}) {
         await canonical.get({ analysisId: canonicalDatabaseId(analysisId) });
-        // Public v4 exposes ordered phoneme candidates, not sentence judgments.
+        // Public v5 exposes ordered phoneme candidates, not sentence judgments.
         return {
           items: [],
           page: filters.page ?? 0,

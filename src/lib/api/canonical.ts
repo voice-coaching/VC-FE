@@ -10,8 +10,8 @@ import {
   type CanonicalViewExpectation,
 } from "../canonical-analysis";
 
-export const CANONICAL_RESULT_HEADER =
-  "voice-coaching.runpod-analysis-result.v4";
+export const HANDOFF_RESULT_HEADER = "voice-coaching.runpod-analysis-result.v5";
+export const CANONICAL_RESULT_HEADER = HANDOFF_RESULT_HEADER;
 export function canonicalDatabaseId(value: Id): number {
   if (typeof value === "string" && !/^[1-9][0-9]*$/.test(value))
     throw new ApiError(
@@ -45,18 +45,14 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       );
     }
     const data = await request<unknown>(
-      `/api/v2/analyses/${expected.analysisId}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        signal,
-        endpointErrorsOnly: true,
-      },
+      `/api/v3/analyses/${expected.analysisId}`,
+      { method: "GET", cache: "no-store", signal, endpointErrorsOnly: true },
     );
-    return readCanonicalAnalysisView(data, expected);
+    const view = readCanonicalAnalysisView(data, expected);
+    return view;
   }
 
-  function submit(
+  async function submit(
     sessionId: Id,
     consent: AnalysisConsentInput,
     retry: boolean,
@@ -70,7 +66,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
         signal,
         cache: "no-store",
         endpointErrorsOnly: true,
-        headers: { "X-Analysis-Result-Schema": CANONICAL_RESULT_HEADER },
+        headers: { "X-Analysis-Result-Schema": HANDOFF_RESULT_HEADER },
       },
     );
   }
