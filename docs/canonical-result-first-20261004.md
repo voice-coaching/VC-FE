@@ -1,5 +1,7 @@
 # v5 결과 우선 표시
 
+후속: [결과 직접 수신](canonical-direct-result-20261004.md). 아래 초기 구현의 상태 polling→별도 결과 GET을 결과 대기 요청 한 번으로 대체한다.
+
 구현 상태이며 운영 배포·브라우저 QA는 별도다. Backend의 `analysis.canonical.delivery.enabled`를 켜기 전에 이 FE를 먼저 반영해야 한다.
 
 - 상태 응답의 `resultAvailable=true`에서 분석 polling을 끝내고 같은 analysis의 결과를 조회한다. analysis/recording/request/execution ID 검증은 유지한다.
