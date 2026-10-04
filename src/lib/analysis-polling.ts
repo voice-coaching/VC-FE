@@ -176,6 +176,7 @@ export async function pollAnalysis({
       failures = 0;
       onConnectionChange?.(false);
       onProgress(status.progressPercent);
+      if (status.resultAvailable === true) return status.analysisId;
       if (status.status === "COMPLETED") return status.analysisId;
       if (status.status === "FAILED")
         throw new AnalysisFailed(

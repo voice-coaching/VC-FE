@@ -74,6 +74,11 @@ type Phase =
   | "error";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function savingResult(result: AnalysisResult | null) {
+  return ["SAVING", "RETRYING"].includes(
+    result?.canonical?.persistenceStatus ?? "",
+  );
+}
 
 function invalidateLearningCaches() {
   const userId = getAuthenticatedUserId();
@@ -350,8 +355,9 @@ function PracticeSessionBody({
           completedRef.current = true;
           analysisPendingRef.current = false;
         }
-        analysisPendingRef.current = false;
-        if (titleExamId) await submitTitleExamResult(analysisId);
+        analysisPendingRef.current = savingResult(result);
+        if (titleExamId && !savingResult(result))
+          await submitTitleExamResult(analysisId);
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
@@ -574,16 +580,28 @@ function PracticeSessionBody({
       analysisId,
       selectedRecordingRef.current,
     );
-    if (result.canonical && !result.canonical.actions.canComplete)
+    if (
+      result.canonical &&
+      !result.canonical.actions.canComplete &&
+      !savingResult(result)
+    )
       throw new CanonicalResultUnavailable(result.canonical);
     return result;
   }
 
   async function loadResult(activeSessionId: Id, analysisId: Id) {
+    const authVersion = getAuthSessionVersion();
     const result = await readResult(analysisId);
+    if (!mountedRef.current || authVersion !== getAuthSessionVersion()) return;
     const segmentPage = { items: [] };
     setAnalysis(result);
     setSegments(segmentPage.items);
+    // Results become visible before database persistence and learning completion.
+    setPhase("result");
+    if (savingResult(result)) {
+      analysisPendingRef.current = true;
+      return;
+    }
     await api.training.complete(
       activeSessionId,
       Math.max(1, Math.round(recorder.durationMs / 1_000)),
@@ -609,6 +627,75 @@ function PracticeSessionBody({
     if (titleExamId) await submitTitleExamResult(analysisId);
     setPhase("result");
   }
+
+  useEffect(() => {
+    const view = analysis?.canonical;
+    if (phase !== "result" || !sessionId || !view || !savingResult(analysis))
+      return;
+    const owner = new AbortController();
+    const epoch = getAuthSessionVersion();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      try {
+        const current = await canonicalApi.get(
+          {
+            analysisId: view.analysisId,
+            recordingId: view.recordingId,
+            requestId: view.requestId,
+            executionId: view.executionId,
+          },
+          owner.signal,
+        );
+        if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+        if (
+          current.persistenceStatus === "SAVED" ||
+          current.persistenceStatus === "NONE"
+        ) {
+          await loadResult(sessionId, current.analysisId);
+          return;
+        }
+        if (
+          current.persistenceStatus !== "SAVING" &&
+          current.persistenceStatus !== "RETRYING"
+        )
+          throw new CanonicalResultUnavailable(current);
+        setAnalysis((previous) =>
+          previous ? { ...previous, canonical: current } : previous,
+        );
+      } catch (error) {
+        if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+        if (
+          error instanceof CanonicalResultUnavailable ||
+          (error instanceof ApiError &&
+            [401, 403, 404, 409].includes(error.status))
+        ) {
+          setAnalysis(null);
+          setRequestFailure(error);
+          setPhase("error");
+          setRequestError("현재 분석 결과를 다시 확인해 주세요.");
+          return;
+        }
+        setRequestError(
+          "결과는 준비됐지만 저장 상태를 확인하지 못했습니다. 다시 확인하고 있습니다.",
+        );
+      }
+      if (!owner.signal.aborted) timer = setTimeout(check, 5_000);
+    };
+    timer = setTimeout(check, 1_000);
+    return () => {
+      owner.abort();
+      if (timer) clearTimeout(timer);
+    };
+    // The full attempt identity scopes the observer; rendering a fresh snapshot does not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    phase,
+    sessionId,
+    analysis?.canonical?.analysisId,
+    analysis?.canonical?.requestId,
+    analysis?.canonical?.executionId,
+    analysis?.canonical?.persistenceStatus,
+  ]);
 
   async function analyze() {
     if (!recorder.blob) return;
@@ -1382,6 +1469,17 @@ function PracticeSessionBody({
               </button>
             </div>
           )}
+          {savingResult(analysis) && (
+            <p
+              role="status"
+              className="mx-5 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900"
+            >
+              {analysis?.canonical?.persistenceStatus === "RETRYING"
+                ? "분석 결과는 준비됐습니다. 기록 저장을 다시 시도하고 있습니다."
+                : "분석 결과가 준비됐습니다. 기록을 저장하고 있습니다."}{" "}
+              화면을 닫아도 저장은 계속됩니다.
+            </p>
+          )}
           <AnalysisView
             analysis={analysis}
             courseMode={Boolean(courseId)}
@@ -1400,7 +1498,10 @@ function PracticeSessionBody({
           <div className="sticky bottom-0 border-t border-[#e5e8eb] bg-white px-5 py-3">
             <button
               type="button"
-              disabled={loadingNext}
+              disabled={
+                loadingNext ||
+                (Boolean(courseId || titleExamId) && savingResult(analysis))
+              }
               onClick={() =>
                 courseId
                   ? void goToNextContent()

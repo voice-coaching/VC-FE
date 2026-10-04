@@ -219,6 +219,9 @@ const projectionSchema = z
       .strict()
       .nullable(),
     actions: actionsSchema,
+    persistenceStatus: z
+      .enum(["NONE", "SAVING", "SAVED", "RETRYING"])
+      .optional(),
   })
   .strict();
 
@@ -288,6 +291,15 @@ export function readCanonicalAnalysisView(
     );
   }
   const { canonicalAnalysis: canonical, actions, jobStatus } = view;
+  if (
+    view.persistenceStatus === "SAVING" ||
+    view.persistenceStatus === "RETRYING"
+  ) {
+    requireProjection(
+      !actions.canComplete && !actions.canRetry && !actions.canRerecord,
+    );
+    requireProjection(jobStatus === "COMPLETED" || jobStatus === "FAILED");
+  }
   const pending = jobStatus === "PENDING" || jobStatus === "PROCESSING";
   requireProjection(
     !pending || (canonical === null && view.serviceFailure === null),
