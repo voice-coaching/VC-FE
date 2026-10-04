@@ -35,10 +35,10 @@ import {
   titleExamErrorMessage,
 } from "@/lib/title-exam";
 import {
-  pollAnalysis,
   AnalysisConnectionUnavailable,
   AnalysisWaitTimeout,
 } from "@/lib/analysis-polling";
+import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
 import {
   describePracticeError,
   PracticeInputError,
@@ -50,7 +50,10 @@ import {
   subscribeAuthSession,
 } from "@/lib/api/client";
 import { canonicalApi } from "@/lib/api/canonical";
-import { CanonicalResultUnavailable } from "@/lib/canonical-presentation";
+import {
+  CanonicalResultUnavailable,
+  canonicalPresentation,
+} from "@/lib/canonical-presentation";
 import { splitSentences } from "@/lib/sentences";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
@@ -315,9 +318,9 @@ function PracticeSessionBody({
           selected?.recordingId ?? selected?.id ?? null;
         setRecordingAttempts(attempts);
 
-        let analysisId: Id;
+        let deliveredResult: AnalysisResult;
         try {
-          analysisId = await waitForAnalysis(resumedSessionId);
+          deliveredResult = await waitForAnalysis(resumedSessionId);
         } catch (reason) {
           if (
             reason instanceof ApiError &&
@@ -331,12 +334,13 @@ function PracticeSessionBody({
           throw reason;
         }
         if (!active) return;
-        const result = await readResult(analysisId);
+        const result = await readResult(deliveredResult.id, deliveredResult);
         if (!active) return;
         const segmentPage = { items: [] };
         if (!active) return;
         setAnalysis(result);
         setSegments(segmentPage.items);
+        setPhase("result");
         if (
           resumedSession.status !== "COMPLETED" &&
           result.canonical?.actions.canComplete
@@ -357,7 +361,7 @@ function PracticeSessionBody({
         }
         analysisPendingRef.current = savingResult(result);
         if (titleExamId && !savingResult(result))
-          await submitTitleExamResult(analysisId);
+          await submitTitleExamResult(result.id);
         if (active) setPhase("result");
       } catch (reason) {
         if (!active) return;
@@ -497,11 +501,13 @@ function PracticeSessionBody({
     analysisPendingRef.current = true;
     setCanCheckAnalysis(false);
     try {
-      return await pollAnalysis({
-        getStatus: (signal) =>
-          api.training.getAnalysisStatus(activeSessionId, signal),
+      if (selectedRecordingRef.current == null)
+        throw new Error("선택한 녹음을 확인할 수 없습니다.");
+      return await waitForCanonicalResult({
+        sessionId: activeSessionId,
+        recordingId: selectedRecordingRef.current,
+        analysisId: expectedAnalysisId,
         signal: controller.signal,
-        expectedAnalysisId,
         onConnectionChange: setConnectionRecovering,
         onProgress: setAnalysisProgress,
       });
@@ -535,11 +541,11 @@ function PracticeSessionBody({
     setCanCheckAnalysis(false);
     setPhase("analyzing");
     try {
-      const analysisId = await waitForAnalysis(
+      const result = await waitForAnalysis(
         sessionId,
         waitingAnalysisRef.current,
       );
-      await loadResult(sessionId, analysisId);
+      await loadResult(sessionId, result.id, result);
     } catch (reason) {
       setRequestFailure(reason);
       setRequestError(
@@ -573,13 +579,23 @@ function PracticeSessionBody({
     );
   }
 
-  async function readResult(analysisId: Id) {
+  async function readResult(analysisId: Id, delivered?: AnalysisResult) {
     if (selectedRecordingRef.current == null)
       throw new Error("선택한 녹음을 확인할 수 없습니다.");
-    const result = await api.analyses.get(
-      analysisId,
-      selectedRecordingRef.current,
-    );
+    if (
+      delivered &&
+      (String(delivered.id) !== String(analysisId) ||
+        String(delivered.canonical?.recordingId) !==
+          String(selectedRecordingRef.current))
+    )
+      throw new ApiError(
+        "분석 시도가 변경되었습니다.",
+        409,
+        "CANONICAL_ATTEMPT_CHANGED",
+      );
+    const result =
+      delivered ??
+      (await api.analyses.get(analysisId, selectedRecordingRef.current));
     if (
       result.canonical &&
       !result.canonical.actions.canComplete &&
@@ -589,9 +605,13 @@ function PracticeSessionBody({
     return result;
   }
 
-  async function loadResult(activeSessionId: Id, analysisId: Id) {
+  async function loadResult(
+    activeSessionId: Id,
+    analysisId: Id,
+    delivered?: AnalysisResult,
+  ) {
     const authVersion = getAuthSessionVersion();
-    const result = await readResult(analysisId);
+    const result = await readResult(analysisId, delivered);
     if (!mountedRef.current || authVersion !== getAuthSessionVersion()) return;
     const segmentPage = { items: [] };
     setAnalysis(result);
@@ -651,7 +671,11 @@ function PracticeSessionBody({
           current.persistenceStatus === "SAVED" ||
           current.persistenceStatus === "NONE"
         ) {
-          await loadResult(sessionId, current.analysisId);
+          await loadResult(
+            sessionId,
+            current.analysisId,
+            canonicalPresentation(current),
+          );
           return;
         }
         if (
@@ -782,14 +806,11 @@ function PracticeSessionBody({
         await getConsentInput(),
       );
       setPhase("analyzing");
-      const completedAnalysisId = await waitForAnalysis(
+      const deliveredResult = await waitForAnalysis(
         activeSessionId,
         requested.analysisId,
       );
-      await loadResult(
-        activeSessionId,
-        completedAnalysisId ?? requested.analysisId,
-      );
+      await loadResult(activeSessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
       setRequestFailure(reason);
       setRequestError(
@@ -822,11 +843,11 @@ function PracticeSessionBody({
         await getConsentInput(),
         expected,
       );
-      const completedAnalysisId = await waitForAnalysis(
+      const deliveredResult = await waitForAnalysis(
         sessionId,
         requested.analysisId,
       );
-      await loadResult(sessionId, completedAnalysisId ?? requested.analysisId);
+      await loadResult(sessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
       setRequestFailure(reason);
       setRequestError(
