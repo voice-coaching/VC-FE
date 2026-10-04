@@ -50,6 +50,13 @@ import {
   subscribeAuthSession,
 } from "@/lib/api/client";
 import { canonicalApi } from "@/lib/api/canonical";
+import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
+import {
+  awaitCanonicalPersistence,
+  completeCanonicalPractice,
+  invalidatesCanonicalResult,
+  resultStillPending,
+} from "@/lib/canonical-persistence";
 import {
   CanonicalResultUnavailable,
   canonicalPresentation,
@@ -334,35 +341,7 @@ function PracticeSessionBody({
           throw reason;
         }
         if (!active) return;
-        const result = await readResult(deliveredResult.id, deliveredResult);
-        if (!active) return;
-        const segmentPage = { items: [] };
-        if (!active) return;
-        setAnalysis(result);
-        setSegments(segmentPage.items);
-        setPhase("result");
-        if (
-          resumedSession.status !== "COMPLETED" &&
-          result.canonical?.actions.canComplete
-        ) {
-          const selectedRecording = attempts.find((item) => item.selected);
-          const durationSeconds = Math.max(
-            1,
-            Math.round((selectedRecording?.durationMs ?? 0) / 1_000),
-          );
-          await api.training.complete(
-            resumedSessionId,
-            durationSeconds,
-            result.canonical,
-          );
-          invalidateLearningCaches();
-          completedRef.current = true;
-          analysisPendingRef.current = false;
-        }
-        analysisPendingRef.current = savingResult(result);
-        if (titleExamId && !savingResult(result))
-          await submitTitleExamResult(result.id);
-        if (active) setPhase("result");
+        await loadResult(resumedSessionId, deliveredResult.id, deliveredResult);
       } catch (reason) {
         if (!active) return;
         setRequestFailure(reason);
@@ -418,11 +397,13 @@ function PracticeSessionBody({
   }
 
   async function getAnalysisCapabilities() {
-    if (courseId || courseStepId || content.contentType === "CLASS_PRACTICE")
-      throw new PracticeInputError(
-        "unsupported",
-        "현재 서버의 분석 계약은 클래스 분석을 아직 지원하지 않습니다.",
-      );
+    await requireAnalysisScope(
+      titleExamId
+        ? "TITLE_EXAM"
+        : courseId || courseStepId || content.contentType === "CLASS_PRACTICE"
+          ? "COURSE"
+          : "STANDALONE_AUDIO",
+    );
     if (capabilitiesRef.current) return capabilitiesRef.current;
     const userId = getAuthenticatedUserId();
     const capabilities =
@@ -476,6 +457,7 @@ function PracticeSessionBody({
     setRequestError(null);
     setRequestFailure(null);
     try {
+      if (!localOnly) await getAnalysisCapabilities();
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
@@ -598,7 +580,8 @@ function PracticeSessionBody({
       (await api.analyses.get(analysisId, selectedRecordingRef.current));
     if (
       result.canonical &&
-      !result.canonical.actions.canComplete &&
+      (result.canonical.jobStatus === "FAILED" ||
+        result.canonical.canonicalAnalysis?.decision.status !== "ACCEPT") &&
       !savingResult(result)
     )
       throw new CanonicalResultUnavailable(result.canonical);
@@ -622,11 +605,34 @@ function PracticeSessionBody({
       analysisPendingRef.current = true;
       return;
     }
-    await api.training.complete(
-      activeSessionId,
-      Math.max(1, Math.round(recorder.durationMs / 1_000)),
-      result.canonical,
-    );
+    if (!result.canonical?.actions.canComplete) {
+      analysisPendingRef.current = false;
+      setRequestError(
+        "분석 결과는 준비됐지만 학습 완료를 확인할 수 없습니다. 현재 결과를 다시 확인해 주세요.",
+      );
+      return;
+    }
+    try {
+      await completeCanonicalPractice(
+        api,
+        activeSessionId,
+        result.canonical,
+        () => mountedRef.current && authVersion === getAuthSessionVersion(),
+      );
+    } catch (error) {
+      if (!mountedRef.current || authVersion !== getAuthSessionVersion())
+        return;
+      if (invalidatesCanonicalResult(error)) {
+        setAnalysis(null);
+        throw error;
+      }
+      setRequestError(
+        "분석 결과는 준비됐지만 학습 완료를 확인하지 못했습니다. 완료 상태를 다시 확인해 주세요.",
+      );
+      return;
+    }
+    if (!mountedRef.current || authVersion !== getAuthSessionVersion()) return;
+    setRequestError(null);
     invalidateLearningCaches();
     completedRef.current = true;
     analysisPendingRef.current = false;
@@ -654,62 +660,41 @@ function PracticeSessionBody({
       return;
     const owner = new AbortController();
     const epoch = getAuthSessionVersion();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const check = async () => {
-      try {
-        const current = await canonicalApi.get(
-          {
-            analysisId: view.analysisId,
-            recordingId: view.recordingId,
-            requestId: view.requestId,
-            executionId: view.executionId,
-          },
-          owner.signal,
+    void awaitCanonicalPersistence(view, owner.signal, (current) => {
+      if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+      // A pending recovery snapshot has no result; keep the same attempt's preview read-only.
+      if (current.canonicalAnalysis || current.serviceFailure)
+        setAnalysis(canonicalPresentation(current));
+      else
+        setRequestError(
+          "저장 상태를 다시 확인하고 있습니다. 분석을 다시 요청할 필요는 없습니다.",
         );
-        if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
-        if (
-          current.persistenceStatus === "SAVED" ||
-          current.persistenceStatus === "NONE"
-        ) {
+    })
+      .then(async (current) => {
+        if (!owner.signal.aborted && epoch === getAuthSessionVersion())
           await loadResult(
             sessionId,
             current.analysisId,
             canonicalPresentation(current),
           );
-          return;
-        }
-        if (
-          current.persistenceStatus !== "SAVING" &&
-          current.persistenceStatus !== "RETRYING"
-        )
-          throw new CanonicalResultUnavailable(current);
-        setAnalysis((previous) =>
-          previous ? { ...previous, canonical: current } : previous,
-        );
-      } catch (error) {
+      })
+      .catch((error) => {
         if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
         if (
           error instanceof CanonicalResultUnavailable ||
-          (error instanceof ApiError &&
-            [401, 403, 404, 409].includes(error.status))
+          invalidatesCanonicalResult(error)
         ) {
           setAnalysis(null);
           setRequestFailure(error);
           setPhase("error");
-          setRequestError("현재 분석 결과를 다시 확인해 주세요.");
-          return;
+          setRequestError(error.message);
+        } else {
+          setRequestError(
+            "분석 결과는 준비됐지만 저장 확인이 지연되고 있습니다. 저장 상태를 다시 확인해 주세요.",
+          );
         }
-        setRequestError(
-          "결과는 준비됐지만 저장 상태를 확인하지 못했습니다. 다시 확인하고 있습니다.",
-        );
-      }
-      if (!owner.signal.aborted) timer = setTimeout(check, 5_000);
-    };
-    timer = setTimeout(check, 1_000);
-    return () => {
-      owner.abort();
-      if (timer) clearTimeout(timer);
-    };
+      });
+    return () => owner.abort();
     // The full attempt identity scopes the observer; rendering a fresh snapshot does not restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -718,8 +703,43 @@ function PracticeSessionBody({
     analysis?.canonical?.analysisId,
     analysis?.canonical?.requestId,
     analysis?.canonical?.executionId,
-    analysis?.canonical?.persistenceStatus,
   ]);
+
+  async function refreshResult() {
+    const view = analysis?.canonical;
+    if (!view || !sessionId) return;
+    const epoch = getAuthSessionVersion();
+    try {
+      const current = await canonicalApi.get(view);
+      if (!mountedRef.current || epoch !== getAuthSessionVersion()) return;
+      if (resultStillPending(current)) {
+        setRequestError(
+          "기존 결과의 저장 상태를 다시 확인하고 있습니다. 잠시 후 다시 확인해 주세요.",
+        );
+        return;
+      }
+      await loadResult(
+        sessionId,
+        current.analysisId,
+        canonicalPresentation(current),
+      );
+    } catch (error) {
+      if (!mountedRef.current || epoch !== getAuthSessionVersion()) return;
+      if (
+        error instanceof CanonicalResultUnavailable ||
+        invalidatesCanonicalResult(error)
+      ) {
+        setAnalysis(null);
+        setRequestFailure(error);
+        setPhase("error");
+      }
+      setRequestError(
+        error instanceof Error
+          ? error.message
+          : "결과를 다시 확인하지 못했습니다.",
+      );
+    }
+  }
 
   async function analyze() {
     if (!recorder.blob) return;
@@ -1500,6 +1520,15 @@ function PracticeSessionBody({
                 : "분석 결과가 준비됐습니다. 기록을 저장하고 있습니다."}{" "}
               화면을 닫아도 저장은 계속됩니다.
             </p>
+          )}
+          {(savingResult(analysis) || requestError) && (
+            <button
+              type="button"
+              onClick={() => void refreshResult()}
+              className="mx-5 min-h-11 rounded-xl border px-4 text-sm font-semibold"
+            >
+              저장·완료 상태 다시 확인
+            </button>
           )}
           <AnalysisView
             analysis={analysis}
