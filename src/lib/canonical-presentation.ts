@@ -66,8 +66,11 @@ export function canonicalPresentation(
 export class CanonicalResultUnavailable extends Error {
   constructor(readonly view: CanonicalAnalysisView) {
     super(
-      canonicalPresentation(view).summaryFeedback ??
-        "분석 결과를 확인할 수 없습니다.",
+      view.jobStatus === "FAILED" ||
+        view.canonicalAnalysis?.decision.status !== "ACCEPT"
+        ? (canonicalPresentation(view).summaryFeedback ??
+            "분석 상태를 확인해 주세요.")
+        : "분석 결과는 준비됐지만 요청한 작업을 진행할 수 없습니다. 현재 상태를 다시 확인해 주세요.",
     );
     this.name = "CanonicalResultUnavailable";
   }

@@ -26,7 +26,14 @@ export function describePracticeError(
   if (reason instanceof CanonicalResultUnavailable) {
     return {
       kind: "analysis",
-      title: "AI 분석을 완료하지 못했어요",
+      title:
+        reason.view.jobStatus === "FAILED"
+          ? "AI 분석을 완료하지 못했어요"
+          : reason.view.canonicalAnalysis?.decision.status === "REJECT"
+            ? "녹음 조건을 다시 확인해 주세요"
+            : reason.view.canonicalAnalysis?.decision.status === "INCONCLUSIVE"
+              ? "분석 판단에 필요한 근거가 부족해요"
+              : "분석 결과의 처리 상태를 확인해 주세요",
       hint: reason.message,
     };
   }

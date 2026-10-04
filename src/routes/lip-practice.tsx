@@ -22,7 +22,23 @@ import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
-import { pollAnalysis } from "@/lib/analysis-polling";
+import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
+import {
+  awaitCanonicalPersistence,
+  completeCanonicalPractice,
+  invalidatesCanonicalResult,
+  persistencePending,
+} from "@/lib/canonical-persistence";
+import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
+import {
+  canonicalPresentation,
+  CanonicalResultUnavailable,
+} from "@/lib/canonical-presentation";
+import {
+  ApiError,
+  getAuthSessionVersion,
+  subscribeAuthSession,
+} from "@/lib/api/client";
 import {
   api,
   type AnalysisResult,
@@ -46,6 +62,7 @@ type LipAnalysisPhase =
   "idle" | "preparing" | "uploading" | "analyzing" | "result" | "error";
 
 type LipAnalysisBundle = {
+  sessionId: import("@/lib/api/types").Id;
   content: PracticeContent;
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -80,10 +97,22 @@ export default function LipPractice() {
   const mediaRequest = useRef(0);
   const mediaBusy = useRef(false);
   const analysisBusyRef = useRef(false);
+  const analysisOwnerRef = useRef<AbortController | null>(null);
   const analysisBusy =
     analysisPhase === "preparing" ||
     analysisPhase === "uploading" ||
     analysisPhase === "analyzing";
+
+  useEffect(
+    () =>
+      subscribeAuthSession(() => {
+        analysisOwnerRef.current?.abort();
+        setAnalyses({});
+        setAnalysisError(null);
+        setAnalysisPhase("idle");
+      }),
+    [],
+  );
 
   useEffect(() => {
     clipsRef.current = clips;
@@ -93,6 +122,7 @@ export default function LipPractice() {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      analysisOwnerRef.current?.abort();
       mediaRequest.current += 1;
       mediaBusy.current = false;
       if (stopTimerRef.current !== null)
@@ -230,6 +260,8 @@ export default function LipPractice() {
       return;
     }
     try {
+      await requireAnalysisScope("VIDEO");
+      if (!mounted.current || request !== mediaRequest.current) return;
       releaseLipResources(streamRef.current, []);
       streamRef.current = null;
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -250,7 +282,9 @@ export default function LipPractice() {
       setError(
         denied
           ? "카메라와 마이크 권한이 필요해요. iPhone 설정의 SPEAK AI에서 권한을 허용해 주세요."
-          : "카메라와 마이크를 시작하지 못했어요.",
+          : reason instanceof Error
+            ? reason.message
+            : "카메라와 마이크를 시작하지 못했어요.",
       );
     } finally {
       if (request === mediaRequest.current) mediaBusy.current = false;
@@ -289,17 +323,27 @@ export default function LipPractice() {
     }
 
     analysisBusyRef.current = true;
+    const owner = new AbortController();
+    analysisOwnerRef.current?.abort();
+    analysisOwnerRef.current = owner;
+    const epoch = getAuthSessionVersion();
+    let previewShown = false;
     setAnalysisPhase("preparing");
     setAnalysisTarget(selectedClip);
     setAnalysisError(null);
     setUploadProgress(0);
     setAnalysisProgress(0);
     const requireActive = () => {
-      if (!mounted.current)
+      if (
+        !mounted.current ||
+        owner.signal.aborted ||
+        epoch !== getAuthSessionVersion()
+      )
         throw new DOMException("화면이 닫혔습니다.", "AbortError");
     };
 
     try {
+      await requireAnalysisScope("VIDEO", owner.signal);
       const capabilities = await api.training.getAnalysisCapabilities();
       requireActive();
       if (
@@ -432,37 +476,132 @@ export default function LipPractice() {
       });
       requireActive();
       setAnalysisPhase("analyzing");
-      const completedAnalysisId = await pollAnalysis({
-        getStatus: (signal) =>
-          api.training.getAnalysisStatus(sessionId, signal),
-        expectedAnalysisId: requested.analysisId,
+      let analysis = await waitForCanonicalResult({
+        sessionId,
+        recordingId,
+        analysisId: requested.analysisId,
+        signal: owner.signal,
         onProgress: setAnalysisProgress,
+        onConnectionChange: () => undefined,
       });
       requireActive();
-      const analysisId = completedAnalysisId ?? requested.analysisId;
-      const analysis = await api.analyses.get(analysisId, recordingId);
-      requireActive();
-      await api.training.complete(
-        sessionId,
-        Math.max(1, Math.round(reportClip.durationMs / 1_000)),
-        analysis.canonical,
-      );
-      requireActive();
-      setAnalyses((current) => ({
-        ...current,
-        // The canonical public view has phoneme candidates, not sentence segments.
-        [selectedClip]: { content, analysis, segments: [] },
-      }));
-      setAnalysisPhase("result");
+      const show = () => {
+        setAnalyses((current) => ({
+          ...current,
+          [selectedClip]: {
+            sessionId,
+            content: content!,
+            analysis,
+            segments: [],
+          },
+        }));
+        setAnalysisPhase("result");
+        previewShown = true;
+      };
+      show();
+      if (analysis.canonical && persistencePending(analysis.canonical)) {
+        const current = await awaitCanonicalPersistence(
+          analysis.canonical,
+          owner.signal,
+          () => {
+            setAnalysisError("결과 저장 상태를 확인하고 있습니다.");
+          },
+        );
+        requireActive();
+        analysis = canonicalPresentation(current);
+        show();
+      }
+      if (analysis.canonical?.actions.canComplete) {
+        await completeCanonicalPractice(
+          api,
+          sessionId,
+          analysis.canonical,
+          () =>
+            mounted.current &&
+            !owner.signal.aborted &&
+            epoch === getAuthSessionVersion(),
+        );
+        requireActive();
+        setAnalysisError(null);
+      } else if (analysis.canonical) {
+        setAnalysisError(
+          new CanonicalResultUnavailable(analysis.canonical).message,
+        );
+      }
     } catch (reason) {
-      if (!mounted.current) return;
+      if (
+        !mounted.current ||
+        owner.signal.aborted ||
+        epoch !== getAuthSessionVersion()
+      )
+        return;
+      if (invalidatesCanonicalResult(reason)) {
+        setAnalyses((current) => {
+          const next = { ...current };
+          delete next[selectedClip];
+          return next;
+        });
+        previewShown = false;
+      }
       setAnalysisError(
         reason instanceof Error
           ? reason.message
           : "영상 발음 분석을 완료하지 못했어요.",
       );
-      setAnalysisPhase("error");
+      setAnalysisPhase(previewShown ? "result" : "error");
     } finally {
+      if (analysisOwnerRef.current === owner) analysisOwnerRef.current = null;
+      analysisBusyRef.current = false;
+    }
+  }
+
+  async function refreshSavedResult() {
+    const bundle = analyses[selectedClip];
+    const view = bundle?.analysis.canonical;
+    if (!bundle || !view || analysisBusyRef.current) return;
+    analysisBusyRef.current = true;
+    const owner = new AbortController();
+    analysisOwnerRef.current = owner;
+    const epoch = getAuthSessionVersion();
+    const active = () =>
+      mounted.current &&
+      !owner.signal.aborted &&
+      epoch === getAuthSessionVersion();
+    try {
+      const current = await awaitCanonicalPersistence(
+        view,
+        owner.signal,
+        () => {
+          if (active())
+            setAnalysisError("결과 저장 상태를 다시 확인하고 있습니다.");
+        },
+      );
+      if (!active()) return;
+      setAnalyses((previous) => ({
+        ...previous,
+        [selectedClip]: { ...bundle, analysis: canonicalPresentation(current) },
+      }));
+      if (current.actions.canComplete) {
+        await completeCanonicalPractice(api, bundle.sessionId, current, active);
+        if (active()) setAnalysisError(null);
+      } else setAnalysisError(new CanonicalResultUnavailable(current).message);
+    } catch (reason) {
+      if (!active()) return;
+      if (invalidatesCanonicalResult(reason)) {
+        setAnalyses((previous) => {
+          const next = { ...previous };
+          delete next[selectedClip];
+          return next;
+        });
+        setAnalysisPhase("error");
+      }
+      setAnalysisError(
+        reason instanceof Error
+          ? reason.message
+          : "저장 상태를 확인하지 못했습니다.",
+      );
+    } finally {
+      if (analysisOwnerRef.current === owner) analysisOwnerRef.current = null;
       analysisBusyRef.current = false;
     }
   }
@@ -698,6 +837,18 @@ export default function LipPractice() {
               </section>
             ) : selectedAnalysis ? (
               <div className="mt-5">
+                {analysisError && (
+                  <div role="status" className="mb-3 text-sm">
+                    <p>{analysisError}</p>
+                    <button
+                      type="button"
+                      className="mt-2 min-h-11 rounded-xl border px-4"
+                      onClick={() => void refreshSavedResult()}
+                    >
+                      저장·완료 상태 다시 확인
+                    </button>
+                  </div>
+                )}
                 <AnalysisView
                   analysis={selectedAnalysis.analysis}
                   segments={selectedAnalysis.segments}

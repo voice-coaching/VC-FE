@@ -14,3 +14,11 @@
 
 이전에 적혀 있던 `GET /health`는 프론트에서 사용하지 않고 운영 OpenAPI에도 없는
 템플릿 항목이므로 제거했다.
+
+
+## 분석 연동
+
+| Method | URL | 인증 | 설명 |
+|---|---|---|---|
+| GET | `/api/analysis-capabilities/canonical` | 사용자 로그인 | 분석 계약·접수 가능 상태·목적별 지원 범위 |
+| GET | `/api/v3/analyses/{analysisId}` | 사용자 로그인·소유 확인 | 현재 실행 결과와 저장·후속 작업 상태 |
