@@ -1,3 +1,5 @@
+> Superseded rollout policy: [v5-only deployment](canonical-v5-only-migration-20261004.md). Dual-version admission/fallback below is historical.
+
 # canonical v5 결과 연동
 
 `src/lib/api/canonical.ts`는 접수 직전 `/api/analysis-capabilities/canonical`의 `resultSchemas`를 확인한다. v5를 허용하면 `X-Analysis-Result-Schema: voice-coaching.runpod-analysis-result.v5`를 보내며, v4만 허용하면 기존 헤더를 사용한다. 둘 다 접수 불가면 요청을 생성하지 않는다. 구 Backend의 명시적 404에서만 v4 호환 동작을 유지한다.

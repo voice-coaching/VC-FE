@@ -512,7 +512,7 @@ export interface AnalysisScoreBreakdown {
 }
 
 export interface AnalysisResult {
-  /** Verified v4 public result retained losslessly; not a legacy wire payload. */
+  /** Verified v5 public result retained losslessly; not a legacy wire payload. */
   canonical?: import("../canonical-analysis").CanonicalAnalysisView;
   coaching?: import("@/lib/coaching").AnalysisCoaching | null;
   id: Id;
