@@ -1,4 +1,5 @@
 import type { AnalysisProgress } from "./api/types";
+import { isCanonicalReadConflict } from "./canonical-recovery";
 import {
   ApiError,
   getAuthSessionVersion,
@@ -26,7 +27,8 @@ export class AnalysisFailed extends Error {}
 function transient(error: unknown): error is ApiError {
   return (
     error instanceof ApiError &&
-    ([502, 503, 504].includes(error.upstreamStatus ?? 0) ||
+    (isCanonicalReadConflict(error) ||
+      [502, 503, 504].includes(error.upstreamStatus ?? 0) ||
       (error.status === 0 && error.code === "NETWORK_ERROR") ||
       (error.status === 408 && error.code === "TIMEOUT"))
   );
