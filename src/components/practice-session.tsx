@@ -42,6 +42,7 @@ import {
   AnalysisWaitTimeout,
 } from "@/lib/analysis-polling";
 import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
+import { canRecheckSubmittedAnalysis } from "@/lib/canonical-recovery";
 import {
   describePracticeError,
   PracticeInputError,
@@ -522,10 +523,7 @@ function PracticeSessionBody({
         reason instanceof CanonicalResultUnavailable &&
           reason.view.actions.canRetry,
       );
-      setCanCheckAnalysis(
-        reason instanceof AnalysisConnectionUnavailable ||
-          reason instanceof AnalysisWaitTimeout,
-      );
+      setCanCheckAnalysis(canRecheckSubmittedAnalysis(reason));
       throw reason;
     } finally {
       if (analysisPollRef.current === controller)
@@ -759,6 +757,12 @@ function PracticeSessionBody({
   }
 
   async function analyze() {
+    // Once submitted (including a lost acknowledgement), recover by reading.
+    // Never issue another upload against an ANALYZING session.
+    if (analysisPendingRef.current && sessionIdRef.current) {
+      await checkExistingAnalysis();
+      return;
+    }
     if (!recorder.blob) return;
     if (localOnly) {
       setRequestError(
@@ -897,6 +901,13 @@ function PracticeSessionBody({
   }
 
   async function resetRecording() {
+    if (
+      analysisPendingRef.current &&
+      !(requestFailure instanceof CanonicalResultUnavailable)
+    ) {
+      await checkExistingAnalysis();
+      return;
+    }
     try {
       if (requestFailure instanceof CanonicalResultUnavailable) {
         const previous = requestFailure.view;
