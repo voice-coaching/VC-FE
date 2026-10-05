@@ -1,5 +1,9 @@
 # Canonical 9항목 점수 표시
 
+2026-10-04 Native 전환: `phone-rubric-native-v1`도 명시적으로 허용한다. 서버 점수와 9항목 단계만 표시하며 계산은 FE에서 수행하지 않는다. Native 결과에는 이전 방식과의 직접 비교 불가 및 일부 모음 관측 범주 통합을 안내한다. 기존 점수를 새 revision으로 바꾸지 않는다. UNKNOWN/UNSCORABLE은 점수로 대체하지 않는다. 정책 보정과 RunPod 실행 승인이 완료되기 전에는 운영 활성화하지 않는다.
+
+최신 dev `aecddad` 기준 `feat/native-score-contract-20261004`에서 TypeScript `--noEmit --incremental false` 통과. 브라우저 QA·커밋·푸시·PR·운영 배포는 수행하지 않았다.
+
 2026-10-03 구현. Backend 새 scored-H5 점수 계약에 연결한다. 운영 배포·브라우저 QA는 이번 작업에서 수행하지 않았다.
 
 - `src/lib/canonical-score.ts`: 서버 점수 계약 검증. revision=phone-rubric-20261003-v1, 순서 고정 9항목, 단계 0~4/null, 점수 0~100을 확인한다. 과거 S7/H5 null 점수도 허용한다. `canonicalCriterionPoints`는 검증된 단계와 해당 revision의 배점을 항목 점수 표시 모델로 변환한다.

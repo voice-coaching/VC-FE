@@ -1,5 +1,7 @@
 "use client";
 
+import { DirectHistory } from "@/components/direct-history";
+
 import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
@@ -442,6 +444,7 @@ export default function LearningHistory() {
           )}
         </div>
       </div>
+      <DirectHistory key={String(userId)} />
     </AppShell>
   );
 }

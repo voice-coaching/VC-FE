@@ -12,6 +12,12 @@ export function CanonicalScoreCriteria({
     <section className="rounded-2xl bg-white p-5">
       <h2 className="text-[15px] font-bold">항목별 점수</h2>
       <p className="mt-1 text-xs text-[#6b7684]">받은 점수 / 배점</p>
+      {score.rubricRevision === "phone-rubric-native-v1" && (
+        <p className="mt-2 text-xs leading-5 text-[#6b7684]">
+          채점 기준이 변경되어 이전 방식의 점수와 직접 비교할 수 없습니다. 일부
+          모음은 같은 관측 범주로 평가합니다.
+        </p>
+      )}
       <dl className="mt-3 space-y-2">
         {canonicalCriterionPoints(score).map((row) => (
           <div

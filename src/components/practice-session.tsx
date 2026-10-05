@@ -1,5 +1,8 @@
 "use client";
 
+import { DirectPracticeSession } from "./direct-practice-session";
+import { directAnalysisEnabled } from "@/lib/direct-analysis";
+
 import {
   useCallback,
   useEffect,
@@ -118,6 +121,20 @@ export function PracticeSession(props: {
     params.get("courseStepId"),
     params.get("titleExamId"),
   ];
+  if (
+    directAnalysisEnabled &&
+    !params.get("courseId") &&
+    !params.get("sessionId") &&
+    !params.get("courseStepId") &&
+    !params.get("titleExamId")
+  ) {
+    return (
+      <DirectPracticeSession
+        key={JSON.stringify(identity)}
+        content={props.content}
+      />
+    );
+  }
   return <PracticeSessionBody key={JSON.stringify(identity)} {...props} />;
 }
 
