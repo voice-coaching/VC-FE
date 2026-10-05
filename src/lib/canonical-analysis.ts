@@ -45,7 +45,7 @@ const factSchema = z
   })
   .strict();
 
-const candidateSchema = z
+export const candidateSchema = z
   .object({
     candidateId,
     evidenceIds: z.array(evidenceId),

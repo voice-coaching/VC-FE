@@ -17,7 +17,10 @@ const computedScore = z
     overallScore: z.number().finite().min(0).max(100),
     validity: z.literal("RUBRIC_COMPUTED"),
     reason: z.literal("EVIDENCE_BOUND_PRACTICE_SCORE"),
-    rubricRevision: z.literal("phone-rubric-20261003-v1"),
+    rubricRevision: z.enum([
+      "phone-rubric-20261003-v1",
+      "phone-rubric-native-v1",
+    ]),
     criteria: z
       .array(
         z
