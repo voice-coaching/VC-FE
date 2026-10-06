@@ -24,6 +24,7 @@ export const directResultSchema = z.object({
   coaching: z.object({
     items: z.array(z.object({ candidate: candidateSchema, expression })),
     generationStatus: z.string(),
+    feedback: z.string().min(1).max(4000).optional(),
   }),
   failure: z.string().nullable(),
   sourceIdentity: z.object({

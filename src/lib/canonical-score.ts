@@ -20,6 +20,7 @@ const computedScore = z
     rubricRevision: z.enum([
       "phone-rubric-20261003-v1",
       "phone-rubric-native-v1",
+      "phone-rubric-gop-ctc-af-sd-v1",
     ]),
     criteria: z
       .array(
@@ -87,11 +88,7 @@ export type CanonicalCriterionPoints = {
 export function canonicalCriterionPoints(
   score: z.infer<typeof canonicalScoreSchema>,
 ): CanonicalCriterionPoints[] {
-  if (
-    score.validity !== "RUBRIC_COMPUTED" ||
-    score.rubricRevision !== "phone-rubric-20261003-v1"
-  )
-    return [];
+  if (score.validity !== "RUBRIC_COMPUTED") return [];
 
   return score.criteria.map((row, index) => {
     const [, label, maxPoints] = scoreCriteria[index];

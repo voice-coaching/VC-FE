@@ -73,8 +73,15 @@ export function AnalysisView({
       segment.pronunciationScore != null && segment.resultStatus === "NORMAL",
   );
   const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
+  const canonicalCoaching = analysis.canonical?.canonicalAnalysis?.coaching;
+  const gptFeedback =
+    canonicalCoaching?.adapterStatus === "READY"
+      ? canonicalCoaching.feedback
+      : undefined;
   const summary =
-    analysis.summaryFeedback?.trim() || "제공된 AI 총평이 없습니다.";
+    gptFeedback?.trim() ||
+    analysis.summaryFeedback?.trim() ||
+    "제공된 AI 총평이 없습니다.";
   const scoreRows = useMemo(() => {
     if (analysis.scoreBreakdown?.items.length) {
       return analysis.scoreBreakdown.items.map((item) => ({
@@ -117,6 +124,7 @@ export function AnalysisView({
           </section>
         </div>
         <div className="space-y-2.5 px-5 pt-3 pb-6">
+          {gptFeedback && <AnalysisSummary text={gptFeedback} />}
           {analysis.canonical?.canonicalAnalysis?.score.validity ===
           "RUBRIC_COMPUTED" ? (
             <CanonicalScoreCriteria view={analysis.canonical} />

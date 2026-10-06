@@ -34,6 +34,11 @@ export function DirectAnalysisResult({ result }: { result: DirectResult }) {
           ))}
         </dl>
       )}
+      {result.coaching.feedback && (
+        <p className="whitespace-pre-wrap leading-relaxed">
+          {result.coaching.feedback}
+        </p>
+      )}
       {result.coaching.items.map((item, index) => (
         <article key={index} className="space-y-2 border-t pt-3">
           <h3 className="font-semibold">
@@ -60,7 +65,7 @@ export function DirectAnalysisResult({ result }: { result: DirectResult }) {
           </details>
         </article>
       ))}
-      {result.coaching.items.length === 0 && (
+      {result.coaching.items.length === 0 && !result.coaching.feedback && (
         <p>
           이번 분석에서 제공할 교정 항목이 없습니다. 모든 발음이 정확하다는
           의미는 아닙니다.
