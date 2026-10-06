@@ -119,8 +119,9 @@ const coachingSchema = z.union([
             })
             .strict(),
         )
-        .min(1)
+        .min(0)
         .max(3),
+      feedback: z.string().min(1).max(4000).optional(),
       dispatchAttempts: z.literal(1),
       fallbackReason: text.max(128).nullable(),
       naturalLanguageSemanticsFullyVerified: z.literal(false),
@@ -334,7 +335,10 @@ export function readCanonicalAnalysisView(
     );
   }
   if (canonical.score.validity === "UNSCORABLE") {
-    requireProjection(jobStatus === "FAILED" && !actions.canComplete);
+    requireProjection(
+      jobStatus === "FAILED" ||
+        (jobStatus === "COMPLETED" && coaching?.adapterStatus === "READY"),
+    );
   }
   requireProjection(
     decision.status !== "SYSTEM_FAILURE" || jobStatus === "FAILED",
@@ -354,7 +358,7 @@ export function readCanonicalAnalysisView(
     requireProjection(
       jobStatus === "COMPLETED" &&
         decision.status === "ACCEPT" &&
-        selection !== null,
+        (selection !== null || Boolean(coaching.feedback)),
     );
     requireProjection(
       coaching.generationStatus === "DETERMINISTIC_FALLBACK"
@@ -389,7 +393,14 @@ export function readCanonicalAnalysisView(
     requireProjection(
       canonical.representation === "INLINE" && coaching !== null,
     );
-    if (decision.status === "ACCEPT") {
+    if (
+      decision.status === "ACCEPT" &&
+      !(
+        coaching?.adapterStatus === "READY" &&
+        coaching.feedback &&
+        selection === null
+      )
+    ) {
       requireProjection(selection !== null);
       requireProjection(
         selection.candidates.length > 0
