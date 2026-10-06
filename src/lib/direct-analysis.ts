@@ -4,8 +4,10 @@ import { candidateSchema } from "./canonical-analysis";
 import { createHttpClient } from "./api/client";
 
 export const directAnalysisEnabled =
-  process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED === "true";
-const origin = process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN ?? "";
+  process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED !== "false";
+const origin =
+  process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN ||
+  "https://s8hb5b0l5k4qlx-8080.proxy.runpod.net/direct";
 const expression = z.object({
   explanation: z.string(),
   action: z.string(),
@@ -74,7 +76,7 @@ function endpoint(path: string) {
     url.hash
   )
     throw new Error("분석 서버 주소가 설정되지 않았습니다.");
-  return url.origin + path;
+  return url.origin + url.pathname.replace(/\/$/, "") + path;
 }
 async function response(reply: Response) {
   if (!reply.ok)
