@@ -7,7 +7,7 @@ export const directAnalysisEnabled =
   process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED !== "false";
 const origin =
   process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN ||
-  "https://s8hb5b0l5k4qlx-8080.proxy.runpod.net/direct";
+  "https://ai.voice-coaching.site/direct";
 const expression = z.object({
   explanation: z.string(),
   action: z.string(),
