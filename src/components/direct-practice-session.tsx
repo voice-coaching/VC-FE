@@ -33,8 +33,10 @@ const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
 
 export function DirectPracticeSession({
   content,
+  onTitleChange,
 }: {
   content: PracticeContent;
+  onTitleChange?: (title: string) => void;
 }) {
   const router = useRouter();
   const recorder = useAudioRecorder();
@@ -252,37 +254,25 @@ export function DirectPracticeSession({
       .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
   };
 
+  useEffect(() => {
+    onTitleChange?.(
+      phase === "result"
+        ? "피드백"
+        : phase === "analyzing"
+          ? "분석 중"
+          : "연습하기",
+    );
+  }, [phase, onTitleChange]);
+
   if (phase === "result" && view?.result) {
     return (
       <div className="flex min-h-full flex-col bg-[#f2f4f6]">
-        <div className="space-y-5 px-5 py-4">
-          <p className="flex min-w-0 max-w-full items-center justify-center gap-2 text-[13px] leading-[18px]">
-            <b className="shrink-0 text-primary">
-              {CONTENT_LABEL[content.contentType]}
-            </b>
-            <span className="h-2.5 w-px shrink-0 bg-[#e5e8eb]" />
-            <span className="min-w-0 max-w-[240px] truncate font-medium text-[#8b95a1]">
-              {content.title}
-            </span>
-          </p>
-          <DirectAnalysisResult result={view.result} />
-          <section className="rounded-2xl bg-white p-4">
-            <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
-              연습 문장
-            </h2>
-            <p className="mt-1.5 text-[15px] leading-[1.5] font-medium">
-              {content.scriptText}
-            </p>
-            {recorder.previewUrl ? (
-              <div className="mt-3.5">
-                <ReferencePlayer
-                  source={recorder.previewUrl}
-                  title="내 녹음 전체 듣기"
-                  buttonTone="primary"
-                />
-              </div>
-            ) : null}
-          </section>
+        <DirectAnalysisResult
+          result={view.result}
+          content={content}
+          recordingUrl={recorder.previewUrl ?? undefined}
+        />
+        <div className="px-5 pb-4">
           <p
             role="status"
             className="rounded-2xl bg-white px-4 py-3 text-center text-[12px] leading-5 text-[#6b7684]"

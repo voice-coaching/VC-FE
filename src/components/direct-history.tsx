@@ -75,7 +75,16 @@ export function DirectHistory() {
             />
           </summary>
           <div className="space-y-4 border-t border-[#eef0f3] bg-[#f8f9fa] px-4 py-5">
-            <DirectAnalysisResult result={item.result} />
+            <DirectAnalysisResult
+              result={item.result}
+              content={{
+                id: item.jobId,
+                contentType: "SENTENCE",
+                title: item.scriptText,
+                scriptText: item.scriptText,
+                referenceAudioAvailable: false,
+              }}
+            />
           </div>
         </details>
       ))}

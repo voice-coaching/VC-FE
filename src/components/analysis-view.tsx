@@ -45,6 +45,11 @@ function ReportIcon({
   );
 }
 
+export type AnalysisViewContent = Pick<
+  PracticeContent,
+  "id" | "contentType" | "title" | "scriptText" | "referenceAudioAvailable"
+>;
+
 export function AnalysisView({
   analysis,
   segments,
@@ -52,15 +57,17 @@ export function AnalysisView({
   recordingUrl,
   recordingId,
   courseMode = false,
+  reportParameter = "report",
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
-  content: PracticeContent;
+  content: AnalysisViewContent;
   recordingUrl?: string;
   recordingId?: Id;
   courseMode?: boolean;
+  reportParameter?: string;
 }) {
-  const [report, setReport] = useHistoryPanel("report", [
+  const [report, setReport] = useHistoryPanel(reportParameter, [
     "pronunciation",
     ...segments.map((segment) => `sentence:${segment.id}`),
   ]);
@@ -81,8 +88,12 @@ export function AnalysisView({
       segment.pronunciationScore != null && segment.resultStatus === "NORMAL",
   );
   const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
+  const canonicalCoaching = analysis.canonical?.canonicalAnalysis?.coaching;
   const summary =
-    analysis.summaryFeedback?.trim() || "제공된 AI 총평이 없습니다.";
+    (canonicalCoaching?.adapterStatus === "READY" &&
+      canonicalCoaching.feedback?.trim()) ||
+    analysis.summaryFeedback?.trim() ||
+    "제공된 AI 총평이 없습니다.";
   const sourceLabel = courseMode
     ? "클래스"
     : CONTENT_LABEL[content.contentType];

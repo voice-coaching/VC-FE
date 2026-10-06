@@ -7,7 +7,7 @@ export const directAnalysisEnabled =
   process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED !== "false";
 const origin =
   process.env.NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN ||
-  "https://s8hb5b0l5k4qlx-8080.proxy.runpod.net/direct";
+  "https://ai.voice-coaching.site/direct";
 const expression = z.object({
   explanation: z.string(),
   action: z.string(),
@@ -24,6 +24,7 @@ export const directResultSchema = z.object({
   coaching: z.object({
     items: z.array(z.object({ candidate: candidateSchema, expression })),
     generationStatus: z.string(),
+    feedback: z.string().min(1).max(4000).optional(),
   }),
   failure: z.string().nullable(),
   sourceIdentity: z.object({
