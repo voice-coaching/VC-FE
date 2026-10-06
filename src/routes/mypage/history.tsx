@@ -442,9 +442,9 @@ export default function LearningHistory() {
               아직 저장된 학습 기록이 없어요.
             </p>
           )}
+          <DirectHistory key={String(userId)} />
         </div>
       </div>
-      <DirectHistory key={String(userId)} />
     </AppShell>
   );
 }
