@@ -1,6 +1,6 @@
 # Direct RunPod independent voice practice
 
-2026-10-05 implementation, not deployed. Build flags: `NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED=true` and an absolute HTTPS `NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN`. Defaults OFF. These are public configuration only; never put service/API secrets in NEXT_PUBLIC variables.
+2026-10-06 rollout: new independent practice defaults to the public RunPod origin `https://s8hb5b0l5k4qlx-8080.proxy.runpod.net/direct`. An HTTPS `NEXT_PUBLIC_DIRECT_ANALYSIS_ORIGIN` can override the host and base path. `NEXT_PUBLIC_DIRECT_ANALYSIS_ENABLED=false` explicitly retains the prior route. These are public configuration only; never put service/API secrets in NEXT_PUBLIC variables. Next.js embeds these values at build time; editing server environment without rebuilding does not switch an existing browser bundle.
 
 The new client sends raw prepared mono 16kHz 16bit PCM WAV directly to RunPod with base64 JSON metadata. It uses credentials=omit and no Authorization header or AWS proxy. No gateway or user authentication is added to RunPod. Upload, status, SSE, cancellation and recovery all use that public origin.
 
@@ -15,3 +15,5 @@ New independent practice uses the direct component. Requests carrying courseId/c
 Changed paths: `src/lib/direct-analysis.ts`, `src/components/direct-practice-session.tsx`, `src/components/direct-analysis-result.tsx`, `src/components/direct-history.tsx`, `src/components/practice-session.tsx`, `src/routes/mypage/history.tsx`. `canonical-analysis.ts` exports the existing candidate validator so direct results preserve evidence constraints.
 
 TypeScript noEmit and formatting checks passed. No browser automation, regression tests, Vercel deployment or inference QA ran. RunPod must have approved Native artifacts and working HTTPS/CORS/SSE before enabling the build flag. Native DRAFT changes inherited in this worktree are not an approved production model release.
+
+The remaining course/exam/session routes cannot be switched merely by deleting the wrapper condition: their completion API requires a persisted integer analysis ID, selected recording and current session ownership. Direct jobs use independent UUIDs. Their result display must be separated from an asynchronous history-to-session projection before they can use the same public path without losing course progress or exam submission. This change does not claim those flows have migrated.
