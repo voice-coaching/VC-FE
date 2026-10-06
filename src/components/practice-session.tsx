@@ -133,6 +133,7 @@ export function PracticeSession(props: {
       <DirectPracticeSession
         key={JSON.stringify(identity)}
         content={props.content}
+        onTitleChange={props.onTitleChange}
       />
     );
   }
