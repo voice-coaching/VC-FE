@@ -7,10 +7,8 @@ import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { DirectAnalysisResult } from "@/components/direct-analysis-result";
 import { ReferencePlayer } from "@/components/reference-player";
 import { SentenceReader } from "@/components/sentence-reader";
-import {
-  prepareAudioForAnalysis,
-  useAudioRecorder,
-} from "@/hooks/use-audio-recorder";
+import { useAudioRecorder } from "@/hooks/use-audio-recorder";
+import { prepareDirectAudio } from "@/lib/direct-audio";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import type { PracticeContent } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
@@ -155,9 +153,7 @@ export function DirectPracticeSession({
     controller.current?.abort();
     controller.current = current;
     try {
-      const prepared = await prepareAudioForAnalysis(recorder.blob, [
-        "audio/wav",
-      ]);
+      const prepared = await prepareDirectAudio(recorder.blob);
       const selected = attempt.current ?? {
         attemptId: crypto.randomUUID(),
         historyClaim: btoa(
