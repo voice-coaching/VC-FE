@@ -1575,6 +1575,39 @@ function PracticeSessionBody({
             </p>
           )}
           <div className="sticky bottom-0 border-t border-[#e5e8eb] bg-white px-5 py-3">
+            {!courseId && !titleExamId && (
+              <button
+                type="button"
+                onClick={() => {
+                  const params = new URLSearchParams({ start: "1" });
+                  const returnTo = searchParams.get("returnTo");
+                  if (returnTo) params.set("returnTo", returnTo);
+                  if (resumedSessionId) {
+                    router.replace(
+                      `/practice/${encodeURIComponent(String(content.id))}?${params}`,
+                    );
+                    return;
+                  }
+                  analysisPollRef.current?.abort();
+                  sessionIdRef.current = null;
+                  setSessionId(null);
+                  completedRef.current = false;
+                  selectedRecordingRef.current = null;
+                  analysisPendingRef.current = false;
+                  setAnalysis(null);
+                  setSegments([]);
+                  setResultAudioUrl(undefined);
+                  setRequestError(null);
+                  setRequestFailure(null);
+                  setActiveSentence(0);
+                  recorder.reset();
+                  setPhase("idle");
+                }}
+                className="mb-3 h-14 w-full rounded-full border border-primary text-[16px] font-bold text-primary"
+              >
+                다시 연습하기
+              </button>
+            )}
             <button
               type="button"
               disabled={
