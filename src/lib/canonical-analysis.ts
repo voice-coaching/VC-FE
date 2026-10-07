@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lipVisualSchema } from "./canonical-lip";
 import { canonicalScoreSchema } from "./canonical-score";
 
 // Deployed PUBLIC view allowlist. Safe subtrees follow runpod_result_v5;
@@ -7,6 +8,9 @@ export const CANONICAL_VIEW_SCHEMA =
   "voice-coaching.canonical-analysis-view.v2";
 export const HANDOFF_VIEW_SCHEMA = "voice-coaching.canonical-analysis-view.v2";
 export const HANDOFF_PROFILE = "CANONICAL_HANDOFF_20261004_V5";
+export const AUDIOVISUAL_PROFILE = "CANONICAL_AUDIOVISUAL_20261007_V6";
+export const AUDIOVISUAL_VIEW_SCHEMA =
+  "voice-coaching.canonical-analysis-view.v3";
 export const CANONICAL_PROFILE = "CANONICAL_HANDOFF_20261004_V5";
 
 const text = z.string().min(1);
@@ -205,7 +209,7 @@ const actionsSchema = z
   })
   .strict();
 
-const projectionSchema = z
+const audioProjectionSchema = z
   .object({
     schemaVersion: z.literal(HANDOFF_VIEW_SCHEMA),
     analysisId: databaseId,
@@ -225,6 +229,19 @@ const projectionSchema = z
       .optional(),
   })
   .strict();
+
+const projectionSchema = z.union([
+  audioProjectionSchema,
+  audioProjectionSchema
+    .extend({
+      schemaVersion: z.literal(AUDIOVISUAL_VIEW_SCHEMA),
+      analysisProfile: z.literal(AUDIOVISUAL_PROFILE),
+      canonicalAnalysis: canonicalSchema
+        .extend({ visual: lipVisualSchema })
+        .nullable(),
+    })
+    .strict(),
+]);
 
 const expectationSchema = z
   .object({
@@ -276,10 +293,10 @@ export function readCanonicalAnalysisView(
   if (!parsed.success) throw new CanonicalProjectionError();
   const view = parsed.data;
   requireProjection(
-    (view.schemaVersion === CANONICAL_VIEW_SCHEMA &&
-      view.analysisProfile === CANONICAL_PROFILE) ||
-      (view.schemaVersion === HANDOFF_VIEW_SCHEMA &&
-        view.analysisProfile === HANDOFF_PROFILE),
+    (view.schemaVersion === AUDIOVISUAL_VIEW_SCHEMA &&
+      view.analysisProfile === AUDIOVISUAL_PROFILE) ||
+      (view.schemaVersion === CANONICAL_VIEW_SCHEMA &&
+        view.analysisProfile === CANONICAL_PROFILE),
   );
   for (const field of [
     "analysisId",

@@ -1,4 +1,5 @@
 "use client";
+import { canonicalApi } from "@/lib/api/canonical";
 
 import {
   Camera,
@@ -470,10 +471,14 @@ export default function LipPractice() {
 
       await api.training.selectRecording(sessionId, recordingId);
       requireActive();
-      const requested = await api.training.analyze(sessionId, {
-        accepted: true,
-        policyRevision: capabilities.consentPolicyRevision,
-      });
+      const requested = await canonicalApi.analyzeAudiovisual(
+        sessionId,
+        {
+          accepted: true,
+          policyRevision: capabilities.consentPolicyRevision,
+        },
+        owner.signal,
+      );
       requireActive();
       setAnalysisPhase("analyzing");
       let analysis = await waitForCanonicalResult({

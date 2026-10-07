@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, createHttpClient } from "./client";
 import { HANDOFF_PROFILE } from "../canonical-analysis";
-import { HANDOFF_RESULT_HEADER } from "./canonical";
+import { HANDOFF_RESULT_HEADER, AUDIOVISUAL_RESULT_HEADER } from "./canonical";
 
 export type AnalysisScope =
   "STANDALONE_AUDIO" | "COURSE" | "TITLE_EXAM" | "VIDEO";
@@ -60,7 +60,9 @@ export async function requireAnalysisScope(
     );
   if (
     !value.admissionEnabled ||
-    !value.resultSchemas.includes(HANDOFF_RESULT_HEADER)
+    !value.resultSchemas.includes(
+      requested === "VIDEO" ? AUDIOVISUAL_RESULT_HEADER : HANDOFF_RESULT_HEADER,
+    )
   )
     throw new ApiError(
       messages.STANDALONE_AUDIO,
