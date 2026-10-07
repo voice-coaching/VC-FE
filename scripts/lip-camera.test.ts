@@ -78,6 +78,45 @@ test("camera permission denial remains retryable and shows an error", async () =
   assert.equal(result.mediaBusy.current, false);
 });
 
+test("a single reviewed clip can open the result screen and submit audio immediately", () => {
+  let handler = "";
+  function visit(node: ts.Node) {
+    if (
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "analyzeCurrentClip"
+    )
+      handler = node.body!.getText(file).slice(1, -1);
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  assert.ok(handler);
+  let submitted = false;
+  let step = "review";
+  let released = false;
+  const streamRef = { current: { getTracks: () => [] } as unknown };
+  const dependencies = {
+    currentClip: { promptIndex: 0, audioBlob: new Blob(["audio"]) },
+    analysisBusyRef: { current: false },
+    streamRef,
+    releaseLipResources: () => {
+      released = true;
+    },
+    setStep: (value: string) => {
+      step = value;
+    },
+    analyzeSelectedClip: () => {
+      submitted = true;
+    },
+  };
+  new Function(...Object.keys(dependencies), handler)(
+    ...Object.values(dependencies),
+  );
+  assert.equal(step, "complete");
+  assert.equal(submitted, true);
+  assert.equal(released, true);
+  assert.equal(streamRef.current, null);
+});
+
 test("lip analysis submits captured audio to the same direct API as voice practice", async () => {
   let analysisBody = "";
   function visit(node: ts.Node) {

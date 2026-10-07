@@ -393,6 +393,14 @@ export default function LipPractice() {
   const selectedAnalysis = analyses[selectedClip];
   const selectedDirectResult = directResults[selectedClip]?.result;
 
+  function analyzeCurrentClip() {
+    if (!currentClip || analysisBusyRef.current) return;
+    releaseLipResources(streamRef.current, []);
+    streamRef.current = null;
+    setStep("complete");
+    void analyzeSelectedClip();
+  }
+
   async function analyzeSelectedClip() {
     if (!reportClip || analysisBusyRef.current || !mounted.current) return;
     if (!videoConsentAccepted) {
@@ -820,11 +828,11 @@ export default function LipPractice() {
                 />
                 <span>
                   <strong className="block text-sm">
-                    음성 AI 분석 및 처리 동의 (선택)
+                    음성 AI 분석 및 처리 동의
                   </strong>
                   <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                     AI 분석을 요청할 때 선택한 촬영본의 음성을 서버로
-                    전송합니다. 동의하지 않아도 촬영 연습은 할 수 있어요.
+                    전송합니다. 동의한 후 촬영 연습을 시작할 수 있어요.
                   </span>
                 </span>
               </label>
@@ -833,6 +841,7 @@ export default function LipPractice() {
             <BottomAction
               label="카메라·마이크 권한 확인"
               onClick={() => void requestMedia()}
+              disabled={!videoConsentAccepted}
             />
           </div>
         ) : step === "permission" ? (
@@ -875,14 +884,16 @@ export default function LipPractice() {
                 <Check className="size-10" />
               </span>
               <h1 className="mt-5 text-2xl font-bold">
-                5개 문장을 모두 촬영했어요
+                {clips.length === LIP_PRACTICE_PROMPTS.length
+                  ? "5개 문장을 모두 촬영했어요"
+                  : `${clips.length}개 문장을 촬영했어요`}
               </h1>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 문장을 선택해 촬영 영상을 확인하고 AI 발음 분석을 시작하세요.
               </p>
             </section>
             <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
-              {LIP_PRACTICE_PROMPTS.map((_, index) => (
+              {clips.map(({ promptIndex: index }) => (
                 <button
                   key={index}
                   type="button"
@@ -1051,6 +1062,27 @@ export default function LipPractice() {
               <RotateCcw className="size-4" />
               선택한 문장 다시 촬영
             </button>
+            {clips.length < LIP_PRACTICE_PROMPTS.length ? (
+              <button
+                type="button"
+                disabled={analysisBusy}
+                onClick={() => {
+                  const next = LIP_PRACTICE_PROMPTS.findIndex(
+                    (_, index) =>
+                      !clips.some((clip) => clip.promptIndex === index),
+                  );
+                  if (next < 0) return;
+                  setPromptIndex(next);
+                  setAnalysisPhase("idle");
+                  setAnalysisTarget(null);
+                  setAnalysisError(null);
+                  void requestMedia();
+                }}
+                className="mt-3 min-h-12 w-full rounded-full border border-border bg-white text-sm font-bold disabled:opacity-45"
+              >
+                남은 문장 연습하기
+              </button>
+            ) : null}
             <BackButton
               fallback="/home"
               label="입모양 연습 완료"
@@ -1124,6 +1156,14 @@ export default function LipPractice() {
                 <p className="mt-4 text-center text-sm font-bold">
                   문장 {promptIndex + 1} 촬영을 확인해 주세요
                 </p>
+                <button
+                  type="button"
+                  onClick={analyzeCurrentClip}
+                  disabled={!currentClip.audioBlob || !videoConsentAccepted}
+                  className="design-action mt-4 shrink-0 disabled:cursor-not-allowed disabled:!bg-[#e5e8eb] disabled:!text-[#8b95a1]"
+                >
+                  AI 발음 분석하기
+                </button>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -1136,7 +1176,7 @@ export default function LipPractice() {
                   <button
                     type="button"
                     onClick={continueFlow}
-                    className="flex min-h-14 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-white"
+                    className="flex min-h-14 items-center justify-center gap-2 rounded-full border border-border bg-white text-sm font-bold"
                   >
                     {promptIndex === LIP_PRACTICE_PROMPTS.length - 1
                       ? "촬영 완료"
@@ -1266,7 +1306,7 @@ function BottomAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="design-action mt-5 shrink-0 disabled:cursor-not-allowed disabled:opacity-45"
+      className="design-action mt-5 shrink-0 disabled:cursor-not-allowed disabled:!bg-[#e5e8eb] disabled:!text-[#8b95a1] disabled:!shadow-none disabled:opacity-100"
     >
       {label}
     </button>
