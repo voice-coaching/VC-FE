@@ -8,7 +8,7 @@
 - `src/lib/canonical-analysis.ts`, `canonical-lip.ts`: public view v2/v3를 profile과 묶어 엄격히 파싱. 현재 recording/request/execution 검증 유지. null 점수, 관찰, 시간 범위, coverage 검사.
 - `src/components/canonical-lip-result.tsx`, `analysis-view.tsx`: 기존 음성 피드백 옆에 입술 상태·자음 구간·관찰/보정 점수·연구용 유사도를 별도 표시. null은 점수 미제공으로 표시하며 종합 음성 점수에 합산하지 않음.
 
-Backend PR #114, AI PR #34가 함께 필요하다. 기존 URL의 v3 public view가 private v6 결과를 그대로 전달하는 것은 아니다. 얼굴 좌표·receipt·비밀값을 화면에 노출하지 않는다. public 상세 128개 제한 및 생략 수를 표시한다.
+Backend PR #115, AI PR #35가 함께 필요하다. 기존 URL의 v3 public view가 private v6 결과를 그대로 전달하는 것은 아니다. 얼굴 좌표·receipt·비밀값을 화면에 노출하지 않는다. public 상세 128개 제한 및 생략 수를 표시한다.
 
 초기 AI 후보는 자음 MFA 기반 관찰 전용이다. 참조·보정 데이터와 개발자 QA 전에는 입술 점수가 제공되지 않는다. Backend VIDEO capability가 닫힌 상태에서는 촬영/업로드 전 기존 안내를 유지한다.
 
