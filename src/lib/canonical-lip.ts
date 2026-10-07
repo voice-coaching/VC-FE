@@ -90,7 +90,7 @@ export const lipVisualSchema = z
     phoneAssessments: z.array(phone).max(128),
     omittedPhoneAssessmentCount: count,
     reasonCodes: reasons,
-    alignmentScope: z.literal("CANONICAL_PRONUNCIATION_EVIDENCE_CONSONANTS"),
+    alignmentScope: z.literal("CANONICAL_MFA_DETECTOR_PHONES_V1"),
     unresolvedExpectedIndices: z.array(index).max(2048),
   })
   .strict()
@@ -102,6 +102,10 @@ export const lipVisualSchema = z
       n.scoredCount > n.observedCount ||
       n.observedCount > n.visuallyEligibleCount ||
       n.visuallyEligibleCount > n.targetCount ||
+      v.phoneAssessments.length + v.omittedPhoneAssessmentCount +
+        v.unresolvedExpectedIndices.length !== n.targetCount ||
+      new Set(v.unresolvedExpectedIndices).size !== v.unresolvedExpectedIndices.length ||
+      v.phoneAssessments.some((p) => v.unresolvedExpectedIndices.includes(p.expectedIndex)) ||
       new Set(v.phoneAssessments.map((p) => p.expectedIndex)).size !==
         v.phoneAssessments.length
     )

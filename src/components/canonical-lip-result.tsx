@@ -28,10 +28,16 @@ export function CanonicalLipResult({ view }: { view: CanonicalAnalysisView }) {
           : "점수 미제공"}
       </p>
       <p className="mt-2 text-xs leading-5 text-[#6b7684]">
-        정렬된 자음 {visual.coverage.targetCount}개 중{" "}
+        분석 대상 음소 {visual.coverage.targetCount}개 중{" "}
         {visual.coverage.observedCount}개에서 입술 움직임을 관찰했어요. 입술
         점수는 음성 종합 점수에 합산하지 않아요.
       </p>
+      {visual.unresolvedExpectedIndices.length > 0 && (
+        <p className="mt-1 text-xs text-[#6b7684]">
+          {visual.unresolvedExpectedIndices.length}개 음소는 정확한 시간 구간을
+          확인하지 못했어요.
+        </p>
+      )}
       {visual.reasonCodes.map((code) =>
         reasons[code] ? (
           <p key={code} className="mt-1 text-xs text-[#6b7684]">
