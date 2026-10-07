@@ -11,6 +11,8 @@ import {
 } from "../canonical-analysis";
 
 export const HANDOFF_RESULT_HEADER = "voice-coaching.runpod-analysis-result.v5";
+export const AUDIOVISUAL_RESULT_HEADER =
+  "voice-coaching.runpod-analysis-result.v6";
 export const CANONICAL_RESULT_HEADER = HANDOFF_RESULT_HEADER;
 export function canonicalDatabaseId(value: Id): number {
   if (typeof value === "string" && !/^[1-9][0-9]*$/.test(value))
@@ -61,6 +63,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
     consent: AnalysisConsentInput,
     retry: boolean,
     signal?: AbortSignal,
+    audiovisual = false,
   ) {
     return request<AnalysisRequest>(
       `/api/training-sessions/${canonicalDatabaseId(sessionId)}/${retry ? "analysis/retry" : "analyze"}`,
@@ -70,7 +73,11 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
         signal,
         cache: "no-store",
         endpointErrorsOnly: true,
-        headers: { "X-Analysis-Result-Schema": HANDOFF_RESULT_HEADER },
+        headers: {
+          "X-Analysis-Result-Schema": audiovisual
+            ? AUDIOVISUAL_RESULT_HEADER
+            : HANDOFF_RESULT_HEADER,
+        },
       },
     );
   }
@@ -87,6 +94,16 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
   return {
     get,
     status,
+    analyzeAudiovisual: (
+      sessionId: Id,
+      consent: AnalysisConsentInput,
+      signal?: AbortSignal,
+    ) => submit(sessionId, consent, false, signal, true),
+    retryAudiovisual: (
+      sessionId: Id,
+      consent: AnalysisConsentInput,
+      signal?: AbortSignal,
+    ) => submit(sessionId, consent, true, signal, true),
     analyze: (
       sessionId: Id,
       consent: AnalysisConsentInput,

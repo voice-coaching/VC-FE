@@ -21,6 +21,7 @@ export type LipClip = {
   promptIndex: number;
   url: string;
   blob: Blob;
+  audioBlob?: Blob;
   durationMs: number;
 };
 

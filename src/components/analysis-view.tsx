@@ -5,6 +5,7 @@ import { useMemo, type ReactNode } from "react";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
+import { CanonicalLipResult } from "@/components/canonical-lip-result";
 import { CanonicalScoreCriteria } from "@/components/canonical-score-criteria";
 import type {
   AnalysisResult,
@@ -345,6 +346,7 @@ export function AnalysisView({
           </p>
           <AnalysisSummary key={summary} text={summary} />
         </section>
+        {analysis.canonical && <CanonicalLipResult view={analysis.canonical} />}
 
         <section className="rounded-2xl bg-white p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">

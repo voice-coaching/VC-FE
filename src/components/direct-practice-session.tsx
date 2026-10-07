@@ -17,6 +17,7 @@ import {
   findDirect,
   linkDirectHistory,
   observeDirect,
+  readDirect,
   submitDirect,
   type DirectView,
 } from "@/lib/direct-analysis";
@@ -94,21 +95,56 @@ export function DirectPracticeSession({
         const saved: Attempt = JSON.parse(raw);
         attempt.current = saved;
         setHasAttempt(true);
-        if (saved.jobId) void observe(saved.jobId, current.signal);
-        else
-          void findDirect(saved.attemptId, current.signal)
-            .then((reply) => {
-              if (current.signal.aborted) return;
-              save({ ...saved, jobId: reply.jobId });
-              update(reply);
-              void observe(reply.jobId, current.signal);
-            })
-            .catch(() => {
-              if (!current.signal.aborted)
-                setError(
-                  "이전 요청 접수를 확인하지 못했습니다. 새 녹음 전 결과를 다시 확인해 주세요.",
-                );
-            });
+        setBusy(true);
+        const restored = saved.jobId
+          ? readDirect(saved.jobId, current.signal)
+          : findDirect(saved.attemptId, current.signal);
+        void restored
+          .then(async (reply) => {
+            if (current.signal.aborted) return;
+            if (
+              ["RESULT_READY", "FAILED", "CANCELLED"].includes(reply.status)
+            ) {
+              if (reply.status === "RESULT_READY" && saved.historyClaim) {
+                try {
+                  const linked = await linkDirectHistory(
+                    reply.jobId,
+                    saved.historyClaim,
+                    current.signal,
+                  );
+                  if (current.signal.aborted) return;
+                  if (linked.state !== "SAVED") {
+                    update(reply);
+                    setHistory(linked.state);
+                    setBusy(false);
+                    return;
+                  }
+                } catch {
+                  if (current.signal.aborted) return;
+                  update(reply);
+                  setHistory("RETRYING");
+                  setBusy(false);
+                  return;
+                }
+              }
+              // A finished attempt is in history; reopening starts a new practice.
+              attempt.current = null;
+              localStorage.removeItem(key);
+              setHasAttempt(false);
+              setBusy(false);
+              return;
+            }
+            update(reply);
+            save({ ...saved, jobId: reply.jobId });
+            void observe(reply.jobId, current.signal);
+          })
+          .catch(() => {
+            if (current.signal.aborted) return;
+            setBusy(false);
+            setError(
+              "이전 분석 상태를 확인하지 못했습니다. 결과를 다시 확인하거나 새로 연습해 주세요.",
+            );
+          });
       }
     } catch {
       setError("이전 작업 정보를 복구하지 못했습니다.");
@@ -285,6 +321,13 @@ export function DirectPracticeSession({
           </p>
         </div>
         <div className="sticky bottom-0 mt-auto border-t border-[#e5e8eb] bg-white px-5 py-3">
+          <button
+            type="button"
+            onClick={clearAttempt}
+            className="mb-3 h-14 w-full rounded-full border border-primary text-[16px] font-bold text-primary"
+          >
+            다시 연습하기
+          </button>
           <button
             type="button"
             onClick={() => router.push("/home")}
