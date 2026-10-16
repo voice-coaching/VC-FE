@@ -22,6 +22,10 @@ import { useCatalogFilters } from "@/hooks/use-catalog-filters";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { refreshCatalogWindow } from "@/lib/catalog-pages";
 import {
+  catalogFacetsForPractice,
+  catalogItemsForPractice,
+} from "@/lib/catalog-visibility";
+import {
   Carousel,
   CarouselContent,
   CarouselItem,
@@ -47,7 +51,6 @@ const difficultyStyle: Record<Difficulty, string> = {
 };
 
 const SENTENCE_FILTERS = [
-  { label: "예시문제", symbol: "가", description: "난이도별로 연습해요" },
   { label: "받침", symbol: "ㄹ", description: "끝소리를 또렷하게" },
   { label: "된소리", symbol: "ㄲ", description: "힘주어 정확하게" },
   { label: "자음", symbol: "ㄹ", description: "첫소리를 분명하게" },
@@ -98,9 +101,7 @@ export function ContentCatalog({
   const userId = getAuthenticatedUserId();
   const { category, difficulty, setCategory, setDifficulty } =
     useCatalogFilters(`${userId}:${type}`);
-  const categoryValues = useRef<Record<string, string>>({
-    예시문제: "EXAMPLE_QUESTION",
-  });
+  const categoryValues = useRef<Record<string, string>>({});
   const fallbackCategories =
     type === "NEWS"
       ? ["사회", "경제", "문화", "스포츠"]
@@ -176,18 +177,22 @@ export function ContentCatalog({
     let active = true;
     const resource = cacheResources.contentFacets(type);
     const applyFacets = (facets: ContentFacets) => {
+      const visibleFacets = catalogFacetsForPractice(type, facets);
       categoryValues.current = {
         ...categoryValues.current,
         ...Object.fromEntries(
-          facets.categories.map((option) => [option.label, option.value]),
+          visibleFacets.categories.map((option) => [
+            option.label,
+            option.value,
+          ]),
         ),
       };
-      if (facets.categories.length)
-        setCategories(facets.categories.map((option) => option.label));
-      if (facets.difficulties.length)
+      if (visibleFacets.categories.length)
+        setCategories(visibleFacets.categories.map((option) => option.label));
+      if (visibleFacets.difficulties.length)
         setDifficultyOptions([
           DIFFICULTIES[0],
-          ...facets.difficulties.map((option) => ({
+          ...visibleFacets.difficulties.map((option) => ({
             value: option.value,
             label: option.label,
           })),
@@ -200,7 +205,11 @@ export function ContentCatalog({
       .then((facets) => {
         if (!active) return;
         applyFacets(facets);
-        writeUserClientCache(userId, resource, facets);
+        writeUserClientCache(
+          userId,
+          resource,
+          catalogFacetsForPractice(type, facets),
+        );
       })
       .catch(() => {
         // Keep the bundled labels when the optional facet endpoint is unavailable.
@@ -251,10 +260,6 @@ export function ContentCatalog({
           type,
           category: categoryValues.current[category] ?? (category || undefined),
           difficulty: difficulty || undefined,
-          focus:
-            type === "SENTENCE" && category === "예시문제"
-              ? "PRONUNCIATION"
-              : undefined,
           page,
           size: 20,
         }),
@@ -316,10 +321,6 @@ export function ContentCatalog({
         type,
         category: categoryValues.current[category] ?? (category || undefined),
         difficulty: difficulty || undefined,
-        focus:
-          type === "SENTENCE" && category === "예시문제"
-            ? "PRONUNCIATION"
-            : undefined,
         page: page + 1,
         size: 20,
       });
@@ -356,7 +357,13 @@ export function ContentCatalog({
     }
   }
 
-  const featured = items[0];
+  const visibleItems = catalogItemsForPractice(type, items);
+  const hiddenLoadedItems = items.length - visibleItems.length;
+  const visibleTotalElements = Math.max(
+    visibleItems.length,
+    totalElements - hiddenLoadedItems,
+  );
+  const featured = visibleItems[0];
 
   return (
     <AppShell
@@ -408,7 +415,9 @@ export function ContentCatalog({
             {type === "SENTENCE" ? (
               <>
                 {category || "전체"} 문장
-                <span className="ml-2 text-primary">{totalElements}</span>
+                <span className="ml-2 text-primary">
+                  {visibleTotalElements}
+                </span>
               </>
             ) : null}
           </h2>
@@ -436,7 +445,7 @@ export function ContentCatalog({
           </div>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <CatalogItem
                 key={String(item.id)}
                 item={item}
@@ -444,7 +453,7 @@ export function ContentCatalog({
                 href={practiceHref(item.id, returnTo)}
               />
             ))}
-            {items.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <p className="py-12 text-center text-sm text-[#8b95a1]">
                 조건에 맞는 콘텐츠가 없어요.
               </p>

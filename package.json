@@ -16,7 +16,7 @@
     "native:assets": "node scripts/sync-native-icons.mjs && npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor '#2f6bff' --iconBackgroundColorDark '#2f6bff' --splashBackgroundColor '#336fff' --splashBackgroundColorDark '#336fff'",
     "native:doctor": "cap doctor",
     "native:android": "cap open android",
-    "native:ios": "cap open ios"
+    "native:ios": "cap sync ios && cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",

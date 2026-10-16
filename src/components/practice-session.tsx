@@ -416,13 +416,15 @@ function PracticeSessionBody({
   }
 
   async function getAnalysisCapabilities() {
-    await requireAnalysisScope(
-      titleExamId
-        ? "TITLE_EXAM"
-        : courseId || courseStepId || content.contentType === "CLASS_PRACTICE"
+    // Title exams use the authenticated audio pipeline and are authorized again
+    // by the exam/session/submit endpoints. The legacy canonical scope still
+    // reports TITLE_EXAM as unsupported and must not block an otherwise valid exam.
+    if (!titleExamId)
+      await requireAnalysisScope(
+        courseId || courseStepId || content.contentType === "CLASS_PRACTICE"
           ? "COURSE"
           : "STANDALONE_AUDIO",
-    );
+      );
     if (capabilitiesRef.current) return capabilitiesRef.current;
     const userId = getAuthenticatedUserId();
     const capabilities =
