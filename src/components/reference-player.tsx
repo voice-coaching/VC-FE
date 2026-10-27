@@ -23,7 +23,8 @@ type ReferencePlayerProps = {
   endSeconds?: number;
   compact?: boolean;
   buttonTone?: "primary" | "neutral";
-  variant?: "default" | "guide" | "recording";
+  dense?: boolean;
+  variant?: "default" | "guide" | "recording" | "comparison";
   disabled?: boolean;
 };
 
@@ -52,6 +53,7 @@ function ReferencePlayerSession({
   endSeconds,
   compact = false,
   buttonTone,
+  dense = false,
   variant = "default",
   disabled = false,
 }: ReferencePlayerProps) {
@@ -191,6 +193,53 @@ function ReferencePlayerSession({
       .toString()
       .padStart(2, "0")}`;
   const remainingTime = () => time(remainingAudioDuration(duration, elapsed));
+  if (variant === "comparison")
+    return (
+      <span className="relative shrink-0">
+        <audio
+          ref={audio}
+          onPlay={() => setPlaying(true)}
+          onPause={releasePlayback}
+          onEnded={releasePlayback}
+          onError={() => {
+            releasePlayback();
+            setError("음성을 불러오지 못했습니다.");
+          }}
+        />
+        <button
+          type="button"
+          disabled={disabled || loading || playbackBlocked}
+          onClick={() => void toggle()}
+          aria-label={playing ? `${title} 일시 정지` : title}
+          aria-busy={loading}
+          className={`flex size-[26px] items-center justify-center rounded-full disabled:opacity-40 ${buttonTone === "primary" ? "bg-primary text-white" : "border border-[#e4ebfa] bg-white text-[#8b95a1]"}`}
+        >
+          {playing ? (
+            <Pause className="size-3" aria-hidden="true" />
+          ) : (
+            <Image
+              src={
+                buttonTone === "primary"
+                  ? "/figma/report-improved/play-white.svg"
+                  : "/figma/report-improved/play-muted.svg"
+              }
+              alt=""
+              width={12}
+              height={12}
+            />
+          )}
+        </button>
+        {error && (
+          <span
+            role="alert"
+            className="absolute right-0 top-8 z-10 w-44 rounded-lg bg-white p-2 text-xs text-destructive shadow-md"
+          >
+            {error}
+          </span>
+        )}
+      </span>
+    );
+
   if (variant === "guide")
     return (
       <section className="flex flex-col items-center gap-1.5">
@@ -332,7 +381,7 @@ function ReferencePlayerSession({
           type="button"
           disabled={disabled || loading || playbackBlocked}
           onClick={() => void toggle()}
-          className={`flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14px] leading-5 font-bold disabled:opacity-60 ${
+          className={`flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2 leading-5 font-bold disabled:opacity-60 ${dense ? "text-[13px]" : "text-[14px]"} ${
             buttonTone === "primary"
               ? "bg-[#edf2ff] text-primary"
               : "bg-[#f2f4f6] text-[#4e5968]"
@@ -344,12 +393,16 @@ function ReferencePlayerSession({
             <Image
               src={
                 buttonTone === "primary"
-                  ? "/figma/report/play.svg"
-                  : "/figma/report/headphones.svg"
+                  ? dense
+                    ? "/figma/report-improved/play.svg"
+                    : "/figma/report/play.svg"
+                  : dense
+                    ? "/figma/report-improved/headphones.svg"
+                    : "/figma/report/headphones.svg"
               }
               alt=""
-              width={18}
-              height={18}
+              width={dense ? 16 : 18}
+              height={dense ? 16 : 18}
             />
           )}
           {loading ? "불러오는 중…" : playing ? "일시 정지" : title}

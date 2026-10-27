@@ -4,11 +4,14 @@ import type {
   PracticeContentSummary,
 } from "./api/types";
 
-export const TITLE_EXAM_CONTENT_CATEGORY = "EXAMPLE_QUESTION";
+export const TITLE_EXAM_CONTENT_CATEGORY = "TITLE_EXAM";
 
 function isTitleExamCategory(value: string, label?: string) {
   return (
     value === TITLE_EXAM_CONTENT_CATEGORY ||
+    value === "EXAMPLE_QUESTION" ||
+    value === "승급시험" ||
+    label === "승급시험" ||
     value === "예시문제" ||
     label === "예시문제"
   );

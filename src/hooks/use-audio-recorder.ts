@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { createPcmRecording, playRecordingCue } from "@/lib/recording-audio";
+import {
+  createPcmRecording,
+  prepareRecordingAudio,
+} from "@/lib/recording-audio";
 
 export type RecorderStatus =
   | "idle"
@@ -262,7 +265,7 @@ export function useAudioRecorder() {
         }
         pcmRef.current = pcm;
       }
-      await playRecordingCue(context);
+      await prepareRecordingAudio(context);
       if (recordingGeneration !== recordingGenerationRef.current) return false;
       if (native) {
         pcmRef.current!.start();

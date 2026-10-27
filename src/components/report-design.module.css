@@ -1,0 +1,200 @@
+.scoreCard {
+  display: flex;
+  width: 100%;
+  min-height: 176px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 17px 20px;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #fff, #f9fbff);
+}
+.gauge {
+  position: relative;
+  display: block;
+  width: 120px;
+  height: 106px;
+  flex-shrink: 0;
+}
+.glow {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+}
+.arc {
+  position: absolute;
+  inset: 0;
+  width: 120px;
+  height: 120px;
+}
+.scoreValue {
+  position: absolute;
+  inset: 43px 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.scoreValue > span {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.scoreValue b {
+  font-size: 32px;
+  line-height: 38px;
+  letter-spacing: -0.64px;
+}
+.scoreValue small {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4e5968;
+}
+.scoreValue em {
+  font-size: 12px;
+  line-height: 16px;
+  font-style: normal;
+  color: #8b95a1;
+}
+.gauge[data-large="true"] {
+  width: 180px;
+  height: 160px;
+}
+.gauge[data-large="true"] .arc {
+  width: 180px;
+  height: 180px;
+}
+.gauge[data-large="true"] .glow {
+  left: 19.4px;
+  top: 19.4px;
+}
+.gauge[data-large="true"] .scoreValue {
+  top: 59px;
+}
+.gauge[data-large="true"] b {
+  font-size: 46px;
+  line-height: 54px;
+  letter-spacing: -0.92px;
+}
+.gauge[data-large="true"] small {
+  font-size: 16px;
+}
+.correction {
+  border-radius: 16px;
+  padding: 16px 14px 16px 16px;
+  background: linear-gradient(156deg, #fafbff, #f1f5ff);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comparisonLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.comparisonLine > strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+.chip {
+  width: 60px;
+  flex-shrink: 0;
+  text-align: center;
+  padding: 3px 0;
+  border-radius: 6px;
+  background: #ffecee;
+  color: #e5404e;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+}
+.chip[data-tone="correct"] {
+  background: #e3ecff;
+  color: #2f6bff;
+}
+.chip[data-tone="feedback"] {
+  background: #eef1f6;
+  color: #4e5968;
+}
+.feedbackLine {
+  display: flex;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e4ebfa;
+}
+.feedbackLine p {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: #4e5968;
+  white-space: pre-line;
+}
+.tip {
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #fff0f8, #e9f3ff);
+  font-size: 14px;
+  line-height: 21px;
+  color: #4e5968;
+}
+.tip strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #d34be2;
+  font-size: 12px;
+}
+.criterion {
+  overflow: hidden;
+  border-radius: 16px;
+  background: white;
+}
+.criterion summary {
+  display: flex;
+  min-height: 56px;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.criterion summary::-webkit-details-marker {
+  display: none;
+}
+.criterion[open] summary > strong {
+  color: #2f6bff;
+}
+.criterion summary > img {
+  transform: rotate(90deg);
+}
+.criterion[open] summary > img {
+  transform: rotate(-90deg);
+}
+.criterionBody {
+  margin: 0 18px 16px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #f5f7ff, #e1eaff);
+  color: #4e5968;
+  font-size: 13px;
+  line-height: 20px;
+}
+.phones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+.phones span {
+  min-width: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: white;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+}

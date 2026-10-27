@@ -19,6 +19,11 @@ export function DirectAnalysisResult({
   return (
     <AnalysisView
       analysis={directAnalysisPresentation(result)}
+      corrections={
+        !result.failure && result.decision.status === "ACCEPT"
+          ? result.coaching.items
+          : []
+      }
       // The direct contract has no sentence scores or sentence judgments.
       segments={[]}
       content={content}

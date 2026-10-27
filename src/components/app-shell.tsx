@@ -20,6 +20,7 @@ const tabFlowPrefixes = [
   "/home",
   "/class",
   "/mypage",
+  "/saved",
   "/news",
   "/sentences",
   "/my-script",
@@ -51,6 +52,7 @@ export function AppShell({
   chromeColor,
   bottomChromeColor,
   mainRef,
+  animateRoute = true,
 }: {
   children: ReactNode;
   nav?: boolean;
@@ -59,12 +61,15 @@ export function AppShell({
   chromeColor?: string;
   bottomChromeColor?: string;
   mainRef?: Ref<HTMLElement>;
+  animateRoute?: boolean;
 }) {
   const pathname = usePathname();
   const lockViewport = nav || viewportLocked;
-  const animateTabFlow = tabFlowPrefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  const animateTabFlow =
+    animateRoute &&
+    tabFlowPrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
   const animateContent = animateTabFlow && !staticMyPageTabs.has(pathname);
   const transitionDirection = useMemo(() => {
     void pathname;

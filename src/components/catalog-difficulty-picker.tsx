@@ -6,10 +6,23 @@ import type { Difficulty } from "@/lib/api";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 
 type Props = {
+  variant?: "default" | "news";
   value: Difficulty | "";
   options: Array<{ value: Difficulty | ""; label: string }>;
   onChange: (value: Difficulty | "") => void;
 };
+
+const newsTriggerClass =
+  "flex h-[30px] shrink-0 items-center gap-0.5 rounded-full bg-[#e8eeff] pl-3 pr-2 text-[13px] leading-[18px] font-medium text-[#1276ff]";
+
+function triggerLabel(
+  value: Difficulty | "",
+  options: Props["options"],
+  variant: Props["variant"],
+) {
+  if (variant === "news" && !value) return "모든 난이도";
+  return options.find((option) => option.value === value)?.label;
+}
 
 const triggerClass =
   "flex min-h-11 items-center gap-1 rounded-full border border-[#e5e8eb] bg-white px-3 text-[13px] font-medium text-[#6b7684]";
@@ -18,8 +31,12 @@ export function CatalogDifficultyPicker(props: Props) {
   return (
     <Suspense
       fallback={
-        <button type="button" disabled className={triggerClass}>
-          {props.options.find((option) => option.value === props.value)?.label}
+        <button
+          type="button"
+          disabled
+          className={props.variant === "news" ? newsTriggerClass : triggerClass}
+        >
+          {triggerLabel(props.value, props.options, props.variant)}
           <ChevronDown className="size-4" />
         </button>
       }
@@ -29,7 +46,7 @@ export function CatalogDifficultyPicker(props: Props) {
   );
 }
 
-function DifficultyPicker({ value, options, onChange }: Props) {
+function DifficultyPicker({ value, options, onChange, variant }: Props) {
   const [panel, setPanel] = useHistoryPanel("panel", ["difficulty"] as const);
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -53,11 +70,18 @@ function DifficultyPicker({ value, options, onChange }: Props) {
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={
+          variant === "news" && !value ? "모든 난이도 선택" : undefined
+        }
         onClick={() => setPanel("difficulty")}
-        className={triggerClass}
+        className={variant === "news" ? newsTriggerClass : triggerClass}
       >
-        {options.find((option) => option.value === value)?.label}
-        <ChevronDown className="size-4" />
+        {triggerLabel(value, options, variant)}
+        {variant === "news" ? (
+          <ChevronDown className="size-4" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="size-4" />
+        )}
       </button>
       <dialog
         ref={dialog}

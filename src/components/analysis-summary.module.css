@@ -1,17 +1,19 @@
 .card {
   width: 100%;
   border-radius: 18px;
-  background: var(--color-primary, #2f6bff);
-  padding: 16px;
+  background:
+    radial-gradient(ellipse at 95% 5%, #8db6ff59, transparent 55%),
+    linear-gradient(162deg, #4a82ff, #2459f0);
+  padding: 14px 16px;
   color: white;
 }
 
 .heading {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  line-height: 22px;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 700;
 }
 
@@ -22,14 +24,14 @@
 
 .body {
   position: relative;
-  margin-top: 8px;
+  margin-top: 6px;
   overflow: hidden;
 }
 
 .text {
   margin: 0;
-  font-size: 16px;
-  line-height: 1.625;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -51,7 +53,7 @@
 
 .toggle {
   display: flex;
-  min-height: 44px;
+  min-height: 30px;
   width: 100%;
   margin-top: 6px;
   align-items: center;
@@ -60,7 +62,13 @@
   border: 0;
   background: transparent;
   color: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.heading h2 {
+  background: linear-gradient(90deg, #ffd3ee, #e6d9ff, #bfe4ff);
+  background-clip: text;
+  color: transparent;
 }

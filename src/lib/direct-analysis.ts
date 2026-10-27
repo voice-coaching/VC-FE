@@ -234,7 +234,7 @@ export async function listDirectHistory(signal: AbortSignal) {
       z.object({
         jobId: z.string().uuid(),
         scriptText: z.string(),
-        result: directResultSchema,
+        result: directResultSchema.nullable(),
         storageStatus: z.string(),
       }),
     )

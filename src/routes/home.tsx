@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,6 +17,7 @@ import {
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import styles from "./home.module.css";
+import { newsHeadline } from "@/lib/news-presentation";
 import {
   updateHomeHeader,
   type HeaderScrollState,
@@ -63,9 +65,9 @@ const PRACTICE_CARDS: PracticeCard[] = [
         소리 내어 읽어요
       </>
     ),
-    icon: "/figma/home-density/practice-news.svg",
-    iconWidth: 32,
-    iconHeight: 36.8,
+    icon: "/figma/home-before/practice-news.svg",
+    iconWidth: 32.0002,
+    iconHeight: 36.8005,
   },
   {
     href: "/sentences",
@@ -77,9 +79,9 @@ const PRACTICE_CARDS: PracticeCard[] = [
         반복해 교정해요
       </>
     ),
-    icon: "/figma/home-density/practice-sentence.svg",
-    iconWidth: 38.4,
-    iconHeight: 36.8,
+    icon: "/figma/home-before/practice-sentence.svg",
+    iconWidth: 38.7998,
+    iconHeight: 37.2006,
   },
   {
     href: "/announcer",
@@ -91,9 +93,9 @@ const PRACTICE_CARDS: PracticeCard[] = [
         듣고 따라 해요
       </>
     ),
-    icon: "/figma/home-density/practice-follow.svg",
-    iconWidth: 17.6,
-    iconHeight: 36.8,
+    icon: "/figma/home-before/practice-follow.svg",
+    iconWidth: 20,
+    iconHeight: 41.0008,
   },
   {
     href: "/my-script",
@@ -105,8 +107,8 @@ const PRACTICE_CARDS: PracticeCard[] = [
         붙여넣고 연습해요
       </>
     ),
-    icon: "/figma/home-density/practice-custom.svg",
-    iconWidth: 35.2,
+    icon: "/figma/home-before/practice-custom.svg",
+    iconWidth: 35.2005,
     iconHeight: 33.6,
   },
 ];
@@ -186,6 +188,57 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [coursesLoading, setCoursesLoading] = useState(true);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsItems, setNewsItems] = useState<PracticeContentSummary[]>([]);
+  const [newsFailed, setNewsFailed] = useState(false);
+  const [imagesLoading, setImagesLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setNewsLoading(true);
+    setNewsFailed(false);
+    void api.content
+      .list({ type: "NEWS", page: 0, size: 5 })
+      .then((result) => {
+        if (active) setNewsItems(result.items.slice(0, 5));
+      })
+      .catch(() => {
+        if (active) setNewsFailed(true);
+      })
+      .finally(() => {
+        if (active) setNewsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId, reloadKey]);
+
+  useEffect(() => {
+    let active = true;
+    const sources = [
+      "/figma/home/news-character.png",
+      "/figma/home-before/brand.svg",
+      "/figma/home-before/bell.svg",
+      ...PRACTICE_CARDS.map((card) => card.icon),
+    ];
+    const images = sources.map(
+      (source) =>
+        new Promise<void>((resolve) => {
+          const image = new window.Image();
+          image.onload = () => resolve();
+          image.onerror = () => resolve();
+          image.src = source;
+        }),
+    );
+    void Promise.all(images).then(() => {
+      if (active) setImagesLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [coursesUnavailable, setCoursesUnavailable] = useState(false);
 
   useEffect(() => {
@@ -196,7 +249,7 @@ export default function Home() {
     setCoursesUnavailable(false);
 
     void Promise.allSettled([
-      api.courses.getMyProgress(),
+      api.courses.getMyProgress("IN_PROGRESS"),
       api.myPage.getStatistics({ from, to }),
       api.myPage.listTrainingSessions({
         status: "COMPLETED",
@@ -228,13 +281,19 @@ export default function Home() {
 
       const courseResults = await Promise.allSettled(
         courseResult.value
-          .filter(
-            (item) => item.progressPercent > 0 && item.progressPercent < 100,
-          )
+          .filter((item) => item.status === "IN_PROGRESS")
           .slice(0, 2)
           .map(async (item) => {
             const course = await api.courses.get(item.courseId);
-            return { ...course, progressPercent: item.progressPercent };
+            return {
+              ...course,
+              progressPercent: item.progressPercent,
+              progress: {
+                ...course.progress,
+                status: item.status,
+                progressPercent: item.progressPercent,
+              },
+            };
           }),
       );
       if (!active) return;
@@ -259,6 +318,7 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     setError(null);
+    setDashboardLoading(true);
 
     void (async () => {
       const [dashboardResult, recommendationResult] = await Promise.allSettled([
@@ -317,7 +377,9 @@ export default function Home() {
           }
         }
       }
-    })();
+    })().finally(() => {
+      if (active) setDashboardLoading(false);
+    });
 
     return () => {
       active = false;
@@ -337,6 +399,9 @@ export default function Home() {
       })
       .catch(() => {
         if (active) setHasUnreadNotifications(false);
+      })
+      .finally(() => {
+        if (active) setNotificationsLoading(false);
       });
     return () => {
       active = false;
@@ -372,21 +437,40 @@ export default function Home() {
     [now, weekRange],
   );
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
+  const recentTraining = dashboard?.recentTraining;
+  const ongoingTraining =
+    recentTraining &&
+    ["RECORDING", "UPLOADING", "ANALYZING"].includes(recentTraining.status)
+      ? recentTraining
+      : null;
+  const ongoingCourses = recentCourses.filter(
+    (course) => course.progress?.status === "IN_PROGRESS",
+  );
+  if (
+    dashboardLoading ||
+    coursesLoading ||
+    newsLoading ||
+    notificationsLoading ||
+    imagesLoading
+  ) {
+    return <HomeSkeleton />;
+  }
 
   return (
     <AppShell
+      animateRoute={false}
       viewportLocked
       className="relative"
       chromeColor={headerCollapsed ? "#f2f4f6" : "#2f6bff"}
     >
       <header
-        className={`${styles.homeHeader} z-20 bg-[#2f6bff]`}
+        className={`${styles.homeHeader} z-20`}
         data-state={headerCollapsed ? "hidden" : "visible"}
         inert={headerCollapsed}
       >
         <div className="flex h-16 items-center px-5">
           <Image
-            src="/figma/home-density/brand.svg"
+            src="/figma/home-before/brand.svg"
             alt="Speak AI"
             width={23.2}
             height={32}
@@ -399,14 +483,14 @@ export default function Home() {
             className="relative flex size-11 items-center justify-end"
           >
             <Image
-              src="/figma/home-density/bell.svg"
+              src="/figma/home-before/bell.svg"
               alt=""
               width={28}
               height={28}
             />
             {hasUnreadNotifications ? (
               <Image
-                src="/figma/home-density/badge-dot.svg"
+                src="/figma/home-before/badge-dot.svg"
                 alt=""
                 width={8}
                 height={8}
@@ -416,7 +500,7 @@ export default function Home() {
           </Link>
         </div>
 
-        <section className="mx-5 mt-2 h-[85px] rounded-2xl bg-white/15 px-[14px] py-[10px] text-white">
+        <section className="mx-5 mt-1 h-[95px] rounded-[20px] border border-white/45 bg-linear-[169deg,rgba(255,255,255,0.24)_14.286%,rgba(255,255,255,0.08)_85.714%] py-[14px] pr-[14px] pl-4 text-white">
           <Link href="/home/streak" className="flex h-full items-center gap-3">
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-1 whitespace-nowrap">
@@ -431,10 +515,10 @@ export default function Home() {
                 {weekDates.map((day) => {
                   const completed = completedWeekdays.has(day.key);
                   const dot = completed
-                    ? "/figma/home-density/day-complete-dot.svg"
+                    ? "/figma/home-before/day-complete-dot.svg"
                     : day.isToday
-                      ? "/figma/home-density/day-current.svg"
-                      : "/figma/home-density/day-inactive.svg";
+                      ? "/figma/home-before/day-current.svg"
+                      : "/figma/home-before/day-inactive.svg";
                   return (
                     <span
                       key={day.key}
@@ -444,7 +528,7 @@ export default function Home() {
                         <Image src={dot} alt="" width={20} height={20} />
                         {completed ? (
                           <Image
-                            src="/figma/home-density/day-check.svg"
+                            src="/figma/home-before/day-check.svg"
                             alt=""
                             width={14}
                             height={14}
@@ -469,7 +553,7 @@ export default function Home() {
               </span>
             </span>
             <Image
-              src="/figma/home-density/chevron-streak.svg"
+              src="/figma/home-before/chevron-streak.svg"
               alt=""
               width={18}
               height={18}
@@ -492,11 +576,11 @@ export default function Home() {
         }}
         className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <div className="h-[181px] shrink-0" aria-hidden="true" />
+        <div className="h-[187px] shrink-0" aria-hidden="true" />
 
-        <main className="relative z-10 min-h-full rounded-t-[24px] bg-[#f2f4f6]">
-          <div className="relative min-h-full pb-8">
-            <div className="relative px-5 pt-5">
+        <main className="relative z-10 bg-[#f2f4f6]">
+          <div className="relative pb-8">
+            <div className="relative px-5 pt-6">
               {error ? (
                 <div
                   role="alert"
@@ -513,8 +597,10 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <section className="relative h-[200px] overflow-hidden rounded-[20px] bg-white p-5">
-                <span className="inline-flex h-[26px] items-center rounded-full bg-[#edf2ff] px-3 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+              <section
+                className={`${styles.todayCard} relative h-[200px] overflow-hidden rounded-[20px] p-5`}
+              >
+                <span className="inline-flex h-[26px] items-center rounded-full pr-3 pl-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
                   {dashboard?.courseProgress
                     ? dashboard.courseProgress.title
                     : "오늘의 추천"}
@@ -545,16 +631,19 @@ export default function Home() {
                 <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
                   <Image
                     src="/figma/home/news-character.png"
+                    unoptimized
                     alt="뉴스를 읽는 Speak AI 캐릭터"
                     width={217}
                     height={216}
                     priority
-                    className="absolute top-[-15px] left-[-31px] h-[216px] w-[217px] max-w-none"
+                    className="absolute top-[-8.21%] left-[-20.36%] h-[116.76%] w-[140.85%] max-w-none"
                   />
                 </span>
               </section>
 
-              <section className="mt-8">
+              <HomeNewsTicker items={newsItems} failed={newsFailed} />
+
+              <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
                   무엇을 연습할까요?
                 </h2>
@@ -565,10 +654,10 @@ export default function Home() {
                 </div>
                 <Link
                   href="/lip-practice"
-                  className="mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] bg-white p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]"
+                  className={`${styles.lipCard} mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]`}
                 >
                   <Image
-                    src="/figma/home-density/lip-practice.svg"
+                    src="/figma/home-before/lip-practice.svg"
                     alt=""
                     width={44}
                     height={44}
@@ -579,7 +668,7 @@ export default function Home() {
                       <strong className="text-[15px] leading-[22px]">
                         입모양 보며 연습
                       </strong>
-                      <span className="rounded-full bg-[#f2f4f6] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684]">
+                      <span className="shrink-0 rounded-full bg-white/85 px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684] max-[360px]:hidden">
                         카메라 사용
                       </span>
                     </span>
@@ -588,7 +677,7 @@ export default function Home() {
                     </span>
                   </span>
                   <Image
-                    src="/figma/home-density/chevron-feature.svg"
+                    src="/figma/home-before/chevron-feature.svg"
                     alt=""
                     width={20}
                     height={20}
@@ -597,38 +686,26 @@ export default function Home() {
                 </Link>
               </section>
 
-              <section className="mt-8 pb-1">
+              <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
                   진행 중인 연습
                 </h2>
                 <div className="mt-3 space-y-2">
-                  {dashboard?.recentTraining ? (
+                  {ongoingTraining ? (
                     <ContinueCard
-                      href={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? `/mypage/history/${dashboard.recentTraining.sessionId}`
-                          : `/practice/${dashboard.recentTraining.contentId}?sessionId=${dashboard.recentTraining.sessionId}&resumeType=${dashboard.recentTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`
-                      }
-                      title={dashboard.recentTraining.title}
-                      detail={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? "최근 완료한 연습"
-                          : "멈춘 지점부터 이어서 시작해요"
-                      }
+                      href={`/practice/${ongoingTraining.contentId}?sessionId=${ongoingTraining.sessionId}&resumeType=${ongoingTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`}
+                      title={ongoingTraining.title}
+                      detail="멈춘 지점부터 이어서 시작해요"
                       badge="최근"
-                      ring="/figma/home-density/progress-announcer-ring.svg"
-                      icon="/figma/home-density/progress-announcer.svg"
-                      iconWidth={10.462}
-                      iconHeight={23.538}
-                      badgeColor="#bfceff"
-                      count={
-                        dashboard.recentTraining.status === "COMPLETED"
-                          ? "완료"
-                          : "계속"
-                      }
+                      ring="/figma/home-before/progress-announcer-ring.svg"
+                      icon="/figma/home-before/progress-announcer.svg"
+                      iconWidth={10.4626}
+                      iconHeight={23.5385}
+                      badgeColor="#eaf0ff"
+                      count="계속"
                     />
                   ) : null}
-                  {recentCourses.map((course) => (
+                  {ongoingCourses.map((course) => (
                     <ContinueCard
                       key={String(course.id)}
                       href={`/class/${course.courseType.toLowerCase()}`}
@@ -640,28 +717,30 @@ export default function Home() {
                       detail={course.title}
                       ring={
                         course.courseType === "INTONATION"
-                          ? "/figma/home-density/progress-intonation-ring.svg"
-                          : "/figma/home-density/progress-pronunciation-ring.svg"
+                          ? "/figma/home-before/progress-intonation-ring.svg"
+                          : "/figma/home-before/progress-pronunciation-ring.svg"
                       }
                       icon={
                         course.courseType === "INTONATION"
-                          ? "/figma/home-density/progress-intonation.svg"
-                          : "/figma/home-density/progress-pronunciation.svg"
+                          ? "/figma/home-before/progress-intonation.svg"
+                          : "/figma/home-before/progress-pronunciation.svg"
                       }
                       iconWidth={
-                        course.courseType === "INTONATION" ? 28.333 : 20.778
+                        course.courseType === "INTONATION" ? 28.3341 : 20.7783
                       }
-                      iconHeight={17}
-                      badgeColor="#e2eaff"
+                      iconHeight={
+                        course.courseType === "INTONATION" ? 17.0023 : 17.0005
+                      }
+                      badgeColor="#eaf0ff"
                       chevron={
                         course.courseType === "INTONATION"
-                          ? "/figma/home-density/chevron-intonation.svg"
+                          ? "/figma/home-before/chevron-intonation.svg"
                           : undefined
                       }
                       count={`${Math.round(course.progressPercent)}%`}
                     />
                   ))}
-                  {!dashboard?.recentTraining && recentCourses.length === 0 ? (
+                  {!ongoingTraining && ongoingCourses.length === 0 ? (
                     <div
                       className="rounded-[18px] bg-white px-5 py-6 text-center text-sm leading-6 text-[#6b7684]"
                       role="status"
@@ -699,6 +778,138 @@ export default function Home() {
   );
 }
 
+function HomeNewsTicker({
+  items,
+  failed,
+}: {
+  items: PracticeContentSummary[];
+  failed: boolean;
+}) {
+  const [index, setIndex] = useState(0);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const [inView, setInView] = useState(false);
+  const [pageVisible, setPageVisible] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const tickerRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncMotion = () => setReduceMotion(media.matches);
+    const syncVisibility = () => setPageVisible(!document.hidden);
+    syncMotion();
+    syncVisibility();
+    media.addEventListener("change", syncMotion);
+    document.addEventListener("visibilitychange", syncVisibility);
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0.5 },
+    );
+    if (tickerRef.current) observer.observe(tickerRef.current);
+    return () => {
+      media.removeEventListener("change", syncMotion);
+      document.removeEventListener("visibilitychange", syncVisibility);
+      observer.disconnect();
+    };
+  }, []);
+
+  // Give each headline a full reading interval, including after interaction.
+  useEffect(() => {
+    if (
+      items.length < 2 ||
+      hovered ||
+      focused ||
+      transitioning ||
+      !inView ||
+      !pageVisible ||
+      reduceMotion
+    )
+      return;
+    const timer = window.setTimeout(() => {
+      setIndex((value) => (value + 1) % items.length);
+      setTransitioning(true);
+    }, 4200);
+    return () => window.clearTimeout(timer);
+  }, [
+    items.length,
+    index,
+    hovered,
+    focused,
+    transitioning,
+    inView,
+    pageVisible,
+    reduceMotion,
+  ]);
+
+  useEffect(() => {
+    if (!transitioning) return;
+    const timer = window.setTimeout(
+      () => setTransitioning(false),
+      reduceMotion ? 0 : 560,
+    );
+    return () => window.clearTimeout(timer);
+  }, [transitioning, reduceMotion]);
+
+  const item = items[index];
+  const previousIndex = (index - 1 + items.length) % items.length;
+  const previousItem = items[previousIndex];
+  return (
+    <Link
+      href={item ? `/practice/${item.id}?returnTo=%2Fhome` : "/news"}
+      aria-label={
+        item
+          ? `인기 뉴스 ${index + 1}위: ${newsHeadline(item.title)}`
+          : "뉴스 읽기 보기"
+      }
+      ref={tickerRef}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      className="mt-7 flex h-14 items-center gap-2.5 overflow-hidden rounded-[16px] bg-white py-4 pr-3 pl-[14px] shadow-[0_2px_8px_rgba(26,51,128,0.05)]"
+    >
+      <span className="shrink-0 rounded-[6px] bg-[#eaf0ff] px-2 py-[3px] text-[11px] leading-4 font-bold tracking-[-0.165px] text-primary">
+        인기 뉴스
+      </span>
+      <span className={styles.newsWindow} aria-hidden="true">
+        {transitioning && previousItem ? (
+          <span
+            className={`${styles.newsRow} ${styles.newsOutgoing}`}
+            key={`out-${previousItem.id}`}
+          >
+            <strong className={styles.newsRank}>{previousIndex + 1}</strong>
+            <span className={styles.newsTitle}>
+              {newsHeadline(previousItem.title)}
+            </span>
+          </span>
+        ) : null}
+        <span
+          className={`${styles.newsRow} ${transitioning ? styles.newsIncoming : ""}`}
+          key={item?.id ?? "empty"}
+        >
+          {item ? (
+            <strong className={styles.newsRank}>{index + 1}</strong>
+          ) : null}
+          <span className={styles.newsTitle}>
+            {(item ? newsHeadline(item.title) : null) ??
+              (failed
+                ? "뉴스 목록에서 다시 확인해 주세요"
+                : "새로운 뉴스를 준비하고 있어요")}
+          </span>
+        </span>
+      </span>
+      <Image
+        src="/figma/home-before/chevron-news.svg"
+        alt=""
+        width={16}
+        height={16}
+        className="shrink-0"
+      />
+    </Link>
+  );
+}
+
 function PracticeTile({
   href,
   title,
@@ -710,7 +921,7 @@ function PracticeTile({
   return (
     <Link
       href={href}
-      className="relative flex h-[136px] min-w-0 flex-col overflow-hidden rounded-[18px] bg-white p-4 active:scale-[0.98]"
+      className={`${styles.practiceTile} relative flex h-[136px] min-w-0 flex-col overflow-hidden rounded-[18px] p-4 active:scale-[0.98]`}
     >
       <h3 className="text-[17px] leading-6 font-bold">{title}</h3>
       <p className="mt-1 text-xs leading-4 tracking-[0.3024px] text-[#6b7684]">
@@ -733,7 +944,7 @@ function ContinueCard({
   iconWidth,
   iconHeight,
   badgeColor,
-  chevron = "/figma/home-density/chevron-progress.svg",
+  chevron = "/figma/home-before/chevron-progress.svg",
   count,
 }: {
   href: string;
@@ -766,7 +977,7 @@ function ContinueCard({
         <span className="flex items-center gap-1.5">
           <strong className="truncate text-sm leading-5">{title}</strong>
           {badge ? (
-            <span className="rounded-full bg-[#edf2ff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+            <span className="shrink-0 rounded-full bg-[#edf2ff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
               {badge}
             </span>
           ) : null}
@@ -781,5 +992,44 @@ function ContinueCard({
         <Image src={chevron} alt="" width={18} height={18} />
       </span>
     </Link>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <AppShell
+      animateRoute={false}
+      viewportLocked
+      chromeColor="#f2f4f6"
+      className="!bg-[#f2f4f6]"
+    >
+      <div
+        role="status"
+        aria-busy="true"
+        aria-label="홈 화면 불러오는 중"
+        className="h-full overflow-hidden px-5 pb-8"
+      >
+        <span className="sr-only">홈 화면을 준비하고 있어요</span>
+        <div className="flex h-16 items-center justify-between">
+          <SkeletonBlock className="h-8 w-6 bg-[#e5e8eb]" />
+          <SkeletonBlock className="size-7 bg-[#e5e8eb]" />
+        </div>
+        <SkeletonBlock className="mt-2 h-[90px] w-full rounded-[20px] bg-[#e5e8eb]" />
+        <SkeletonBlock className="mt-10 h-[200px] w-full rounded-[24px] bg-[#e5e8eb]" />
+        <SkeletonBlock className="mt-7 h-14 w-full rounded-[16px] bg-[#e5e8eb]" />
+        <SkeletonBlock className="mt-7 h-6 w-32 bg-[#e5e8eb]" />
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonBlock
+              key={i}
+              className="h-[136px] rounded-[20px] bg-[#e5e8eb]"
+            />
+          ))}
+        </div>
+        <SkeletonBlock className="mt-3 h-20 w-full rounded-[18px] bg-[#e5e8eb]" />
+        <SkeletonBlock className="mt-6 h-6 w-28 bg-[#e5e8eb]" />
+        <SkeletonBlock className="mt-3 h-20 w-full rounded-[18px] bg-[#e5e8eb]" />
+      </div>
+    </AppShell>
   );
 }

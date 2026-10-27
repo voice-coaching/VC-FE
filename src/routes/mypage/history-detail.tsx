@@ -1,7 +1,8 @@
 "use client";
+import { reportSaves } from "@/lib/report-saves";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { canonicalApi, canonicalDatabaseId } from "@/lib/api/canonical";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
@@ -41,7 +42,7 @@ import { removeCachedHistorySession } from "@/lib/history-cache";
 type DetailBundle = {
   detail: TrainingHistoryDetail;
   content: PracticeContent;
-  result: AnalysisResult;
+  result: AnalysisResult | null;
   segments: AnalysisSegment[];
 };
 
@@ -72,12 +73,15 @@ export default function LearningHistoryDetail({
 
 function HistoryDetail({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const userId = getAuthenticatedUserId();
   const cacheResource = cacheResources.historyDetail(sessionId);
   // Never restore unverified result payloads from persistent UI cache.
   const [bundle, setBundle] = useState<DetailBundle | null>(null);
   const readController = useRef<AbortController | null>(null);
-  const [tab, setTab] = useState<"recording" | "report">("recording");
+  const [tab, setTab] = useState<"recording" | "report">(
+    searchParams.get("tab") === "report" ? "report" : "recording",
+  );
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useHistoryPanel("confirm", [
@@ -131,13 +135,18 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
       try {
         const detail = await api.myPage.getTrainingSession(sessionId);
         if (!active()) return;
-        const result = await canonicalApi.get(
-          {
-            analysisId: canonicalDatabaseId(detail.analysis.id),
-            recordingId: canonicalDatabaseId(detail.recording.id),
-          },
-          controller.signal,
-        );
+        const choice = await reportSaves.get("SESSION", sessionId);
+        if (!active()) return;
+        if (!choice.saved) setTab("recording");
+        const result = choice.saved
+          ? await canonicalApi.get(
+              {
+                analysisId: canonicalDatabaseId(detail.analysis.id),
+                recordingId: canonicalDatabaseId(detail.recording.id),
+              },
+              controller.signal,
+            )
+          : null;
         if (!active()) return;
         const content = await api.content.get(detail.content.id);
         if (!active()) return;
@@ -148,7 +157,7 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
           setBundle({
             detail,
             content: { ...content, scriptText: detail.content.scriptText },
-            result: canonicalPresentation(result),
+            result: result ? canonicalPresentation(result) : null,
             segments: segmentPage.items,
           });
       } catch (reason) {
@@ -224,13 +233,15 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
           >
             녹음
           </button>
-          <button
-            type="button"
-            onClick={() => setTab("report")}
-            className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "report" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
-          >
-            AI 리포트
-          </button>
+          {bundle?.result && (
+            <button
+              type="button"
+              onClick={() => setTab("report")}
+              className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "report" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
+            >
+              AI 리포트
+            </button>
+          )}
         </div>
       </div>
 
@@ -292,7 +303,7 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
         </>
       )}
 
-      {bundle && tab === "report" && (
+      {bundle?.result && tab === "report" && (
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <AnalysisView
             key={String(bundle.result.id)}

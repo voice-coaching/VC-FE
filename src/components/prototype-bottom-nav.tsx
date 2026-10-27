@@ -17,6 +17,11 @@ const tabs = [
     icon: "/figma/home-density/tab-book-fill.svg",
   },
   {
+    href: "/mypage/history",
+    label: "기록",
+    icon: "/figma/history-tab/chart.svg",
+  },
+  {
     href: "/mypage",
     label: "마이",
     icon: "/figma/home-density/tab-person-fill.svg",
@@ -25,15 +30,22 @@ const tabs = [
 
 export function PrototypeBottomNav() {
   const pathname = usePathname();
-  const activeTabIndex = tabs.findIndex(
-    ({ href }) => pathname === href || pathname.startsWith(`${href}/`),
-  );
+  const matchesTab = (href: string) => {
+    if (
+      href === "/mypage" &&
+      (pathname === "/mypage/history" ||
+        pathname.startsWith("/mypage/history/"))
+    )
+      return false;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+  const activeTabIndex = tabs.findIndex(({ href }) => matchesTab(href));
 
   return (
     <nav aria-label="주 메뉴" className={styles.nav}>
       <ul className={styles.list}>
         {tabs.map(({ href, label, icon }, tabIndex) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const active = matchesTab(href);
           return (
             <li key={href} className={styles.item}>
               <Link

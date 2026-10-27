@@ -1,0 +1,263 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: #fff;
+  color: #191f28;
+}
+.selection {
+  background: #f2f4f6;
+}
+.header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 48px;
+  padding: 4px 8px;
+}
+.header h1 {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+}
+.iconButton {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+.content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 20px;
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #edf2ff;
+  color: #2f6bff;
+  border-radius: 999px;
+  padding: 4px 10px 7px;
+  height: 29px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.head h2 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.24px;
+}
+.head p {
+  margin-top: 6px;
+  color: #8b95a1;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 500;
+}
+.preview {
+  height: 230px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.crop {
+  position: relative;
+  width: 185px;
+  height: 224px;
+  overflow: hidden;
+}
+.mascot {
+  position: absolute;
+  left: -41.85%;
+  top: 0;
+  width: 182.64%;
+  max-width: none;
+  height: 100%;
+}
+.sentences {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.setHeading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
+.setHeading > div {
+  flex: 1;
+  min-width: 0;
+}
+.setHeading h3 {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.setHeading p {
+  font-size: 13px;
+  line-height: 18px;
+  color: #8b95a1;
+  margin-top: 2px;
+}
+.setHeading button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 6px 8px 6px 12px;
+  border-radius: 999px;
+  background: #f2f4f6;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: #4e5968;
+}
+.sentenceList {
+  padding: 4px 16px;
+  background: #f2f4f6;
+  border-radius: 18px;
+}
+.sentenceList li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e8eb;
+}
+.sentenceList li:last-child {
+  border: 0;
+}
+.sentenceList li > span {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4e5968;
+}
+.sentenceList p {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.footer {
+  flex-shrink: 0;
+  padding: 12px 20px 36px;
+  background: white;
+}
+.footer button {
+  width: 100%;
+  height: 56px;
+  border-radius: 999px;
+  background: #2f6bff;
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+}
+.selectionHead h2 {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 700;
+}
+.selectionHead p {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 20px;
+  color: #8b95a1;
+}
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 18px 14px 18px 18px;
+  border-radius: 20px;
+  background: white;
+  text-align: left;
+}
+.tile {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  font-size: 24px;
+  font-weight: 700;
+}
+.basic {
+  background: #edf2ff;
+}
+.news {
+  background: #e7f8f1;
+}
+.final {
+  background: #fff4e5;
+  color: #ff8a00;
+}
+.custom {
+  background: #f3eeff;
+}
+.cardText {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.cardText strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.cardText > span {
+  font-size: 13px;
+  line-height: 19px;
+  color: #4e5968;
+}
+.cardText small {
+  padding-top: 3px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #8b95a1;
+}
+.empty {
+  margin: auto 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 24px;
+  color: #8b95a1;
+}
+.retry {
+  margin-top: 16px;
+  color: #2f6bff;
+  padding: 12px;
+}

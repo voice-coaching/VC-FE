@@ -1,0 +1,23 @@
+.waveform {
+  display: flex;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.bar {
+  display: block;
+  width: 4px;
+  height: 6px;
+  border-radius: 999px;
+  background: #c5cbd3;
+  transition: background-color 240ms ease-out;
+}
+.waveform[data-active="true"] .bar {
+  background: #3186f5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

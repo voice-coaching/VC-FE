@@ -3,12 +3,101 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 181px;
+  height: 187px;
+  background:
+    radial-gradient(ellipse 50% 60% at 5% 95%, #8e8bff2e, transparent),
+    radial-gradient(ellipse 55% 75% at 92% 5%, #6fb8ff59, transparent),
+    linear-gradient(180deg, #2f6bff, #3d78ff);
   flex-shrink: 0;
   overflow: hidden;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.todayCard {
+  background:
+    radial-gradient(ellipse 55% 95% at 88% 35%, #4f86ff24, transparent),
+    linear-gradient(157.49deg, #edf2ff 14.286%, #e3ebff 85.714%);
+}
+
+.practiceTile {
+  background:
+    radial-gradient(ellipse 65% 60% at 100% 100%, #2f6bff12, transparent),
+    linear-gradient(150.05deg, #fff 14.286%, #f7f9ff 85.714%);
+}
+
+.lipCard {
+  background:
+    radial-gradient(ellipse 28% 110% at 6% 50%, #2f6bff0f, transparent),
+    linear-gradient(171.05deg, #fff 14.286%, #f7f9ff 85.714%);
+}
+
+.newsWindow {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+}
+
+.newsRow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 24px;
+}
+
+.newsRank {
+  flex-shrink: 0;
+  min-width: 10px;
+  color: var(--primary);
+  font-size: 16px;
+  letter-spacing: -0.24px;
+  font-variant-numeric: tabular-nums;
+}
+
+.newsTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.225px;
+}
+
+.newsOutgoing {
+  pointer-events: none;
+  animation: news-exit 220ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.newsIncoming {
+  animation: news-enter 440ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+@keyframes news-exit {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, -24px, 0);
+  }
+}
+
+@keyframes news-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .homeHeader[data-state="hidden"] {
@@ -19,5 +108,13 @@
 @media (prefers-reduced-motion: reduce) {
   .homeHeader {
     transition: none;
+  }
+
+  .newsIncoming {
+    animation: none;
+  }
+
+  .newsOutgoing {
+    display: none;
   }
 }

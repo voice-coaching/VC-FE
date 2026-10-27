@@ -24,6 +24,7 @@ const PROTECTED_PREFIXES = [
   "/practice",
   "/lip-practice",
   "/mypage",
+  "/saved",
 ] as const;
 
 function isProtectedPath(pathname: string) {

@@ -1,15 +1,155 @@
-/* Keep content reachable when the fixed profile band would consume the screen. */
-@media (max-height: 600px) {
-  .shell {
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
+.shell {
+  overflow: hidden;
+  background: #f2f4f6;
+  color: #191f28;
+}
+.content {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.content::-webkit-scrollbar {
+  display: none;
+}
+.profileBand {
+  background: linear-gradient(#ccdbff, #dfe8ff);
+}
+.profileBand[data-highest="true"] {
+  background: linear-gradient(#ccdbff, #e6edff);
+}
+.profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 32px;
+}
+.profileBand[data-highest="true"] .profile {
+  padding-bottom: 24px;
+}
+.avatar {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+}
+.avatarInner {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  width: 90px;
+  height: 90px;
+  overflow: hidden;
+  border-radius: 45px;
+  background: #edf2ff;
+}
+.avatarCrop {
+  position: absolute;
+  top: 4px;
+  left: -2px;
+  width: 92px;
+  height: 112px;
+  overflow: hidden;
+}
+.character {
+  position: absolute;
+  width: 140.85%;
+  height: 116.76%;
+  left: -20.36%;
+  top: -8.21%;
+  max-width: none;
+}
+.titleBadge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 999px;
+  background: #fffc;
+  font-size: 12px;
+  line-height: 16px;
+  color: #4e5968;
+  white-space: nowrap;
+}
+.titleBadge b {
+  font-size: 11px;
+  color: #2f6bff;
+}
+.titleBadge[data-level="2"] {
+  background: #eaf0ff;
+  color: #2f4a8a;
+}
+.titleBadge[data-level="3"] {
+  background: linear-gradient(90deg, #d6e3ff, #c3d4ff);
+  color: #1f3a80;
+}
+.titleBadge[data-level="4"] {
+  background: linear-gradient(90deg, #4f86ff, #2f6bff);
+  color: white;
+  font-weight: 700;
+}
+.titleBadge[data-level="5"] {
+  background: #1646df;
+  color: white;
+  font-weight: 700;
+}
+.titleBadge[data-level="4"] b,
+.titleBadge[data-level="5"] b {
+  color: #ffffffbf;
+}
+.promotionWrap {
+  padding: 0 20px 24px;
+  background: linear-gradient(#dfe8ff, #e6edff);
+}
+.promotion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 73px;
+  padding: 16px 16px 16px 18px;
+  border-radius: 20px;
+  background: white;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 20px 20px 0;
+  border-radius: 12px;
+  background: #e8ebef;
+}
+.tabs a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  border-radius: 10px;
+  color: #8b95a1;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.tabs a[aria-current="page"] {
+  background: white;
+  color: #191f28;
+  font-weight: 700;
+  box-shadow: 0 1px 4px #0000000f;
+}
+@media (max-width: 360px) {
+  .promotion {
+    gap: 8px;
+    padding-inline: 12px;
   }
-
-  .content {
-    position: relative;
-    inset: auto;
-    margin-top: 262px;
-    overflow: visible;
+  .promotion h2 {
+    font-size: 13px;
+  }
+  .promotion p {
+    font-size: 11px;
+  }
+  .promotion button {
+    padding-inline: 10px;
+    font-size: 12px;
   }
 }
