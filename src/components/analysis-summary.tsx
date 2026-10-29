@@ -31,10 +31,10 @@ export function AnalysisSummary({ text }: { text: string }) {
     <div className={styles.card}>
       <div className={styles.heading}>
         <Image
-          src="/figma/report/ai-sparkle.svg"
+          src="/figma/report-improved/ai-sparkle.svg"
           alt=""
-          width={18}
-          height={18}
+          width={14}
+          height={14}
         />
         <h2>AI 총평</h2>
       </div>
@@ -63,10 +63,10 @@ export function AnalysisSummary({ text }: { text: string }) {
         >
           {expanded ? "접기" : "더보기"}
           <Image
-            src="/figma/report/chevron-white.svg"
+            src="/figma/report-improved/chevron-white.svg"
             alt=""
-            width={16}
-            height={16}
+            width={14}
+            height={14}
             style={{ transform: `rotate(${expanded ? -90 : 90}deg)` }}
           />
         </button>

@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { ChevronRight, X } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import styles from "./home-streak.module.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
@@ -18,7 +18,7 @@ import { buildMonthCalendar, completedDays, monthRange } from "@/lib/streak";
 import { useProfile } from "@/lib/use-profile";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-const GOAL_WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const GOAL_WEEKDAYS = WEEKDAYS;
 
 type StreakMonthCache = {
   statistics: Statistics;
@@ -37,14 +37,19 @@ function dateKey(value: Date) {
 function weekRange(today: Date) {
   const from = new Date(today);
   const weekday = from.getDay();
-  from.setDate(from.getDate() - (weekday === 0 ? 6 : weekday - 1));
+  from.setDate(from.getDate() - weekday);
   const to = new Date(from);
   to.setDate(to.getDate() + 6);
   return { from: dateKey(from), to: dateKey(to), monday: from };
 }
 
 export default function HomeStreak() {
-  const { profile } = useProfile();
+  const {
+    profile,
+    updateLearningGoals,
+    error: profileError,
+    reload: reloadProfile,
+  } = useProfile();
   const today = useMemo(() => new Date(), []);
   const currentWeek = useMemo(() => weekRange(today), [today]);
   const userId = getAuthenticatedUserId();
@@ -82,6 +87,40 @@ export default function HomeStreak() {
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [goalSheet, setGoalSheet] = useState(false);
+  const [monthSheet, setMonthSheet] = useState(false);
+  const [monthDraft, setMonthDraft] = useState(visibleMonth);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [goalDraft, setGoalDraft] = useState(5);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [allSessions, setAllSessions] = useState<TrainingHistoryItem[] | null>(
+    null,
+  );
+  const [summaryError, setSummaryError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setSummaryError(false);
+    void (async () => {
+      const result: TrainingHistoryItem[] = [];
+      for (let page = 0; active; page++) {
+        const history = await api.myPage.listTrainingSessions({
+          status: "COMPLETED",
+          page,
+          size: 100,
+        });
+        result.push(...history.items);
+        if (!(history.hasNext ?? result.length < history.totalElements)) break;
+        if (!history.items.length) break;
+      }
+      if (active) setAllSessions(result);
+    })().catch(() => {
+      if (active) setSummaryError(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId, retryKey]);
 
   const load = useCallback(() => {
     let active = true;
@@ -178,19 +217,21 @@ export default function HomeStreak() {
       buildMonthCalendar(
         visibleMonth.getFullYear(),
         visibleMonth.getMonth(),
-        sessions,
+        allSessions ?? sessions,
         today,
       ),
-    [sessions, today, visibleMonth],
+    [allSessions, sessions, today, visibleMonth],
   );
   const monthCompletedDays = completedDays(calendar);
   const weeklyGoal = profile?.weeklySessions ?? 0;
   const weeklyCompletedKeys = useMemo(
     () =>
       new Set(
-        weeklySessions.map((session) => dateKey(new Date(session.completedAt))),
+        (allSessions ?? weeklySessions).map((session) =>
+          dateKey(new Date(session.completedAt)),
+        ),
       ),
-    [weeklySessions],
+    [allSessions, weeklySessions],
   );
   const goalDays = useMemo(
     () =>
@@ -201,258 +242,341 @@ export default function HomeStreak() {
           label,
           completed: weeklyCompletedKeys.has(dateKey(date)),
           isFuture: date > today,
+          isToday: dateKey(date) === dateKey(today),
         };
       }),
     [currentWeek, today, weeklyCompletedKeys],
   );
   const weeklyCompleted = goalDays.filter((day) => day.completed).length;
-  const remainingGoal = Math.max(0, weeklyGoal - weeklyCompleted);
   const consecutiveDays = statistics?.consecutiveLearningDays ?? 0;
 
-  return (
-    <AppShell chromeColor="#2f6bff" className="overflow-hidden bg-[#f2f4f6]">
-      <div className="relative h-full overflow-hidden bg-[#f2f4f6] text-[#191f28]">
-        <div className="absolute inset-x-0 top-0 h-[222px] bg-[linear-gradient(180deg,#2f6bff_0%,#3f7bff_100%)]" />
+  const historyDays = useMemo(
+    () =>
+      new Set(
+        allSessions?.map((session) => dateKey(new Date(session.completedAt))) ??
+          [],
+      ),
+    [allSessions],
+  );
+  const currentRun = useMemo(() => {
+    const keys = new Set<string>();
+    const date = new Date(today);
+    if (!historyDays.has(dateKey(date))) date.setDate(date.getDate() - 1);
+    while (historyDays.has(dateKey(date))) {
+      keys.add(dateKey(date));
+      date.setDate(date.getDate() - 1);
+    }
+    return keys;
+  }, [historyDays, today]);
+  const bestRun = useMemo(() => {
+    let best = 0;
+    let run = 0;
+    let previous = "";
+    for (const key of [...historyDays].sort()) {
+      const date = new Date(`${key}T12:00:00`);
+      date.setDate(date.getDate() - 1);
+      run = dateKey(date) === previous ? run + 1 : 1;
+      best = Math.max(best, run);
+      previous = key;
+    }
+    return best;
+  }, [historyDays]);
+  const practicedToday = weeklyCompletedKeys.has(dateKey(today));
+  const canGoForward =
+    visibleMonth < new Date(today.getFullYear(), today.getMonth(), 1);
+  const changeMonth = (offset: number) =>
+    setVisibleMonth(
+      (value) => new Date(value.getFullYear(), value.getMonth() + offset, 1),
+    );
+  const openGoal = () => {
+    setGoalDraft(weeklyGoal || 5);
+    setSaveError(null);
+    setGoalSheet(true);
+  };
+  async function saveGoal() {
+    if (!profile || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateLearningGoals({
+        goalDescription: profile.goalDescription,
+        minutesPerDay: profile.minutesPerDay,
+        weeklySessions: goalDraft,
+      });
+      setGoalSheet(false);
+    } catch (reason) {
+      setSaveError(
+        reason instanceof Error
+          ? reason.message
+          : "목표를 저장하지 못했어요. 다시 시도해 주세요.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
-        <header className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-2 py-1 text-white">
+  return (
+    <AppShell
+      viewportLocked
+      chromeColor="#f2f4f6"
+      className="bg-[#f2f4f6] text-[#191f28]"
+    >
+      <div className="flex h-full flex-col">
+        <header className="flex h-12 shrink-0 items-center justify-between px-2 py-1">
           <BackButton
             fallback="/home"
-            className="flex size-10 items-center justify-center"
+            className="flex size-10 items-center justify-start"
           >
-            <Image
-              src="/figma/home/chevron-left-white.svg"
-              alt=""
-              width={24}
-              height={24}
-            />
+            <StreakIcon name="back" size={24} />
           </BackButton>
           <h1 className="text-[17px] leading-6 font-bold">연속 연습</h1>
           <span className="size-10" />
         </header>
-
-        <section className="absolute inset-x-0 top-14 z-10 flex h-[166px] items-center overflow-hidden px-5 pt-3 pb-6 text-white">
-          <div className="min-w-0 flex-1 font-bold">
-            <div className="flex items-baseline gap-1">
-              <strong className="text-[56px] leading-[44px] tracking-[-0.025em]">
-                {consecutiveDays}
-              </strong>
-              <span className="text-2xl leading-8 tracking-[-0.023em]">
-                일째
-              </span>
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-8"
+          data-scroll-container="streak"
+        >
+          <section className={styles.summary} aria-label="연습 요약">
+            <div className="flex items-center gap-4 max-[360px]:gap-2">
+              <div className={styles.avatar}>
+                <div className={styles.mascotCrop}>
+                  <Image
+                    src="/figma/streak-improved/mascot.png"
+                    alt="연습을 응원하는 Speak AI 캐릭터"
+                    width={78}
+                    height={84}
+                    priority
+                    className={styles.mascot}
+                  />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[22px] leading-[30px] font-bold tracking-[-0.44px] max-[360px]:text-[18px]">
+                  <span className="text-primary">
+                    {allSessions ? currentRun.size : consecutiveDays}일
+                  </span>{" "}
+                  연속 연습 중
+                </p>
+                <p className="mt-0.5 text-sm leading-5 font-medium tracking-[-0.21px] text-[#8b95a1] max-[360px]:text-xs">
+                  <strong className="text-primary">오늘</strong>{" "}
+                  {practicedToday
+                    ? "연습을 완료했어요"
+                    : "연습이 아직 남았어요"}
+                </p>
+              </div>
             </div>
-            <p className="mt-1.5 text-[15px] leading-[22px]">
-              연속으로 연습하고 있어요
-            </p>
-          </div>
-          <div className="relative h-[154px] w-[135px] shrink-0 overflow-hidden">
-            <Image
-              src="/figma/home/streak-character.png"
-              alt="연속 연습을 응원하는 Speak AI 캐릭터"
-              fill
-              priority
-              sizes="135px"
-              className="scale-[1.12] object-contain"
-            />
-          </div>
-        </section>
-
-        <div className="absolute inset-x-0 top-[198px] bottom-0 z-10 overflow-y-auto rounded-t-[24px] bg-[#f2f4f6] px-5 pt-5 pb-8">
-          <section className="grid grid-cols-3 gap-2.5">
-            <StatCard
-              icon="/figma/home/streak-current.svg"
-              value={`${consecutiveDays}일`}
-              label="현재 연속"
-            />
-            <StatCard
-              icon="/figma/home/streak-best.svg"
-              value="—"
-              label="최고 기록"
-            />
-            <StatCard
-              icon="/figma/home/streak-total.svg"
-              value={`${monthCompletedDays}일`}
-              label="이번 달 연습일"
-            />
+            <div className={styles.stats}>
+              <SummaryStat
+                icon="best"
+                label="최고 기록"
+                value={allSessions ? `${bestRun}일` : "—"}
+              />
+              <SummaryStat
+                icon="total"
+                label="총 연습"
+                value={allSessions ? `${historyDays.size}일` : "—"}
+              />
+              <SummaryStat
+                icon="month"
+                label={
+                  visibleMonth.getMonth() === today.getMonth() &&
+                  visibleMonth.getFullYear() === today.getFullYear()
+                    ? "이번 달"
+                    : `${visibleMonth.getMonth() + 1}월`
+                }
+                value={loading || error ? "—" : `${monthCompletedDays}일`}
+              />
+            </div>
+            {summaryError ? (
+              <button
+                className="text-xs text-[#6b7684]"
+                onClick={() => setRetryKey((value) => value + 1)}
+              >
+                전체 기록 다시 불러오기
+              </button>
+            ) : null}
           </section>
 
-          <section className="mt-3 rounded-[20px] bg-white p-[18px]">
-            <div className="flex items-center gap-2.5">
+          <section
+            className="mt-3 rounded-[20px] bg-white p-5"
+            aria-labelledby="week-title"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h2
+                  id="week-title"
+                  className="text-[17px] leading-6 font-bold tracking-[-0.255px]"
+                >
+                  이번 주 목표
+                </h2>
+                <p className="mt-0.5 flex items-baseline gap-0.5">
+                  <strong className="text-[26px] leading-[34px] tracking-[-0.52px] text-primary">
+                    {weeklyCompleted}
+                  </strong>
+                  <span className="text-[15px] leading-[22px] font-medium text-[#8b95a1]">
+                    {weeklyGoal ? `/ ${weeklyGoal}일` : "일 연습"}
+                  </span>
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setGoalSheet(true)}
-                className="min-w-0 flex-1 text-left"
+                onClick={openGoal}
+                aria-label="주간 연습 목표 변경"
+                className="flex items-center gap-0.5 rounded-full bg-[#f2f4f6] py-1.5 pr-1.5 pl-2.5 text-[13px] leading-[18px] font-medium text-[#4e5968]"
               >
-                <strong className="block text-base leading-[26px]">
-                  이번 주 목표
-                </strong>
-                <span className="mt-0.5 flex items-center text-xs leading-4 font-medium text-[#8b95a1]">
-                  {weeklyGoal > 0
-                    ? `주 ${weeklyGoal}일 연습`
-                    : profile
-                      ? "자유롭게 연습"
-                      : "목표 미설정"}
-                  <ChevronRight className="size-4" />
-                </span>
+                {weeklyGoal ? `주 ${weeklyGoal}일` : "목표 설정"}
+                <StreakIcon name="goal-chevron" size={14} />
               </button>
-              <p className="flex items-baseline">
-                <strong className="text-[17px] leading-6 text-primary">
-                  {weeklyCompleted}
-                </strong>
-                <span className="text-xs leading-4 font-medium text-[#8b95a1]">
-                  {weeklyGoal > 0 ? `/${weeklyGoal}일` : "일 연습"}
-                </span>
-              </p>
             </div>
-
-            <div className="mt-3.5 flex gap-1.5">
-              {goalDays.slice(0, weeklyGoal > 0 ? weeklyGoal : 7).map((day) => (
-                <span
+            <div className="mt-5 flex justify-between">
+              {goalDays.map((day) => (
+                <div
                   key={day.label}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                  className="flex min-w-0 flex-col items-center gap-1.5"
                 >
                   <span
-                    className={`h-2.5 w-full rounded-full ${
-                      day.completed
-                        ? "bg-[linear-gradient(170deg,#5b8cff_15%,#2f6bff_85%)]"
-                        : day.isFuture
-                          ? "bg-[#eef0f3]"
-                          : "bg-[#edf2ff]"
-                    }`}
-                  />
-                  <span
-                    className={`text-[11px] leading-[14px] font-medium ${day.isFuture ? "text-[#b0b8c1]" : "text-primary"}`}
+                    aria-label={`${day.label}요일${day.completed ? ", 연습 완료" : ""}${day.isToday ? ", 오늘" : ""}`}
+                    className={`${styles.weekDot} ${day.completed ? styles.completed : day.isToday ? styles.today : ""}`}
                   >
-                    {day.label}
+                    {day.completed ? (
+                      <StreakIcon name="check" size={21} />
+                    ) : day.isToday ? (
+                      today.getDate()
+                    ) : null}
                   </span>
-                </span>
+                  <span
+                    className={`text-xs leading-4 ${day.isToday ? "font-bold text-primary" : day.isFuture ? "text-[#b0b8c1]" : "text-[#4e5968]"}`}
+                  >
+                    {day.isToday ? "오늘" : day.label}
+                  </span>
+                </div>
               ))}
-            </div>
-
-            <div className="mt-3.5 flex items-center gap-2 rounded-xl bg-[#f7f8fa] px-3 py-2.5">
-              <Image
-                src="/figma/home/circle-check.svg"
-                alt=""
-                width={24}
-                height={24}
-              />
-              <p className="text-[13px] leading-[18px] font-medium text-[#4e5968]">
-                {weeklyGoal === 0
-                  ? profile
-                    ? "정해진 목표 없이 자유롭게 연습해요"
-                    : "연습 목표를 설정해 보세요"
-                  : remainingGoal === 0
-                    ? "이번 주 목표를 달성했어요"
-                    : `${remainingGoal}일만 더 하면 이번 주 목표 달성이에요`}
-              </p>
             </div>
           </section>
 
-          <section className="mt-3 rounded-[20px] bg-white p-[18px]">
+          <section
+            className="mt-3 rounded-[20px] bg-white p-5"
+            aria-label="연습 달력"
+          >
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                aria-label="이전 달"
-                onClick={() =>
-                  setVisibleMonth(
-                    (value) =>
-                      new Date(value.getFullYear(), value.getMonth() - 1, 1),
-                  )
-                }
-                className="flex size-5 items-center justify-center"
+                aria-label="월 선택"
+                onClick={() => {
+                  setMonthDraft(visibleMonth);
+                  setPickerYear(visibleMonth.getFullYear());
+                  setMonthSheet(true);
+                }}
+                className="flex items-center gap-1 text-[17px] leading-6 font-bold tracking-[-0.255px]"
               >
-                <Image
-                  src="/figma/home/calendar-left.svg"
-                  alt=""
-                  width={20}
-                  height={20}
-                />
-              </button>
-              <h2 className="text-[15px] leading-[22px] font-bold">
                 {visibleMonth.getFullYear()}년 {visibleMonth.getMonth() + 1}월
-              </h2>
-              <button
-                type="button"
-                aria-label="다음 달"
-                onClick={() =>
-                  setVisibleMonth(
-                    (value) =>
-                      new Date(value.getFullYear(), value.getMonth() + 1, 1),
-                  )
-                }
-                className="flex size-5 items-center justify-center"
-              >
-                <Image
-                  src="/figma/home/calendar-right.svg"
-                  alt=""
-                  width={20}
-                  height={20}
+                <StreakIcon
+                  name="month-chevron"
+                  size={16}
+                  className="rotate-90"
                 />
               </button>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  aria-label="이전 달"
+                  onClick={() => changeMonth(-1)}
+                  className={styles.monthArrow}
+                >
+                  <StreakIcon name="previous" size={16} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="다음 달"
+                  disabled={!canGoForward}
+                  onClick={() => changeMonth(1)}
+                  className={styles.monthArrow}
+                >
+                  <StreakIcon name="next" size={16} />
+                </button>
+              </div>
             </div>
-
-            <div className="mt-3.5 grid grid-cols-7 gap-y-1.5 text-center">
-              {WEEKDAYS.map((day) => (
+            <div className="mt-3.5 grid grid-cols-7 text-center">
+              {WEEKDAYS.map((day, index) => (
                 <span
                   key={day}
-                  className="text-[11px] leading-[14px] font-medium text-[#8b95a1]"
+                  className={`text-xs leading-4 font-medium ${index === 0 ? "text-[#f04452]" : "text-[#8b95a1]"}`}
                 >
                   {day}
                 </span>
               ))}
-              {calendar.map((cell) => (
-                <span
-                  key={cell.key}
-                  aria-label={
-                    cell.day == null
-                      ? undefined
-                      : `${cell.day}일, ${cell.completedCount}회 연습`
-                  }
-                  className="flex h-9 items-center justify-center"
-                >
-                  {cell.day == null ? null : cell.completedCount > 0 ? (
-                    <span className="flex size-8 items-center justify-center rounded-full bg-primary">
-                      <Image
-                        src="/figma/home/calendar-check.svg"
-                        alt="연습 완료"
-                        width={18}
-                        height={18}
-                      />
-                    </span>
-                  ) : (
-                    <span
-                      className={`flex size-8 items-center justify-center rounded-full text-xs font-medium ${
-                        cell.isToday
-                          ? "border-2 border-primary text-primary"
-                          : "text-[#b0b8c1]"
-                      }`}
-                    >
-                      {cell.day}
-                    </span>
-                  )}
-                </span>
-              ))}
             </div>
-
-            <div className="mt-3.5 flex items-center gap-3 text-[11px] leading-[14px] font-medium text-[#8b95a1]">
-              <span className="flex items-center gap-1">
-                <span className="flex size-3.5 items-center justify-center rounded-full bg-primary">
-                  <Image
-                    src="/figma/home/calendar-check.svg"
-                    alt=""
-                    width={9}
-                    height={9}
-                  />
-                </span>
+            <div className={styles.calendar}>
+              {calendar.map((cell, index) => {
+                const kind = cell.completedCount
+                  ? currentRun.has(cell.key)
+                    ? "current"
+                    : "past"
+                  : "none";
+                const sameKind = (at: number) => {
+                  const neighbor = calendar[at];
+                  return (
+                    neighbor?.completedCount &&
+                    (currentRun.has(neighbor.key) ? "current" : "past") === kind
+                  );
+                };
+                const start = index % 7 === 0 || !sameKind(index - 1);
+                const end = index % 7 === 6 || !sameKind(index + 1);
+                return (
+                  <div
+                    key={cell.key}
+                    className={styles.calendarCell}
+                    aria-label={
+                      cell.day
+                        ? `${visibleMonth.getMonth() + 1}월 ${cell.day}일, ${cell.completedCount}회 연습${cell.isToday ? ", 오늘" : ""}`
+                        : undefined
+                    }
+                  >
+                    {cell.day ? (
+                      <>
+                        {kind !== "none" ? (
+                          <span
+                            aria-hidden="true"
+                            className={`${styles.run} ${kind === "current" ? styles.currentRun : styles.pastRun} ${start ? styles.runStart : ""} ${end ? styles.runEnd : ""}`}
+                          />
+                        ) : null}
+                        <span
+                          className={`${styles.date} ${kind === "current" ? "font-bold text-white" : kind === "past" || cell.isToday ? "font-bold text-primary" : cell.key > dateKey(today) ? "text-[#c4cad1]" : "text-[#4e5968]"} ${cell.isToday ? styles.todayDate : ""}`}
+                        >
+                          {cell.isToday ? (
+                            <StreakIcon
+                              name="today"
+                              size={34}
+                              className="absolute inset-0"
+                            />
+                          ) : null}
+                          {cell.day}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3.5 flex items-center gap-3.5 text-[11px] leading-4 text-[#6b7684]">
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-5 rounded-full bg-primary" />
+                현재 연속
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-5 rounded-full bg-[#eaf0ff]" />
                 연습한 날
               </span>
-              <span className="flex items-center gap-1">
-                <span className="size-3.5 rounded-full border border-primary" />
+              <span className="flex items-center gap-1.5">
+                <span className="size-3 rounded-full border-[1.5px] border-primary" />
                 오늘
               </span>
             </div>
-
             {loading ? (
-              <p className="mt-3 text-center text-xs text-[#8b95a1]">
+              <p
+                role="status"
+                className="mt-3 text-center text-xs text-[#8b95a1]"
+              >
                 기록을 불러오는 중…
               </p>
             ) : error ? (
@@ -462,9 +586,8 @@ export default function HomeStreak() {
               >
                 <p>{error}</p>
                 <button
-                  type="button"
                   onClick={() => setRetryKey((value) => value + 1)}
-                  className="mt-2 min-h-11 rounded-full px-5 font-bold"
+                  className="mt-2 min-h-11 px-5 font-bold"
                 >
                   다시 시도
                 </button>
@@ -474,72 +597,181 @@ export default function HomeStreak() {
         </div>
       </div>
 
-      {goalSheet ? (
-        <div
-          className="fixed inset-0 z-50 mx-auto flex max-w-[402px] items-end bg-black/35"
-          role="presentation"
-          onClick={() => setGoalSheet(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="weekly-goal-title"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full rounded-t-[28px] bg-white px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom))]"
+      <Dialog.Root open={monthSheet} onOpenChange={setMonthSheet}>
+        <Dialog.Portal>
+          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Content
+            className={`${styles.sheet} ${styles.monthSheet}`}
+            aria-describedby={undefined}
           >
-            <div className="flex items-center justify-between">
-              <h2 id="weekly-goal-title" className="text-lg font-bold">
-                주간 연습 목표
-              </h2>
+            <span className={styles.grab} />
+            <Dialog.Title className="sr-only">연습 기록 월 선택</Dialog.Title>
+            <div className="mt-[38px] flex h-[22px] items-center justify-between">
               <button
-                type="button"
-                aria-label="닫기"
-                onClick={() => setGoalSheet(false)}
-                className="flex size-11 items-center justify-center rounded-full"
+                aria-label="이전 연도"
+                onClick={() => setPickerYear((year) => year - 1)}
               >
-                <X className="size-5" />
+                <StreakIcon name="year-previous" size={20} />
+              </button>
+              <strong className="text-[15px] leading-[22px]">
+                {pickerYear}년
+              </strong>
+              <button
+                aria-label="다음 연도"
+                disabled={pickerYear >= today.getFullYear()}
+                onClick={() => setPickerYear((year) => year + 1)}
+                className="disabled:opacity-40"
+              >
+                <StreakIcon name="year-next" size={20} />
               </button>
             </div>
-            <p className="mt-4 rounded-2xl bg-[#f7f8fa] p-4 text-sm leading-6 text-[#4e5968]">
-              현재 목표는{" "}
-              {weeklyGoal > 0
-                ? `주 ${weeklyGoal}일`
-                : profile
-                  ? "자유 일정"
-                  : "설정 전"}
-              이에요. 목표 변경은 마이페이지의 연습 계획에서 할 수 있어요.
-            </p>
-            <a
-              href="/mypage/plan"
-              className="mt-5 flex h-14 w-full items-center justify-center rounded-full bg-primary font-bold text-white"
+            <div className="mt-3.5 grid grid-cols-4 gap-2.5">
+              {Array.from({ length: 12 }, (_, month) => {
+                const disabled = new Date(pickerYear, month, 1) > today;
+                const selected =
+                  monthDraft.getFullYear() === pickerYear &&
+                  monthDraft.getMonth() === month;
+                return (
+                  <button
+                    key={month}
+                    disabled={disabled}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setMonthDraft(new Date(pickerYear, month, 1))
+                    }
+                    className={`${styles.monthOption} ${selected ? styles.selectedMonth : ""}`}
+                  >
+                    {month + 1}월
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              className={`${styles.action} mt-5`}
+              onClick={() => {
+                setVisibleMonth(monthDraft);
+                setMonthSheet(false);
+              }}
             >
-              연습 계획 수정하기
-            </a>
-          </section>
-        </div>
-      ) : null}
+              {monthDraft.getFullYear()}년 {monthDraft.getMonth() + 1}월 보기
+            </button>
+            <Dialog.Close className="sr-only">닫기</Dialog.Close>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={goalSheet}
+        onOpenChange={(open) => {
+          if (!saving) setGoalSheet(open);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Content className={styles.sheet}>
+            <span className={styles.grab} />
+            <Dialog.Title className="mt-5 text-xl leading-7 font-bold tracking-[-0.3px]">
+              일주일에 며칠 연습할까요?
+            </Dialog.Title>
+            <Dialog.Description className="mt-1 text-[13px] leading-[18px] font-medium tracking-[-0.195px] text-[#8b95a1]">
+              목표를 바꿔도 연속 기록은 그대로 이어져요
+            </Dialog.Description>
+            <div
+              className="mt-[22px] flex gap-1.5"
+              role="group"
+              aria-label="주간 연습 일수"
+            >
+              {Array.from({ length: 7 }, (_, index) => index + 1).map(
+                (days) => (
+                  <button
+                    key={days}
+                    disabled={saving}
+                    aria-pressed={goalDraft === days}
+                    aria-label={`주 ${days}일`}
+                    onClick={() => setGoalDraft(days)}
+                    className={`${styles.goalOption} ${goalDraft === days ? styles.completed : ""}`}
+                  >
+                    <strong className="text-lg leading-6">{days}</strong>
+                    <span className="text-xs leading-4 opacity-60">일</span>
+                  </button>
+                ),
+              )}
+            </div>
+            {saveError || profileError ? (
+              <p role="alert" className="mt-3 text-xs text-[#d91b34]">
+                {saveError ?? profileError}
+              </p>
+            ) : null}
+            {!profile && profileError ? (
+              <button
+                onClick={reloadProfile}
+                className="mt-3 text-sm text-primary"
+              >
+                목표 다시 불러오기
+              </button>
+            ) : null}
+            <button
+              disabled={saving || !profile}
+              className={`${styles.action} mt-[33px]`}
+              onClick={saveGoal}
+            >
+              {saving ? "저장 중…" : `주 ${goalDraft}일로 저장`}
+            </button>
+            <Dialog.Close disabled={saving} className="sr-only">
+              닫기
+            </Dialog.Close>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </AppShell>
   );
 }
 
-function StatCard({
-  icon,
-  value,
-  label,
+function StreakIcon({
+  name,
+  size,
+  className = "",
 }: {
-  icon: string;
-  value: string;
-  label: string;
+  name: string;
+  size: number;
+  className?: string;
 }) {
   return (
-    <article className="flex min-w-0 flex-col items-center gap-3 rounded-2xl bg-white px-3 py-3.5">
-      <Image src={icon} alt="" width={36} height={36} />
-      <p className="text-center">
-        <strong className="block text-[17px] leading-6">{value}</strong>
-        <span className="mt-0.5 block whitespace-nowrap text-xs leading-4 text-[#8b95a1]">
-          {label}
+    <Image
+      src={`/figma/streak-improved/${name}.svg`}
+      alt=""
+      width={size}
+      height={size}
+      className={`shrink-0 ${className}`}
+    />
+  );
+}
+
+function SummaryStat({
+  icon,
+  label,
+  value,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+      <span className="flex items-center gap-1 text-xs leading-4 font-medium tracking-[-0.18px] text-[#8b95a1]">
+        <span className="flex size-4 items-center justify-center">
+          <Image
+            src={`/figma/streak-improved/${icon}.svg`}
+            alt=""
+            width={icon === "total" ? 16.2652 : icon === "month" ? 13.5243 : 16}
+            height={icon === "total" ? 16.0243 : 16}
+          />
         </span>
-      </p>
-    </article>
+        {label}
+      </span>
+      <strong className="text-lg leading-[26px] tracking-[-0.27px]">
+        {value}
+      </strong>
+    </div>
   );
 }

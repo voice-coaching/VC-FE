@@ -22,6 +22,8 @@ test("title exam questions never appear in sentence practice discovery", () => {
   const visible = catalogItemsForPractice("SENTENCE", [
     sentence(1, "FINAL_CONSONANT"),
     sentence(2, "EXAMPLE_QUESTION"),
+    sentence(3, "TITLE_EXAM"),
+    sentence(4, "승급시험"),
   ]);
   assert.deepEqual(
     visible.map((item) => item.id),
@@ -34,6 +36,7 @@ test("title exam category is removed from sentence facets", () => {
     type: "SENTENCE",
     categories: [
       { value: "EXAMPLE_QUESTION", label: "예시문제", count: 3, order: 0 },
+      { value: "TITLE_EXAM", label: "승급시험", count: 4, order: 20 },
       { value: "FINAL_CONSONANT", label: "받침", count: 4, order: 1 },
     ],
     difficulties: [],

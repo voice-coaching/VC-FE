@@ -1,8 +1,16 @@
 "use client";
+import { LipQuickStart } from "@/components/lip-quick-start";
+import {
+  LIP_PRACTICE_SETS,
+  type LipPracticeSet,
+} from "@/lib/lip-practice-sets";
+import { useRouter } from "next/navigation";
+import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
+import { ReportSaveDialog } from "@/components/report-save-dialog";
+import { reportSaves } from "@/lib/report-saves";
 import { canonicalApi } from "@/lib/api/canonical";
 
 import {
-  Camera,
   Check,
   ChevronRight,
   CircleAlert,
@@ -47,7 +55,6 @@ import {
   type PracticeContent,
 } from "@/lib/api";
 import {
-  LIP_PRACTICE_PROMPTS,
   preferredVideoMimeType,
   releaseLipResources,
   type LipClip,
@@ -82,7 +89,14 @@ type LipAnalysisBundle = {
 };
 
 export default function LipPractice() {
+  const router = useRouter();
+  const [saveReportOpen, setSaveReportOpen] = useState(false);
+  const [practiceSet, setPracticeSet] = useState<LipPracticeSet>(
+    LIP_PRACTICE_SETS[1],
+  );
+  const prompts = practiceSet.sentences;
   const [step, setStep] = useState<LipPracticeStep>("guide");
+  const discardGuard = useRecordingDiscardGuard(step === "recording", true);
   const [promptIndex, setPromptIndex] = useState(0);
   const [countdown, setCountdown] = useState(3);
   const [clips, setClips] = useState<LipClip[]>([]);
@@ -374,7 +388,7 @@ export default function LipPractice() {
   }
 
   function continueFlow() {
-    if (promptIndex >= LIP_PRACTICE_PROMPTS.length - 1) {
+    if (promptIndex >= prompts.length - 1) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       setSelectedClip(0);
@@ -453,7 +467,7 @@ export default function LipPractice() {
         setAnalysisPhase("uploading");
         const reply = await submitDirect(
           prepared.blob,
-          LIP_PRACTICE_PROMPTS[selectedClip],
+          prompts[selectedClip],
           null,
           attempt.id,
           attempt.claim,
@@ -523,7 +537,7 @@ export default function LipPractice() {
         content = await api.content.createCustom(
           {
             title: `입모양 연습 ${selectedClip + 1}`,
-            scriptText: LIP_PRACTICE_PROMPTS[selectedClip],
+            scriptText: prompts[selectedClip],
             learningFocus: "PRONUNCIATION",
             retention: "SESSION_HISTORY",
             locale: "ko-KR",
@@ -744,6 +758,24 @@ export default function LipPractice() {
     }
   }
 
+  if (step === "guide")
+    return (
+      <AppShell
+        nav={false}
+        viewportLocked
+        animateRoute={false}
+        chromeColor="#ffffff"
+        bottomChromeColor="#ffffff"
+      >
+        <LipQuickStart
+          selected={practiceSet}
+          onSelect={setPracticeSet}
+          onStart={() => void requestMedia()}
+          onSettings={() => setStep("setup")}
+        />
+      </AppShell>
+    );
+
   return (
     <AppShell
       nav={false}
@@ -751,41 +783,42 @@ export default function LipPractice() {
       chromeColor="#f2f4f6"
       bottomChromeColor="#ffffff"
     >
+      {discardGuard.dialog}
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#f7f8fa]">
         <header className="relative z-20 flex h-16 shrink-0 items-center justify-between px-5">
-          <BackButton
-            fallback="/home"
-            label="입모양 연습 닫기"
-            className="flex size-11 items-center justify-center rounded-full bg-white/85 shadow-sm backdrop-blur"
-          >
-            <X className="size-5" />
-          </BackButton>
+          {step === "setup" ? (
+            <button
+              aria-label="설정 닫기"
+              className="flex size-11 items-center justify-center"
+              onClick={() => setStep("guide")}
+            >
+              <Image
+                src="/figma/lip-quick-start/back.svg"
+                width={24}
+                height={24}
+                alt=""
+              />
+            </button>
+          ) : (
+            <BackButton
+              fallback="/home"
+              label="입모양 연습 닫기"
+              className="flex size-11 items-center justify-center rounded-full bg-white/85 shadow-sm backdrop-blur"
+            >
+              <X className="size-5" />
+            </BackButton>
+          )}
           <p className="text-sm font-bold">
-            {step === "guide" || step === "tips" || step === "setup"
-              ? "입모양 연습"
+            {step === "tips" || step === "setup"
+              ? "입모양 따라 하기"
               : step === "complete"
                 ? "촬영 완료"
-                : `${promptIndex + 1}/${LIP_PRACTICE_PROMPTS.length}`}
+                : `${promptIndex + 1}/${prompts.length}`}
           </p>
           <span className="size-11" aria-hidden="true" />
         </header>
 
-        {step === "guide" ? (
-          <IntroStep
-            icon={<Camera className="size-10" />}
-            eyebrow="새로운 연습"
-            title={
-              <>
-                내 입모양을 보며
-                <br />
-                또박또박 말해 봐요
-              </>
-            }
-            description="5개의 짧은 문장을 촬영하고 재생하며 내 입모양을 확인해요. 녹음한 음성으로 AI 발음 피드백도 받을 수 있어요."
-            action="연습 알아보기"
-            onAction={() => setStep("tips")}
-          />
-        ) : step === "tips" ? (
+        {step === "tips" ? (
           <InfoStep
             title="촬영 전에 확인해 주세요"
             items={[
@@ -832,17 +865,13 @@ export default function LipPractice() {
                   </strong>
                   <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                     AI 분석을 요청할 때 선택한 촬영본의 음성을 서버로
-                    전송합니다. 동의한 후 촬영 연습을 시작할 수 있어요.
+                    전송합니다. AI 분석은 동의한 경우에만 요청할 수 있어요.
                   </span>
                 </span>
               </label>
             </section>
             <PrivacyNote />
-            <BottomAction
-              label="카메라·마이크 권한 확인"
-              onClick={() => void requestMedia()}
-              disabled={!videoConsentAccepted}
-            />
+            <BottomAction label="설정 완료" onClick={() => setStep("guide")} />
           </div>
         ) : step === "permission" ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6 text-center">
@@ -884,8 +913,8 @@ export default function LipPractice() {
                 <Check className="size-10" />
               </span>
               <h1 className="mt-5 text-2xl font-bold">
-                {clips.length === LIP_PRACTICE_PROMPTS.length
-                  ? "5개 문장을 모두 촬영했어요"
+                {clips.length === prompts.length
+                  ? `${prompts.length}개 문장을 모두 촬영했어요`
                   : `${clips.length}개 문장을 촬영했어요`}
               </h1>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -924,7 +953,7 @@ export default function LipPractice() {
               />
             ) : null}
             <p className="mt-3 text-center text-sm font-bold">
-              {LIP_PRACTICE_PROMPTS[selectedClip]}
+              {prompts[selectedClip]}
             </p>
 
             {!selectedAnalysis && !selectedDirectResult && !analysisBusy ? (
@@ -1009,7 +1038,7 @@ export default function LipPractice() {
                     id: `lip-${selectedClip}`,
                     contentType: "SENTENCE",
                     title: `입모양 연습 ${selectedClip + 1}`,
-                    scriptText: LIP_PRACTICE_PROMPTS[selectedClip],
+                    scriptText: prompts[selectedClip],
                     referenceAudioAvailable: false,
                   }}
                   recordingUrl={reportClip?.url}
@@ -1062,12 +1091,12 @@ export default function LipPractice() {
               <RotateCcw className="size-4" />
               선택한 문장 다시 촬영
             </button>
-            {clips.length < LIP_PRACTICE_PROMPTS.length ? (
+            {clips.length < prompts.length ? (
               <button
                 type="button"
                 disabled={analysisBusy}
                 onClick={() => {
-                  const next = LIP_PRACTICE_PROMPTS.findIndex(
+                  const next = prompts.findIndex(
                     (_, index) =>
                       !clips.some((clip) => clip.promptIndex === index),
                   );
@@ -1083,13 +1112,33 @@ export default function LipPractice() {
                 남은 문장 연습하기
               </button>
             ) : null}
-            <BackButton
-              fallback="/home"
-              label="입모양 연습 완료"
+            <button
+              type="button"
               className="design-action mt-3"
+              onClick={() => {
+                if (
+                  Object.keys(analyses).length ||
+                  Object.keys(directResults).length
+                )
+                  setSaveReportOpen(true);
+                else router.push("/home");
+              }}
             >
               완료
-            </BackButton>
+            </button>
+            <ReportSaveDialog
+              open={saveReportOpen}
+              onOpenChange={setSaveReportOpen}
+              onConfirm={async (saved) => {
+                for (const bundle of Object.values(analyses))
+                  if (bundle)
+                    await reportSaves.set("SESSION", bundle.sessionId, saved);
+                for (const view of Object.values(directResults))
+                  if (view?.result)
+                    await reportSaves.set("DIRECT", view.jobId, saved);
+                router.push("/home");
+              }}
+            />
           </div>
         ) : (
           <CameraStage mirrored={mirrored} videoRef={previewRef}>
@@ -1099,7 +1148,7 @@ export default function LipPractice() {
                   문장 {promptIndex + 1}
                 </p>
                 <h1 className="mt-2 text-lg leading-7 font-bold">
-                  {LIP_PRACTICE_PROMPTS[promptIndex]}
+                  {prompts[promptIndex]}
                 </h1>
                 <p className="mt-2 text-xs text-muted-foreground">
                   얼굴을 가이드 안에 맞춰 주세요.
@@ -1132,7 +1181,7 @@ export default function LipPractice() {
                   촬영 중
                 </span>
                 <p className="mt-3 text-lg leading-7 font-bold">
-                  {LIP_PRACTICE_PROMPTS[promptIndex]}
+                  {prompts[promptIndex]}
                 </p>
                 <button
                   type="button"
@@ -1178,7 +1227,7 @@ export default function LipPractice() {
                     onClick={continueFlow}
                     className="flex min-h-14 items-center justify-center gap-2 rounded-full border border-border bg-white text-sm font-bold"
                   >
-                    {promptIndex === LIP_PRACTICE_PROMPTS.length - 1
+                    {promptIndex === prompts.length - 1
                       ? "촬영 완료"
                       : "다음 문장"}
                     <ChevronRight className="size-4" />
@@ -1213,37 +1262,6 @@ function CameraStage({
       />
       <div className="pointer-events-none absolute top-[10%] left-1/2 h-[46%] w-[70%] -translate-x-1/2 rounded-[46%] border-2 border-dashed border-white/75" />
       {children}
-    </div>
-  );
-}
-
-function IntroStep({
-  icon,
-  eyebrow,
-  title,
-  description,
-  action,
-  onAction,
-}: {
-  icon: ReactNode;
-  eyebrow: string;
-  title: ReactNode;
-  description: string;
-  action: string;
-  onAction: () => void;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6">
-      <span className="mt-14 flex size-20 shrink-0 items-center justify-center rounded-[28px] bg-[#eaf4ff] text-primary">
-        {icon}
-      </span>
-      <p className="mt-7 text-sm font-bold text-primary">{eyebrow}</p>
-      <h1 className="mt-2 text-[28px] leading-10 font-bold">{title}</h1>
-      <p className="mt-4 text-sm leading-6 text-muted-foreground">
-        {description}
-      </p>
-      <PrivacyNote />
-      <BottomAction label={action} onClick={onAction} />
     </div>
   );
 }

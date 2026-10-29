@@ -43,36 +43,11 @@ export function encodeMonoWav(
   };
 }
 
-export async function playRecordingCue(context: AudioContext) {
+/** Resume audio silently; visual feedback indicates when capture is ready. */
+export async function prepareRecordingAudio(context: AudioContext) {
   await context.resume();
   if (context.state !== "running")
     throw new Error("오디오를 시작하지 못했습니다. 다시 시도해 주세요.");
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.frequency.value = 880;
-  const now = context.currentTime;
-  gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.15, now + 0.01);
-  gain.gain.setValueAtTime(0.15, now + 0.12);
-  gain.gain.linearRampToValueAtTime(0, now + 0.16);
-  oscillator.connect(gain).connect(context.destination);
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      oscillator.disconnect();
-      gain.disconnect();
-      reject(new Error("녹음 준비가 중단됐습니다. 다시 시도해 주세요."));
-    }, 3_000);
-    oscillator.onended = () => {
-      clearTimeout(timeout);
-      oscillator.disconnect();
-      gain.disconnect();
-      resolve();
-    };
-    oscillator.start(now);
-    oscillator.stop(now + 0.18);
-  });
-  // Leave a short gap so the speaker's cue is not part of the recording.
-  await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
 export async function createPcmRecording(

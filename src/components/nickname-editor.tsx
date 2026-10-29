@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
+import Image from "next/image";
 import { useId, useRef, useState } from "react";
 import {
   Dialog,
@@ -19,9 +20,14 @@ import { navigationEntryId } from "@/lib/navigation-history";
 export function NicknameEditor({
   account,
   fallbackName,
+  compact = false,
+  row = false,
 }: {
   account: UserAccount | null;
   fallbackName?: string;
+  compact?: boolean;
+  /** Renders the trigger as a settings list row. */
+  row?: boolean;
 }) {
   const inputId = useId();
   const [panel, setPanel] = useHistoryPanel("edit", ["nickname"] as const);
@@ -81,24 +87,69 @@ export function NicknameEditor({
         setOpen(nextOpen);
       }}
     >
-      <div className="relative mt-5 flex max-w-full items-center justify-center px-11 text-[#191f28]">
-        <h2
-          className="min-w-0 break-all text-[20px] leading-7 font-bold"
-          aria-live="polite"
-        >
-          {displayName ?? "불러오는 중…"}
-        </h2>
+      {row ? (
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            disabled={!displayName}
+            className="flex h-14 w-full items-center gap-3.5 px-5 py-2 text-left disabled:opacity-60"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center">
+              <Image
+                src="/figma/settings/user.svg"
+                alt=""
+                width={22}
+                height={22}
+              />
+            </span>
+            <span className="flex-1 text-[15px] leading-[22px] font-medium">
+              닉네임
+            </span>
+            <span
+              className="max-w-[45%] truncate text-[15px] leading-[22px] text-[#8b95a1]"
+              aria-live="polite"
+            >
+              {displayName ?? "불러오는 중…"}
+            </span>
+            <Image
+              src="/figma/settings/chevron-right.svg"
+              alt=""
+              width={18}
+              height={18}
+            />
+          </button>
+        </DialogTrigger>
+      ) : compact ? (
         <DialogTrigger asChild>
           <button
             type="button"
             aria-label="닉네임 변경"
             disabled={!displayName}
-            className="absolute right-0 top-1/2 -translate-y-1/2 flex size-11 shrink-0 items-center justify-center rounded-full text-[#4e5968] hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
+            className="max-w-full break-all text-center text-[24px] leading-8 font-bold tracking-[-0.48px] text-[#191f28]"
           >
-            <Pencil className="size-4" aria-hidden="true" />
+            {displayName ?? "불러오는 중…"}
           </button>
         </DialogTrigger>
-      </div>
+      ) : (
+        <div className="relative mt-5 flex max-w-full items-center justify-center px-11 text-[#191f28]">
+          <h2
+            className="min-w-0 break-all text-[20px] leading-7 font-bold"
+            aria-live="polite"
+          >
+            {displayName ?? "불러오는 중…"}
+          </h2>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              aria-label="닉네임 변경"
+              disabled={!displayName}
+              className="absolute right-0 top-1/2 -translate-y-1/2 flex size-11 shrink-0 items-center justify-center rounded-full text-[#4e5968] hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-40"
+            >
+              <Pencil className="size-4" aria-hidden="true" />
+            </button>
+          </DialogTrigger>
+        </div>
+      )}
       <DialogContent className="max-h-[calc(100dvh-40px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-[calc(100%-40px)] max-w-[362px] overflow-y-auto rounded-[24px] border-0">
         <DialogHeader>
           <DialogTitle>닉네임 변경</DialogTitle>

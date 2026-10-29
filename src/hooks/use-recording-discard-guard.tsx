@@ -119,31 +119,36 @@ export function useRecordingDiscardGuard(
         if (!open) cancel();
       }}
     >
-      <AlertDialogContent className="max-w-[340px] rounded-2xl border-0 bg-white p-6 text-[#191f28]">
-        <AlertDialogTitle>
-          {intent === "retry"
-            ? "기존 녹음을 지우고 다시 읽을까요?"
-            : "녹음을 버리고 나갈까요?"}
-        </AlertDialogTitle>
-        <AlertDialogDescription className="leading-6 text-[#4e5968]">
-          {intent === "retry"
-            ? "기존 녹음은 복구할 수 없어요. 연습 문장은 그대로 유지됩니다."
-            : "지금 녹음은 저장되지 않아요. 계속 연습하면 녹음을 유지할 수 있어요."}
-        </AlertDialogDescription>
-        <AlertDialogCancel className="mt-2 min-h-12 rounded-full border-0 bg-[#2f6bff] text-white hover:bg-[#245be0] hover:text-white">
-          계속 연습
-        </AlertDialogCancel>
-        <AlertDialogAction
-          className="min-h-11 rounded-full bg-[#f2f4f6] text-[#4e5968] hover:bg-[#e5e8eb]"
-          onClick={() => {
-            const action = pending.current;
-            pending.current = null;
-            setIntent(null);
-            action?.();
-          }}
-        >
-          {intent === "retry" ? "지우고 다시 녹음" : "녹음 버리고 나가기"}
-        </AlertDialogAction>
+      <AlertDialogContent
+        overlayClassName="bg-black/40"
+        className="w-[calc(100%-40px)] max-w-[342px] !rounded-[20px] border-0 bg-white px-5 pt-7 pb-5 gap-6 text-[#191f28] shadow-[0_8px_24px_rgba(0,0,0,0.12)] data-[state=open]:!animate-none data-[state=closed]:!animate-none"
+      >
+        <div className="space-y-2 text-center">
+          <AlertDialogTitle className="text-[20px] leading-7 font-bold tracking-[-0.24px]">
+            {intent === "retry" ? "다시 녹음할까요?" : "연습을 그만둘까요?"}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-[14px] leading-5 font-medium text-[#6b7684]">
+            {intent === "retry"
+              ? "기존 녹음은 삭제되고 새로 녹음해요"
+              : "지금까지 녹음한 내용은 저장되지 않아요"}
+          </AlertDialogDescription>
+        </div>
+        <div className="flex gap-2">
+          <AlertDialogAction
+            className="h-14 w-[120px] max-w-[40%] min-w-0 flex-none rounded-full border border-[#e5e8eb] bg-white px-3 text-[16px] leading-6 font-bold text-[#191f28] shadow-none hover:bg-[#f2f4f6]"
+            onClick={() => {
+              const action = pending.current;
+              pending.current = null;
+              setIntent(null);
+              action?.();
+            }}
+          >
+            {intent === "retry" ? "다시 녹음" : "그만두기"}
+          </AlertDialogAction>
+          <AlertDialogCancel className="!mt-0 h-14 min-w-0 flex-1 rounded-full border-0 bg-[#2f6bff] px-3 text-[16px] leading-6 font-bold text-white shadow-none hover:bg-[#245be0] hover:text-white">
+            계속 연습
+          </AlertDialogCancel>
+        </div>
       </AlertDialogContent>
     </AlertDialog>
   );

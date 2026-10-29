@@ -5,6 +5,7 @@ import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEventHandler } from "react";
 import { AppShell } from "@/components/app-shell";
+import { NicknameEditor } from "@/components/nickname-editor";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import {
   Dialog,
@@ -17,8 +18,13 @@ import {
   api,
   type NotificationPreferences,
   type NoticeSummary,
+  type UserAccount,
 } from "@/lib/api";
-import { getAuthenticatedUserId } from "@/lib/auth-session";
+import {
+  getAuthenticatedUserId,
+  getCachedUser,
+  markAuthenticatedUser,
+} from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import {
   CLIENT_CACHE_DAY_MAX_AGE_MS,
@@ -101,6 +107,27 @@ export default function AccountSettings() {
   const [inquiryEmail, setInquiryEmail] = useState("");
   const [inquirySending, setInquirySending] = useState(false);
   const [inquirySent, setInquirySent] = useState(false);
+  const [account, setAccount] = useState<UserAccount | null>(() =>
+    getCachedUser(),
+  );
+
+  useEffect(() => {
+    if (account) return;
+    let active = true;
+    api.users
+      .getMe()
+      .then((user) => {
+        if (!active) return;
+        markAuthenticatedUser(user);
+        setAccount(user);
+      })
+      .catch(() => {
+        // The row stays disabled; the rest of settings remains usable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [account]);
 
   useEffect(() => {
     let active = true;
@@ -295,6 +322,13 @@ export default function AccountSettings() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+        <section className="bg-white">
+          <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
+            계정
+          </h2>
+          <NicknameEditor account={account} row />
+        </section>
+
         <section className="bg-white">
           <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
             연습 환경

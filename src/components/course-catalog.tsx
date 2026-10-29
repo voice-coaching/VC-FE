@@ -4,8 +4,16 @@ import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
 import { Check, ChevronRight } from "lucide-react";
-import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
-import { useRouter } from "next/navigation";
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
+import styles from "./course-catalog.module.css";
+import { usePathname, useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
 import { CourseLesson } from "@/components/course-lesson";
@@ -84,13 +92,18 @@ function CourseCatalogView({
 }) {
   const router = useRouter();
   const userId = getAuthenticatedUserId();
-  const activeType = type ?? "PRONUNCIATION";
+  const pathname = usePathname();
+  const activeType: CourseType =
+    pathname === "/class/intonation"
+      ? "INTONATION"
+      : pathname === "/class" || pathname === "/class/pronunciation"
+        ? "PRONUNCIATION"
+        : (type ?? "PRONUNCIATION");
   const cacheResource = cacheResources.courseCatalog(activeType);
   const [initialCache] = useState(() =>
     readUserClientCache<CourseCatalogCache>(userId, cacheResource),
   );
-  const [indicatorType, setIndicatorType] = useState<CourseType>(activeType);
-  const tabNavigationTimer = useRef<number | null>(null);
+  const [loadedType, setLoadedType] = useState(activeType);
   const [stepsByCourse, setStepsByCourse] = useState<
     Record<string, CourseStep[]>
   >(initialCache?.stepsByCourse ?? {});
@@ -141,15 +154,6 @@ function CourseCatalogView({
     };
   }, [activeType, userId, expandedId]);
 
-  useEffect(() => {
-    setIndicatorType(activeType);
-    return () => {
-      if (tabNavigationTimer.current !== null) {
-        window.clearTimeout(tabNavigationTimer.current);
-      }
-    };
-  }, [activeType]);
-
   function navigateToType(
     event: MouseEvent<HTMLAnchorElement>,
     nextType: CourseType,
@@ -163,35 +167,20 @@ function CourseCatalogView({
       event.altKey
     )
       return;
-
     event.preventDefault();
-    if (tabNavigationTimer.current !== null) {
-      window.clearTimeout(tabNavigationTimer.current);
-      tabNavigationTimer.current = null;
-    }
-    setIndicatorType(nextType);
     if (nextType === activeType) return;
-
-    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? 0
-      : 280;
-    if (delay === 0) {
-      router.push(href);
-      return;
-    }
-    tabNavigationTimer.current = window.setTimeout(() => {
-      router.push(href);
-      tabNavigationTimer.current = null;
-    }, delay);
+    // Keep the tab bar mounted; Next synchronizes usePathname with native history.
+    window.history.pushState(null, "", href);
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     let active = true;
     listGeneration.current += 1;
     loadMoreBusy.current = false;
     setLoadingMore(false);
     setLoadMoreError(null);
     setRefreshing(true);
+    setLoadedType(activeType);
     const cached = readUserClientCache<CourseCatalogCache>(
       userId,
       cacheResource,
@@ -539,6 +528,7 @@ function CourseCatalogView({
   return (
     <AppShell
       nav={!selectedCourse}
+      animateRoute={false}
       viewportLocked
       chromeColor="#f2f4f6"
       className="flex min-h-0 flex-col bg-[#f2f4f6]"
@@ -590,11 +580,11 @@ function CourseCatalogView({
             >
               <span
                 aria-hidden="true"
-                data-active-indicator={indicatorType.toLowerCase()}
-                className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/2 bg-[#191f28] transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                data-active-indicator={activeType.toLowerCase()}
+                className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/2 bg-[#191f28] transition-transform duration-[320ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none motion-reduce:duration-0"
                 style={{
                   transform:
-                    indicatorType === "INTONATION"
+                    activeType === "INTONATION"
                       ? "translate3d(100%, 0, 0)"
                       : "translate3d(0, 0, 0)",
                 }}
@@ -605,12 +595,12 @@ function CourseCatalogView({
                   navigateToType(event, "PRONUNCIATION", "/class/pronunciation")
                 }
                 aria-current={
-                  indicatorType === "PRONUNCIATION" ? "page" : undefined
+                  activeType === "PRONUNCIATION" ? "page" : undefined
                 }
-                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-200 ${
-                  indicatorType === "PRONUNCIATION"
+                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-150 motion-reduce:transition-none motion-reduce:duration-0 ${
+                  activeType === "PRONUNCIATION"
                     ? "font-bold text-[#191f28]"
-                    : "font-medium text-[#8b95a1]"
+                    : "font-bold text-[#8b95a1]"
                 }`}
               >
                 발음 클래스
@@ -620,215 +610,223 @@ function CourseCatalogView({
                 onClick={(event) =>
                   navigateToType(event, "INTONATION", "/class/intonation")
                 }
-                aria-current={
-                  indicatorType === "INTONATION" ? "page" : undefined
-                }
-                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-200 ${
-                  indicatorType === "INTONATION"
+                aria-current={activeType === "INTONATION" ? "page" : undefined}
+                className={`relative z-10 flex items-center justify-center px-1 pt-2 text-center text-[15px] transition-colors duration-150 motion-reduce:transition-none motion-reduce:duration-0 ${
+                  activeType === "INTONATION"
                     ? "font-bold text-[#191f28]"
-                    : "font-medium text-[#8b95a1]"
+                    : "font-bold text-[#8b95a1]"
                 }`}
               >
                 억양 클래스
               </Link>
             </nav>
           )}
-          {error && (
-            <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
-              <p role="alert">{error}</p>
-              {!selectedCourse && items.length === 0 && !loading ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoading(true);
-                    setRetry((value) => value + 1);
-                  }}
-                  className="mt-1 min-h-11 px-2 font-semibold text-primary"
-                >
-                  다시 시도
-                </button>
-              ) : null}
-            </div>
-          )}
-          {selectedCourse && detailError ? (
-            <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
-              <p role="alert">{detailError}</p>
-              <button
-                type="button"
-                className="mt-1 min-h-11 font-semibold text-primary"
-                onClick={() => {
-                  setDetailError(null);
-                  setDetailRetry((value) => value + 1);
-                }}
-              >
-                클래스 상세 다시 불러오기
-              </button>
-            </div>
-          ) : null}
-          {selectedCourse ? (
-            <>
-              <div className="flex gap-3 pt-2 text-xs font-medium">
-                <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-primary">
-                  {level(selectedCourse.difficulty)}
-                </span>
-                {detail ? (
-                  <span className="px-0 py-1 text-[#6b7684]">
-                    {detail.stepCount}단계
-                  </span>
+          <div
+            key={
+              selectedCourse
+                ? "detail"
+                : `${activeType}:${loadedType !== activeType || loading ? "loading" : "ready"}`
+            }
+            className={selectedCourse ? undefined : styles.panel}
+            aria-busy={loadedType !== activeType || loading}
+          >
+            {error && loadedType === activeType && (
+              <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
+                <p role="alert">{error}</p>
+                {!selectedCourse && items.length === 0 && !loading ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoading(true);
+                      setRetry((value) => value + 1);
+                    }}
+                    className="mt-1 min-h-11 px-2 font-semibold text-primary"
+                  >
+                    다시 시도
+                  </button>
                 ) : null}
               </div>
-              <h2 className="mt-3 text-[22px] leading-8 font-bold tracking-[-0.02em]">
-                {detail?.description || selectedCourse.title}
-              </h2>
-              <p className="mt-1 text-sm leading-5 text-[#6b7684]">
-                발음 원리를 단계별로 익히고 직접 소리 내어 연습해요
-              </p>
-              <section className="mt-4 rounded-2xl bg-white p-4 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
-                <strong className="block text-[15px] leading-[22px]">
-                  이 클래스를 마치면
-                </strong>
-                <p className="mt-1 text-[13px] leading-[18px] text-[#4e5968]">
-                  {detail?.description ?? "학습 내용을 불러오는 중이에요"}
-                </p>
-              </section>
-              <div className="mt-5 mb-3 flex justify-between">
-                <h3 className="text-[17px] leading-6 font-bold">구성 단계</h3>
-                <span className="text-[13px] leading-[18px] text-[#8b95a1]">
-                  {steps.length}단계
-                </span>
-              </div>
-              <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
-                {steps.map((step, index) => {
-                  const firstIncomplete = steps.findIndex(
-                    (item) => !item.completed,
-                  );
-                  const locked =
-                    !step.completed &&
-                    firstIncomplete >= 0 &&
-                    index > firstIncomplete;
-                  return (
-                    <li key={String(step.id)}>
-                      <button
-                        type="button"
-                        disabled={locked || startingId !== null}
-                        onClick={() => void start(selectedCourse, step)}
-                        className="flex min-h-[57px] w-full items-center gap-3 text-left disabled:cursor-default"
-                      >
-                        <span
-                          className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] font-medium ${step.completed ? "bg-primary text-white" : locked ? "bg-[#f2f4f6] text-[#b0b8c1]" : "border-2 border-primary text-primary"}`}
-                        >
-                          {step.completed ? (
-                            <Check className="size-4" />
-                          ) : (
-                            step.stepOrder
-                          )}
-                        </span>
-                        <span
-                          className={`flex-1 text-[15px] leading-[22px] font-medium ${locked ? "text-[#b0b8c1]" : "text-[#333d4b]"}`}
-                        >
-                          {step.title}
-                        </span>
-                        {!locked ? (
-                          <ChevronRight className="size-5 text-[#b0b8c1]" />
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            </>
-          ) : loading ? (
-            <CourseListSkeleton />
-          ) : (
-            <div className="space-y-3 px-5">
-              {items.map((course) => {
-                const detail = detailsByCourse[String(course.id)];
-                const progress = Math.max(
-                  0,
-                  Math.min(100, course.progressPercent),
-                );
-                return (
-                  <button
-                    key={String(course.id)}
-                    type="button"
-                    onClick={() => setExpandedId(String(course.id))}
-                    className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
-                  >
-                    <span
-                      className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${activeType === "PRONUNCIATION" ? "bg-[#ccddff]" : "bg-[#edf2ff]"}`}
-                    >
-                      <Image
-                        src={
-                          activeType === "PRONUNCIATION"
-                            ? "/figma/class/icon.svg"
-                            : "/figma/class/falling.svg"
-                        }
-                        alt=""
-                        width={28}
-                        height={28}
-                        className="size-7"
-                      />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <h2 className="text-[15px] leading-[22px] font-bold">
-                          {course.title}
-                        </h2>
-                        <span
-                          className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
-                        >
-                          {detail
-                            ? `${Math.round((progress / 100) * detail.stepCount)}/${detail.stepCount}`
-                            : `${Math.round(progress)}%`}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
-                        {detail?.description || "원리부터 차근차근 연습해요"}
-                      </p>
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dfe3e7]">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                      <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
-                        {detail
-                          ? `${detail.stepCount}단계`
-                          : "단계 정보 불러오는 중"}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-              {items.length === 0 && !error && (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  조건에 맞는 클래스가 없습니다.
-                </p>
-              )}
-              {loadMoreError && (
-                <p
-                  role="alert"
-                  className="rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
-                >
-                  {loadMoreError}
-                </p>
-              )}
-              {hasNext && (
+            )}
+            {selectedCourse && detailError ? (
+              <div className="mb-4 rounded-xl bg-destructive/5 p-4 text-sm text-destructive">
+                <p role="alert">{detailError}</p>
                 <button
                   type="button"
-                  disabled={loadingMore || refreshing}
-                  onClick={() => void loadMore()}
-                  className="design-action"
+                  className="mt-1 min-h-11 font-semibold text-primary"
+                  onClick={() => {
+                    setDetailError(null);
+                    setDetailRetry((value) => value + 1);
+                  }}
                 >
-                  {loadingMore
-                    ? "불러오는 중…"
-                    : loadMoreError
-                      ? "클래스 더 불러오기 재시도"
-                      : "클래스 더 보기"}
+                  클래스 상세 다시 불러오기
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            ) : null}
+            {selectedCourse ? (
+              <>
+                <div className="flex gap-3 pt-2 text-xs font-medium">
+                  <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-primary">
+                    {level(selectedCourse.difficulty)}
+                  </span>
+                  {detail ? (
+                    <span className="px-0 py-1 text-[#6b7684]">
+                      {detail.stepCount}단계
+                    </span>
+                  ) : null}
+                </div>
+                <h2 className="mt-3 text-[22px] leading-8 font-bold tracking-[-0.02em]">
+                  {detail?.description || selectedCourse.title}
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-[#6b7684]">
+                  발음 원리를 단계별로 익히고 직접 소리 내어 연습해요
+                </p>
+                <section className="mt-4 rounded-2xl bg-white p-4 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
+                  <strong className="block text-[15px] leading-[22px]">
+                    이 클래스를 마치면
+                  </strong>
+                  <p className="mt-1 text-[13px] leading-[18px] text-[#4e5968]">
+                    {detail?.description ?? "학습 내용을 불러오는 중이에요"}
+                  </p>
+                </section>
+                <div className="mt-5 mb-3 flex justify-between">
+                  <h3 className="text-[17px] leading-6 font-bold">구성 단계</h3>
+                  <span className="text-[13px] leading-[18px] text-[#8b95a1]">
+                    {steps.length}단계
+                  </span>
+                </div>
+                <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
+                  {steps.map((step, index) => {
+                    const firstIncomplete = steps.findIndex(
+                      (item) => !item.completed,
+                    );
+                    const locked =
+                      !step.completed &&
+                      firstIncomplete >= 0 &&
+                      index > firstIncomplete;
+                    return (
+                      <li key={String(step.id)}>
+                        <button
+                          type="button"
+                          disabled={locked || startingId !== null}
+                          onClick={() => void start(selectedCourse, step)}
+                          className="flex min-h-[57px] w-full items-center gap-3 text-left disabled:cursor-default"
+                        >
+                          <span
+                            className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] font-medium ${step.completed ? "bg-primary text-white" : locked ? "bg-[#f2f4f6] text-[#b0b8c1]" : "border-2 border-primary text-primary"}`}
+                          >
+                            {step.completed ? (
+                              <Check className="size-4" />
+                            ) : (
+                              step.stepOrder
+                            )}
+                          </span>
+                          <span
+                            className={`flex-1 text-[15px] leading-[22px] font-medium ${locked ? "text-[#b0b8c1]" : "text-[#333d4b]"}`}
+                          >
+                            {step.title}
+                          </span>
+                          {!locked ? (
+                            <ChevronRight className="size-5 text-[#b0b8c1]" />
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
+            ) : loading || loadedType !== activeType ? (
+              <CourseListSkeleton />
+            ) : (
+              <div className="space-y-3 px-5">
+                {items.map((course) => {
+                  const detail = detailsByCourse[String(course.id)];
+                  const progress = Math.max(
+                    0,
+                    Math.min(100, course.progressPercent),
+                  );
+                  return (
+                    <button
+                      key={String(course.id)}
+                      type="button"
+                      onClick={() => setExpandedId(String(course.id))}
+                      className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
+                    >
+                      <span
+                        className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${activeType === "PRONUNCIATION" ? "bg-[#ccddff]" : "bg-[#edf2ff]"}`}
+                      >
+                        <Image
+                          src={
+                            activeType === "PRONUNCIATION"
+                              ? "/figma/class/icon.svg"
+                              : "/figma/class/falling.svg"
+                          }
+                          alt=""
+                          width={28}
+                          height={28}
+                          className="size-7"
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="text-[15px] leading-[22px] font-bold">
+                            {course.title}
+                          </h2>
+                          <span
+                            className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
+                          >
+                            {detail
+                              ? `${Math.round((progress / 100) * detail.stepCount)}/${detail.stepCount}`
+                              : `${Math.round(progress)}%`}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
+                          {detail?.description || "원리부터 차근차근 연습해요"}
+                        </p>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dfe3e7]">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
+                          {detail
+                            ? `${detail.stepCount}단계`
+                            : "단계 정보 불러오는 중"}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+                {items.length === 0 && !error && (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    조건에 맞는 클래스가 없습니다.
+                  </p>
+                )}
+                {loadMoreError && (
+                  <p
+                    role="alert"
+                    className="rounded-xl bg-destructive/5 p-4 text-sm text-destructive"
+                  >
+                    {loadMoreError}
+                  </p>
+                )}
+                {hasNext && (
+                  <button
+                    type="button"
+                    disabled={loadingMore || refreshing}
+                    onClick={() => void loadMore()}
+                    className="design-action"
+                  >
+                    {loadingMore
+                      ? "불러오는 중…"
+                      : loadMoreError
+                        ? "클래스 더 불러오기 재시도"
+                        : "클래스 더 보기"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         {selectedCourse && (
           <div className="design-dock">
