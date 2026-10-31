@@ -1,14 +1,7 @@
 "use client";
 
-import localFont from "next/font/local";
 import type { CSSProperties, ReactNode } from "react";
 import styles from "./iphone-frame.module.css";
-
-const designFont = localFont({
-  src: "../assets/fonts/NotoSansKR.woff",
-  display: "swap",
-  weight: "100 900",
-});
 
 export function IPhoneFrame({
   children,
@@ -19,7 +12,7 @@ export function IPhoneFrame({
 }) {
   return (
     <div
-      className={`${designFont.className} ${styles.stage}`}
+      className={styles.stage}
       style={
         {
           "--iphone-frame-background": backgroundColor,

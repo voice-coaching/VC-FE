@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   AnalysisFailed,
+  AnalysisConnectionUnavailable,
   AnalysisWaitTimeout,
   pollAnalysis,
 } from "../src/lib/analysis-polling";
+import { ApiError } from "../src/lib/api/client";
 import type { AnalysisProgress } from "../src/lib/api/types";
 
 const pending: AnalysisProgress = {
@@ -69,62 +71,64 @@ test("server failure remains distinct from delayed analysis", async () => {
   );
 });
 
-test("default wait continues beyond two minutes and accepts completion", async () => {
-  const originalNow = Date.now;
+test("default wait continues beyond two minutes and accepts completion", async (t) => {
   let now = 0;
+  t.mock.method(performance, "now", () => now);
   let calls = 0;
-  Date.now = () => now;
-  try {
-    const id = await pollAnalysis({
-      getStatus: async () => {
-        calls += 1;
-        now = calls === 1 ? 121_000 : 599_999;
-        return calls === 1 ? pending : { ...pending, status: "COMPLETED" };
-      },
-      onProgress: () => {},
-      intervalMs: 0,
-    });
-    assert.equal(id, 12);
-    assert.equal(calls, 2);
-  } finally {
-    Date.now = originalNow;
-  }
+  const id = await pollAnalysis({
+    getStatus: async () => {
+      calls += 1;
+      now = calls === 1 ? 121_000 : 599_999;
+      return calls === 1 ? pending : { ...pending, status: "COMPLETED" };
+    },
+    onProgress: () => {},
+    intervalMs: 0,
+  });
+  assert.equal(id, 12);
+  assert.equal(calls, 2);
 });
 
-test("a received completion wins over the elapsed-time check", async () => {
-  const originalNow = Date.now;
+test("a received completion wins over the elapsed-time check", async (t) => {
   let now = 0;
-  Date.now = () => now;
-  try {
-    const id = await pollAnalysis({
+  t.mock.method(performance, "now", () => now);
+  const id = await pollAnalysis({
+    getStatus: async () => {
+      now = 600_001;
+      return { ...pending, status: "COMPLETED" };
+    },
+    onProgress: () => {},
+  });
+  assert.equal(id, 12);
+});
+
+test("default wait stops after ten minutes if analysis is still processing", async (t) => {
+  let now = 0;
+  t.mock.method(performance, "now", () => now);
+  await assert.rejects(
+    pollAnalysis({
       getStatus: async () => {
         now = 600_001;
-        return { ...pending, status: "COMPLETED" };
+        return pending;
       },
       onProgress: () => {},
-    });
-    assert.equal(id, 12);
-  } finally {
-    Date.now = originalNow;
-  }
+    }),
+    AnalysisWaitTimeout,
+  );
 });
 
-test("default wait stops after ten minutes if analysis is still processing", async () => {
-  const originalNow = Date.now;
+test("connection recovery exhaustion before the overall deadline remains a connection error", async (t) => {
   let now = 0;
-  Date.now = () => now;
-  try {
-    await assert.rejects(
-      pollAnalysis({
-        getStatus: async () => {
-          now = 600_001;
-          return pending;
-        },
-        onProgress: () => {},
-      }),
-      AnalysisWaitTimeout,
-    );
-  } finally {
-    Date.now = originalNow;
-  }
+  t.mock.method(performance, "now", () => now);
+  await assert.rejects(
+    pollAnalysis({
+      getStatus: async () => {
+        throw new ApiError("offline", 0, "NETWORK_ERROR");
+      },
+      onProgress: () => {},
+      onConnectionChange: () => {
+        now = 90_001;
+      },
+    }),
+    AnalysisConnectionUnavailable,
+  );
 });
