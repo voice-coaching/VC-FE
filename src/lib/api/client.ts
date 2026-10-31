@@ -211,6 +211,35 @@ export function createHttpClient(
     version: number;
     promise: Promise<RefreshResult>;
   } | null = null;
+  const pendingReads = new Map<string, Promise<unknown>>();
+
+  // Share only identical default JSON reads while they are in flight. Explicit
+  // signals, headers, cache modes and timeouts keep their own request lifecycle.
+  // No completed response is cached, so revisiting a screen still revalidates.
+  function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const method = (options.method ?? "GET").toUpperCase();
+    const shareRead =
+      method === "GET" && Object.keys(options).every((key) => key === "method");
+    if (!shareRead) {
+      const changesData =
+        !["GET", "HEAD", "OPTIONS"].includes(method) &&
+        path !== "/api/auth/token/refresh";
+      if (changesData) pendingReads.clear();
+      return performRequest<T>(path, options).finally(() => {
+        // Reads started during a mutation must also revalidate after it settles.
+        if (changesData) pendingReads.clear();
+      });
+    }
+
+    const key = `${sessionVersion}:${path}`;
+    const existing = pendingReads.get(key);
+    if (existing) return existing as Promise<T>;
+    const pending = performRequest<T>(path, options).finally(() => {
+      if (pendingReads.get(key) === pending) pendingReads.delete(key);
+    });
+    pendingReads.set(key, pending);
+    return pending;
+  }
 
   async function refreshAccessToken() {
     const version = sessionVersion;
@@ -254,7 +283,7 @@ export function createHttpClient(
     return refreshFlight.promise;
   }
 
-  async function request<T>(
+  async function performRequest<T>(
     path: string,
     options: RequestOptions = {},
   ): Promise<T> {
@@ -345,7 +374,7 @@ export function createHttpClient(
         assertCurrentSession(version);
         if (signal?.aborted)
           throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
-        return request<T>(path, { ...options, skipRefresh: true });
+        return performRequest<T>(path, { ...options, skipRefresh: true });
       }
 
       if (responseType === "audio" && response.ok) {
@@ -446,7 +475,7 @@ export function createHttpClient(
           const keys = Object.keys(data);
           if (keys.length === 1 && !skipRefresh) {
             clearTimeout(timeout);
-            return request<T>(path, { ...options, skipRefresh: true });
+            return performRequest<T>(path, { ...options, skipRefresh: true });
           }
         }
       }

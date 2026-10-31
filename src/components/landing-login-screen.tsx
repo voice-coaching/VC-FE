@@ -35,8 +35,6 @@ const SOCIAL_METHODS = [
   className: string;
 }>;
 
-const SPLASH_DURATION_MS = 800;
-
 type EntryPhase = "splash" | "login";
 
 async function hasAuthenticatedSession() {
@@ -63,28 +61,19 @@ export function LandingLoginScreen() {
 
   useEffect(() => {
     let active = true;
-    let splashTimer: number | undefined;
+    void hasAuthenticatedSession().then((authenticated) => {
+      if (!active) return;
 
-    const minimumSplash = new Promise<void>((resolve) => {
-      splashTimer = window.setTimeout(resolve, SPLASH_DURATION_MS);
+      if (authenticated) {
+        router.prefetch("/home");
+        router.replace("/home");
+        return;
+      }
+      setEntryPhase("login");
     });
-
-    void Promise.all([minimumSplash, hasAuthenticatedSession()]).then(
-      ([, authenticated]) => {
-        if (!active) return;
-
-        if (authenticated) {
-          router.prefetch("/home");
-          router.replace("/home");
-          return;
-        }
-        setEntryPhase("login");
-      },
-    );
 
     return () => {
       active = false;
-      if (splashTimer !== undefined) window.clearTimeout(splashTimer);
     };
   }, [router]);
 

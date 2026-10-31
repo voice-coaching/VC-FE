@@ -152,7 +152,7 @@ test("lip analysis submits captured audio to the same direct API as voice practi
     directAttemptsRef: {
       current: new Map([[0, { id: "attempt", claim: "claim" }]]),
     },
-    LIP_PRACTICE_PROMPTS: ["연습 문장"],
+    prompts: ["연습 문장"],
     prepareDirectAudio: async (source: Blob) => {
       assert.equal(source, audio);
       return { blob: audio };

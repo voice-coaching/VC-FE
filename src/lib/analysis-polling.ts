@@ -134,7 +134,10 @@ export async function pollAnalysis({
         outageDeadline ??= now() + 90_000;
         onConnectionChange?.(true);
         const remaining = Math.min(deadline, outageDeadline) - now();
-        if (remaining <= 0) throw new AnalysisConnectionUnavailable(analysisId);
+        if (remaining <= 0) {
+          if (now() >= deadline) throw new AnalysisWaitTimeout(analysisId);
+          throw new AnalysisConnectionUnavailable(analysisId);
+        }
         const backoff =
           Math.min(8_000, 1_000 * 2 ** Math.min(failures++, 3)) *
           (0.8 + Math.random() * 0.4);
@@ -212,8 +215,6 @@ export async function pollAnalysis({
         owner.signal,
       );
     }
-    if (outageDeadline !== undefined)
-      throw new AnalysisConnectionUnavailable(analysisId);
     throw new AnalysisWaitTimeout(analysisId);
   } finally {
     unsubscribe();
