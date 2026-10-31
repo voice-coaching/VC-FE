@@ -96,6 +96,10 @@
 .controls[data-recording="true"] .next {
   pointer-events: auto;
 }
+.controls[data-recording="true"] .finishHidden {
+  visibility: hidden;
+  pointer-events: none;
+}
 .controls[data-recording="true"] .mic {
   opacity: 0;
   transform: scale(0.85);

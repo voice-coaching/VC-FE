@@ -135,7 +135,9 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
       try {
         const detail = await api.myPage.getTrainingSession(sessionId);
         if (!active()) return;
-        const choice = await reportSaves.get("SESSION", sessionId);
+        const choice = await reportSaves
+          .get("SESSION", sessionId)
+          .catch(() => ({ saved: true }));
         if (!active()) return;
         if (!choice.saved) setTab("recording");
         const result = choice.saved

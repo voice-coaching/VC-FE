@@ -11,6 +11,7 @@ import {
 
 export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [items, setItems] = useState<
     Awaited<ReturnType<typeof listDirectHistory>>
   >([]);
@@ -19,12 +20,24 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
   useEffect(() => {
     if (!directAnalysisEnabled) return;
     const controller = new AbortController();
-    void Promise.all([listDirectHistory(controller.signal), reportSaves.list()])
+    void Promise.all([
+      listDirectHistory(controller.signal),
+      reportSaves.list().catch((reason: unknown) => {
+        if (savedOnly) throw reason;
+        return [];
+      }),
+    ])
       .then(([value, saves]) => {
         if (!controller.signal.aborted)
           setSavedIds(
             saves
-              .filter((item) => item.source === "DIRECT")
+              .filter((item) => item.source === "DIRECT" && item.saved)
+              .map((item) => item.referenceId),
+          );
+        if (!controller.signal.aborted)
+          setHiddenIds(
+            saves
+              .filter((item) => item.source === "DIRECT" && !item.saved)
               .map((item) => item.referenceId),
           );
         if (!controller.signal.aborted) setItems(value);
@@ -33,7 +46,7 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
         if (!controller.signal.aborted) setError(true);
       });
     return () => controller.abort();
-  }, []);
+  }, [savedOnly]);
 
   if (!directAnalysisEnabled) return null;
   if (error)
@@ -87,7 +100,7 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
               />
             </summary>
             <div className="space-y-4 border-t border-[#eef0f3] bg-[#f8f9fa] px-4 py-5">
-              {savedIds.includes(item.jobId) && item.result ? (
+              {!hiddenIds.includes(item.jobId) && item.result ? (
                 <DirectAnalysisResult
                   result={item.result}
                   content={{

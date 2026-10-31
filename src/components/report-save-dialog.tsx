@@ -59,7 +59,7 @@ export function ReportSaveDialog({
             리포트를 저장할까요?
           </Dialog.Title>
           <Dialog.Description className={styles.description}>
-            저장하면 저장 탭의 AI 리포트에서 다시 볼 수 있어요.
+            저장하면 이 기기의 저장 탭에서 다시 볼 수 있어요.
             <br />
             저장하지 않아도 녹음 기록은 남아요.
           </Dialog.Description>
