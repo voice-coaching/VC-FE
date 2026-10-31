@@ -1,7 +1,7 @@
 "use client";
 import { RecordingWaveform } from "./recording-waveform";
 import { ArrowRight, Mic } from "lucide-react";
-import { ReferencePlayer } from "./reference-player";
+import { GuidePlayer } from "./guide-player";
 import type { Id } from "@/lib/api";
 import styles from "./sentence-recording-controls.module.css";
 
@@ -10,6 +10,7 @@ export function SentenceRecordingControls({
   contentId,
   stream,
   referenceAvailable,
+  scriptText,
   elapsed,
   busy,
   last,
@@ -21,6 +22,7 @@ export function SentenceRecordingControls({
   contentId: Id;
   stream: MediaStream | null;
   referenceAvailable: boolean;
+  scriptText: string;
   elapsed: string;
   busy: boolean;
   last: boolean;
@@ -48,10 +50,12 @@ export function SentenceRecordingControls({
         </p>
       </div>
       <div className={styles.buttons}>
-        <ReferencePlayer
+        <GuidePlayer
           contentId={contentId}
+          available={referenceAvailable}
+          text={scriptText}
           variant="guide"
-          disabled={!referenceAvailable || requesting}
+          disabled={requesting}
         />
         <button
           type="button"
@@ -72,11 +76,11 @@ export function SentenceRecordingControls({
         </button>
         <button
           type="button"
-          disabled={!recording || busy}
+          disabled={!recording || busy || last}
           onClick={onComplete}
-          aria-hidden={!recording}
-          tabIndex={recording ? 0 : -1}
-          className={styles.next}
+          aria-hidden={!recording || last}
+          tabIndex={recording && !last ? 0 : -1}
+          className={`${styles.next} ${last ? styles.finishHidden : ""}`}
         >
           <span className="grid size-14 place-items-center rounded-full bg-gradient-to-b from-[#191f28] to-[#104286] text-white">
             <ArrowRight size={24} />

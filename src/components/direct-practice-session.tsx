@@ -1,6 +1,7 @@
 "use client";
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
+import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -411,6 +412,7 @@ export function DirectPracticeSession({
           ) : null}
         </div>
       )}
+      {recorder.status === "denied" && <MicrophonePermissionNotice />}
       {(phase === "idle" || phase === "recording") && (
         <SentenceRecordingControls
           recording={phase === "recording"}
@@ -419,6 +421,7 @@ export function DirectPracticeSession({
           stream={recorder.getStream()}
           contentId={content.id}
           referenceAvailable={content.referenceAudioAvailable}
+          scriptText={sentences[activeSentence] ?? content.scriptText}
           elapsed={formatElapsed(recorder.elapsedMs)}
           busy={recorder.status !== "recording"}
           last={activeSentence === sentences.length - 1}

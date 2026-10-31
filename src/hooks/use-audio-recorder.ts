@@ -365,7 +365,9 @@ export function useAudioRecorder() {
       setStatus(denied ? "denied" : "error");
       setError(
         denied
-          ? "마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요."
+          ? Capacitor.isNativePlatform()
+            ? "마이크 권한이 거부되었습니다. 앱 설정에서 권한을 허용해 주세요."
+            : "마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요."
           : reason instanceof Error
             ? reason.message
             : "마이크를 시작하지 못했습니다.",

@@ -1,6 +1,7 @@
 "use client";
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
+import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 
 import { DirectPracticeSession } from "./direct-practice-session";
 import { directAnalysisEnabled } from "@/lib/direct-analysis";
@@ -1116,6 +1117,7 @@ function PracticeSessionBody({
           >
             {requestError ?? recorder.error}
           </p>
+          {recorder.status === "denied" && <MicrophonePermissionNotice />}
         </div>
         <button
           className="design-action"
@@ -1309,6 +1311,7 @@ function PracticeSessionBody({
               stream={recorder.getStream()}
               contentId={content.id}
               referenceAvailable={content.referenceAudioAvailable}
+              scriptText={sentences[activeSentence] ?? content.scriptText}
               elapsed={formatElapsed(recorder.elapsedMs)}
               busy={recorder.status !== "recording"}
               last={activeSentence === sentences.length - 1}
