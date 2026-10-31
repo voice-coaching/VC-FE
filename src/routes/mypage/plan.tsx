@@ -5,7 +5,7 @@ import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { CompactCard, DetailedCard } from "@/components/plan-choice-card";
 import { AppShell } from "@/components/app-shell";
 import { MyPageHead, MyProfileBand } from "@/components/my-page-frame";
 import layout from "@/components/my-page-layout.module.css";
@@ -430,14 +430,17 @@ export default function PracticePlan() {
             setEditing(null);
           }
         }}
-        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto rounded-t-[24px] bg-white px-6 pt-3 pb-[calc(20px+env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-black/40"
+        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[90dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain rounded-t-[24px] border-0 bg-white px-6 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-[rgba(25,31,40,0.45)]"
       >
         <div
           className="mx-auto mb-5 h-1 w-10 rounded-full bg-[#e5e8eb]"
           aria-hidden="true"
         />
         <div className="mb-5">
-          <h2 id="plan-sheet-title" className="text-[20px] leading-7 font-bold">
+          <h2
+            id="plan-sheet-title"
+            className="text-[20px] leading-7 font-bold tracking-[-0.24px]"
+          >
             {editing === "purpose"
               ? "무엇을 위해 연습하고 싶나요?"
               : editing === "improvements"
@@ -447,57 +450,49 @@ export default function PracticePlan() {
                   : "어떤 방식으로 연습하고 싶나요?"}
           </h2>
           {editing === "improvements" || editing === "methods" ? (
-            <p className="mt-1 text-[13px] text-[#8b95a1]">
+            <p className="mt-1.5 text-[13px] leading-[18px] tracking-[0.2522px] text-[#8b95a1]">
               {editing === "improvements"
                 ? "최대 3개까지 고를 수 있어요"
                 : "여러 개를 골라도 돼요"}
             </p>
           ) : null}
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {options.map((option) => {
             const selected = selection.includes(option.value);
-            return (
-              <button
+            const onClick = () => {
+              if (!editing || busy.current) return;
+              const multi = editing === "improvements" || editing === "methods";
+              setSelections((all) => {
+                const current = all[editing] ?? planSelection(draft, editing);
+                const next = multi
+                  ? current.includes(option.value)
+                    ? current.filter((value) => value !== option.value)
+                    : editing === "improvements" && current.length >= 3
+                      ? current
+                      : [...current, option.value]
+                  : [option.value];
+                return { ...all, [editing]: next };
+              });
+            };
+            return editing === "improvements" ? (
+              <CompactCard
                 key={option.value}
-                type="button"
-                aria-pressed={selected}
+                title={option.title}
+                selected={selected}
                 disabled={saving}
-                onClick={() => {
-                  if (!editing || busy.current) return;
-                  const multi =
-                    editing === "improvements" || editing === "methods";
-                  setSelections((all) => {
-                    const current =
-                      all[editing] ?? planSelection(draft, editing);
-                    const next = multi
-                      ? current.includes(option.value)
-                        ? current.filter((value) => value !== option.value)
-                        : editing === "improvements" && current.length >= 3
-                          ? current
-                          : [...current, option.value]
-                      : [option.value];
-                    return { ...all, [editing]: next };
-                  });
-                }}
-                className={`flex min-h-[64px] w-full items-center gap-3 rounded-2xl border-2 p-4 text-left ${selected ? "border-primary bg-[#edf2ff]" : "border-transparent bg-[#f7f8fa]"}`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] leading-[22px] font-bold">
-                    {option.title}
-                  </span>
-                  {option.description ? (
-                    <span className="mt-1 block text-[12px] leading-4 text-[#6b7684]">
-                      {option.description}
-                    </span>
-                  ) : null}
-                </span>
-                {selected ? (
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
-                    <Check className="size-3.5" />
-                  </span>
-                ) : null}
-              </button>
+                onClick={onClick}
+                assetSet="mypage-plan"
+              />
+            ) : (
+              <DetailedCard
+                key={option.value}
+                option={option}
+                selected={selected}
+                disabled={saving}
+                onClick={onClick}
+                assetSet="mypage-plan"
+              />
             );
           })}
         </div>

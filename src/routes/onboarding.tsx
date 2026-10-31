@@ -2,6 +2,7 @@
 import { NavigationIcon } from "@/components/navigation-icon";
 
 import Image from "next/image";
+import { DetailedCard, CompactCard } from "@/components/plan-choice-card";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -27,7 +28,6 @@ import {
   METHOD_OPTIONS,
   type ScheduleId,
   type EditSection,
-  type DetailedOption,
 } from "@/lib/onboarding-options";
 
 export default function Onboarding() {
@@ -445,93 +445,6 @@ function QuestionScreen({
         <div className="mt-[26px] flex flex-col gap-2.5">{children}</div>
       </div>
     </div>
-  );
-}
-
-function SelectionMark() {
-  return (
-    <span className="onboarding-check-pop flex size-6 shrink-0 items-center justify-center rounded-full bg-[#2f6bff]">
-      <Image
-        src="/figma/onboarding/check.svg"
-        alt=""
-        width={14}
-        height={14}
-        aria-hidden="true"
-      />
-    </span>
-  );
-}
-
-function DetailedCard<T extends string>({
-  option,
-  selected,
-  onClick,
-}: {
-  option: DetailedOption<T>;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={`flex min-h-[75px] w-full touch-manipulation items-center gap-3.5 rounded-2xl border-2 px-[18px] py-3.5 text-left transition-[transform,background-color,border-color] duration-200 ease-out active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] ${
-        selected
-          ? "border-[#2f6bff] bg-[#f1f5ff]"
-          : "border-transparent bg-[#f7f8fa]"
-      }`}
-    >
-      {option.icon && (
-        <span className="flex size-[35px] shrink-0 items-center justify-center overflow-hidden rounded-xl">
-          <Image
-            src={option.icon}
-            alt=""
-            width={35}
-            height={35}
-            aria-hidden="true"
-            className={option.iconClassName}
-          />
-        </span>
-      )}
-      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-        <span className="text-[15px] leading-[22px] font-medium tracking-[0.144px] text-[#191f28]">
-          {option.title}
-        </span>
-        <span className="text-[13px] leading-[18px] tracking-[0.2522px] text-[#4e5968]">
-          {option.description}
-        </span>
-      </span>
-      {selected && <SelectionMark />}
-    </button>
-  );
-}
-
-function CompactCard({
-  title,
-  selected,
-  onClick,
-}: {
-  title: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={`flex min-h-[54px] w-full touch-manipulation items-center gap-3.5 rounded-2xl border-2 px-[18px] py-3.5 text-left transition-[transform,background-color,border-color] duration-200 ease-out active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] ${
-        selected
-          ? "border-[#2f6bff] bg-[#f1f5ff]"
-          : "border-transparent bg-[#f7f8fa]"
-      }`}
-    >
-      <span className="min-w-0 flex-1 text-[15px] leading-[22px] font-medium tracking-[0.144px] text-[#191f28]">
-        {title}
-      </span>
-      {selected && <SelectionMark />}
-    </button>
   );
 }
 

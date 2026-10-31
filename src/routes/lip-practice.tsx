@@ -764,7 +764,7 @@ export default function LipPractice() {
         nav={false}
         viewportLocked
         animateRoute={false}
-        chromeColor="#ffffff"
+        chromeColor="#f2f4f6"
         bottomChromeColor="#ffffff"
       >
         <LipQuickStart

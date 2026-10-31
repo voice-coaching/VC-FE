@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, type ReactNode } from "react";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
+import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
 import { CanonicalLipResult } from "@/components/canonical-lip-result";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
@@ -19,13 +21,6 @@ import type {
   Id,
   PracticeContent,
 } from "@/lib/api";
-
-const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
-  NEWS: "뉴스 읽기",
-  SENTENCE: "문장 연습",
-  ANNOUNCER: "아나운서 따라 읽기",
-  CLASS_PRACTICE: "클래스",
-};
 
 function segmentText(segment: AnalysisSegment) {
   return segment.expectedText?.trim() || `문장 ${segment.sequenceNo}`;
@@ -59,7 +54,6 @@ export function AnalysisView({
   content,
   recordingUrl,
   recordingId,
-  courseMode = false,
   reportParameter = "report",
   corrections,
 }: {
@@ -107,9 +101,6 @@ export function AnalysisView({
       canonicalCoaching.feedback?.trim()) ||
     analysis.summaryFeedback?.trim() ||
     "제공된 AI 총평이 없습니다.";
-  const sourceLabel = courseMode
-    ? "클래스"
-    : CONTENT_LABEL[content.contentType];
   const scoreRows = useMemo(() => {
     const score = analysis.canonical?.canonicalAnalysis?.score;
     if (score?.validity === "RUBRIC_COMPUTED") {
@@ -322,15 +313,13 @@ export function AnalysisView({
               ) : (
                 <UnavailableAudio label="내 음성 데이터 없음" primary />
               )}
-              {content.referenceAudioAvailable ? (
-                <ReferencePlayer
-                  contentId={content.id}
-                  title="가이드 음성 듣기"
-                  buttonTone="neutral"
-                />
-              ) : (
-                <UnavailableAudio label="가이드 음성 데이터 없음" />
-              )}
+              <GuidePlayer
+                contentId={content.id}
+                available={content.referenceAudioAvailable}
+                text={selected.expectedText || content.scriptText}
+                title="가이드 음성 듣기"
+                buttonTone="neutral"
+              />
             </div>
           </section>
 
@@ -424,15 +413,13 @@ export function AnalysisView({
               ) : (
                 <UnavailableAudio label="내 음성 데이터 없음" primary />
               )}
-              {content.referenceAudioAvailable ? (
-                <ReferencePlayer
-                  contentId={content.id}
-                  title="가이드 전체 듣기"
-                  buttonTone="neutral"
-                />
-              ) : (
-                <UnavailableAudio label="가이드 음성 데이터 없음" />
-              )}
+              <GuidePlayer
+                contentId={content.id}
+                available={content.referenceAudioAvailable}
+                text={content.scriptText}
+                title="가이드 전체 듣기"
+                buttonTone="neutral"
+              />
             </div>
           </section>
         </div>
@@ -448,13 +435,6 @@ export function AnalysisView({
         className={`min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
         <section className="flex flex-col items-center gap-4 pt-2">
-          <p className="flex min-w-0 max-w-full items-center gap-2 text-[13px] leading-[18px]">
-            <b className="shrink-0 text-primary">{sourceLabel}</b>
-            <span className="h-2.5 w-px shrink-0 bg-[#e5e8eb]" />
-            <span className="min-w-0 max-w-[240px] truncate font-medium text-[#8b95a1]">
-              {content.title}
-            </span>
-          </p>
           <AnalysisSummary key={summary} text={summary} />
         </section>
         {analysis.canonical && <CanonicalLipResult view={analysis.canonical} />}
@@ -491,17 +471,15 @@ export function AnalysisView({
             ) : (
               <UnavailableAudio label="내 녹음 데이터 없음" primary />
             )}
-            {content.referenceAudioAvailable ? (
-              <ReferencePlayer
-                key={overlay ? "hidden-guide" : "summary-guide"}
-                dense
-                contentId={content.id}
-                title="가이드 전체 듣기"
-                buttonTone="neutral"
-              />
-            ) : (
-              <UnavailableAudio label="가이드 데이터 없음" />
-            )}
+            <GuidePlayer
+              key={overlay ? "hidden-guide" : "summary-guide"}
+              dense
+              contentId={content.id}
+              available={content.referenceAudioAvailable}
+              text={content.scriptText}
+              title="가이드 전체 듣기"
+              buttonTone="neutral"
+            />
           </div>
         </section>
 
@@ -743,34 +721,53 @@ function ReportOverlay({
   children: ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col overflow-x-clip bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28] [touch-action:pan-y_pinch-zoom]">
-      <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="피드백으로 돌아가기"
-          className="flex size-10 items-center justify-center"
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) onBack();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col overflow-x-clip bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28] outline-none [touch-action:pan-y_pinch-zoom]"
         >
-          <Image src="/figma/settings/back.svg" alt="" width={24} height={24} />
-        </button>
-        <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
-          {title}
-        </h1>
-        {trailing ? (
-          <span className="absolute right-3 text-[12px] leading-4 font-bold text-[#8b95a1]">
-            {trailing}
-          </span>
-        ) : null}
-      </header>
-      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain [overflow-wrap:anywhere]">
-        {children}
-      </div>
-      {footer ? (
-        <div className="shrink-0 bg-white px-5 pt-3 pb-[max(24px,env(safe-area-inset-bottom,0px))]">
-          {footer}
-        </div>
-      ) : null}
-    </div>
+          <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="피드백으로 돌아가기"
+              className="flex size-10 items-center justify-center"
+            >
+              <Image
+                src="/figma/settings/back.svg"
+                alt=""
+                width={24}
+                height={24}
+              />
+            </button>
+            <Dialog.Title asChild>
+              <h1 className="pointer-events-none absolute inset-x-12 text-center text-[17px] leading-6 font-bold">
+                {title}
+              </h1>
+            </Dialog.Title>
+            {trailing ? (
+              <span className="absolute right-3 text-[12px] leading-4 font-bold text-[#8b95a1]">
+                {trailing}
+              </span>
+            ) : null}
+          </header>
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain [overflow-wrap:anywhere]">
+            {children}
+          </div>
+          {footer ? (
+            <div className="shrink-0 bg-white px-5 pt-3 pb-[max(24px,env(safe-area-inset-bottom,0px))]">
+              {footer}
+            </div>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -858,12 +855,14 @@ function CorrectionCard({
           원문
         </span>
         <strong>{segment.expectedText || "데이터 미제공"}</strong>
-        <ReferencePlayer
+        <GuidePlayer
           contentId={content.id}
+          available={content.referenceAudioAvailable}
+          text={segment.expectedText || content.scriptText}
           title="가이드 전체 듣기"
           variant="comparison"
           buttonTone="primary"
-          disabled={disabled || !content.referenceAudioAvailable}
+          disabled={disabled}
         />
       </div>
       <div className={styles.feedbackLine}>

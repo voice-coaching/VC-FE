@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { createRemoteApi } from "../src/lib/api/remote";
 import { ApiError } from "../src/lib/api/client";
-import type { CanonicalAnalysisView } from "../src/lib/canonical-analysis";
+import {
+  CANONICAL_PROFILE,
+  CANONICAL_VIEW_SCHEMA,
+  type CanonicalAnalysisView,
+} from "../src/lib/canonical-analysis";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -11,8 +15,8 @@ afterEach(() => {
 
 function view(): CanonicalAnalysisView {
   return {
-    schemaVersion: "voice-coaching.canonical-analysis-view.v1",
-    analysisProfile: "CANONICAL_FROZEN_20260928_V4",
+    schemaVersion: CANONICAL_VIEW_SCHEMA,
+    analysisProfile: CANONICAL_PROFILE,
     analysisId: 88,
     recordingId: 55,
     requestId: "00000000-0000-4000-8000-000000000001",
@@ -78,7 +82,7 @@ function server(current: CanonicalAnalysisView) {
       ? { status: "COMPLETED", analysisId: 88, progressPercent: 100 }
       : path.endsWith("/training-sessions/77")
         ? { id: 77, selectedRecordingId: 55 }
-        : path.endsWith("/v2/analyses/88")
+        : path.endsWith("/v3/analyses/88")
           ? current
           : { completed: true };
     return new Response(JSON.stringify({ result: true, data }), {

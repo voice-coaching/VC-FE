@@ -20,7 +20,7 @@ export default function SavedPage() {
       .then(async (saves) => {
         const rows = await Promise.all(
           saves
-            .filter((item) => item.source === "SESSION")
+            .filter((item) => item.source === "SESSION" && item.saved)
             .map(async (item) => {
               const detail = await api.myPage.getTrainingSession(
                 item.referenceId,
@@ -47,6 +47,9 @@ export default function SavedPage() {
         AI 리포트
       </div>
       <section className="space-y-3 p-5" aria-label="저장한 AI 리포트">
+        <p className="text-xs leading-5 text-[#8b95a1]">
+          리포트 저장 목록은 현재 기기에 보관돼요.
+        </p>
         {loading ? (
           <p role="status">리포트를 불러오는 중이에요</p>
         ) : error ? (
