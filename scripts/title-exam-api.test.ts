@@ -100,9 +100,11 @@ test("exam session uses pinned content, exam ID, null course and pronunciation f
   assert.equal(await createTitleExamSession(api(), "456", "123"), 789);
 });
 
-test("existing exam session is reused without a second creation", async () => {
-  globalThis.fetch = async (_url, init) => {
-    assert.notEqual(init?.method, "POST");
+test("existing exam session is resolved through the server's locked reuse path", async () => {
+  const calls: string[] = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (init?.method === "POST") return json({ sessionId: 789 });
     return json({
       id: 456,
       practiceContentId: 123,
@@ -111,6 +113,75 @@ test("existing exam session is reused without a second creation", async () => {
     });
   };
   assert.equal(await createTitleExamSession(api(), 456, 123), 789);
+  assert.deepEqual(calls, [
+    "GET /api/backend/api/users/me/title-exams/456",
+    "POST /api/backend/api/training-sessions",
+  ]);
+});
+
+test("a fresh exam opens recording preparation without a resume session", async () => {
+  globalThis.fetch = async () =>
+    json({
+      id: 456,
+      practiceContentId: 123,
+      status: "READY",
+      trainingSessionId: null,
+    });
+  const url = new URL(
+    await prepareTitleExam(api(), "/mypage", "fresh-key"),
+    "https://local.test",
+  );
+  assert.equal(url.searchParams.get("start"), "1");
+  assert.equal(url.searchParams.get("sessionId"), null);
+  assert.equal(url.searchParams.get("titleExamId"), "456");
+});
+
+test("reopening a cancelled exam records again and obtains a replacement session", async () => {
+  const { loadPracticeResume } = await import("../src/lib/practice-resume");
+  let posts = 0;
+  globalThis.fetch = async (url, init) => {
+    const path = String(url);
+    if (
+      path.endsWith("/users/me/title-exams") ||
+      path.endsWith("/title-exams/456")
+    )
+      return json({
+        id: 456,
+        practiceContentId: 123,
+        status: "IN_PROGRESS",
+        trainingSessionId: 789,
+      });
+    if (path.endsWith("/789/recordings")) return json({ items: [] });
+    if (path.endsWith("/training-sessions/789"))
+      return json({
+        id: 789,
+        status: "CANCELED",
+        content: { id: 123 },
+        selectedRecordingId: null,
+        analysisAvailable: false,
+      });
+    assert.equal(path, "/api/backend/api/training-sessions");
+    assert.equal(init?.method, "POST");
+    assert.equal(JSON.parse(String(init?.body)).titleExamId, 456);
+    posts++;
+    return json({ sessionId: 790 });
+  };
+  const client = api();
+  const url = new URL(
+    await prepareTitleExam(client, "/mypage", "retry-key"),
+    "https://local.test",
+  );
+  const restored = await loadPracticeResume(
+    client,
+    url.searchParams.get("sessionId")!,
+    123,
+    true,
+  );
+  assert.equal(restored.phase, "idle");
+  assert.equal(restored.sessionId, null);
+  assert.equal(posts, 0);
+  assert.equal(await createTitleExamSession(client, 456, 123), 790);
+  assert.equal(posts, 1);
 });
 
 test("mismatched content and graded exams cannot create recording sessions", async () => {
