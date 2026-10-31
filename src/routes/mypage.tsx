@@ -7,7 +7,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { NicknameEditor } from "@/components/nickname-editor";
+import { MyProfileBand, MyPageHead } from "@/components/my-page-frame";
+import { MyGrowthChart } from "@/components/my-growth-chart";
 import layout from "@/components/my-page-layout.module.css";
 import {
   api,
@@ -21,22 +22,7 @@ import {
   readMyPageOverviewCache,
   updateMyPageOverviewCache,
 } from "@/lib/my-page-cache";
-import {
-  getTitleTrainingCountDisplay,
-  getUserTitleProgress,
-} from "@/lib/user-title";
-
-function titlePercent(progress: UserTitleProgress | null) {
-  if (!progress) return 0;
-  if (!progress.next) return 100;
-  const span = Math.max(
-    1,
-    progress.next.requiredTrainingCount - progress.minimumTrainingCount,
-  );
-  const completed =
-    progress.completedTrainingCount - progress.minimumTrainingCount;
-  return Math.min(100, Math.max(0, Math.round((completed / span) * 100)));
-}
+import { getUserTitleProgress } from "@/lib/user-title";
 
 export default function MyPage() {
   const router = useRouter();
@@ -45,6 +31,8 @@ export default function MyPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(
     initialOverview?.statistics ?? null,
   );
+  const [lifetimeStatistics, setLifetimeStatistics] =
+    useState<Statistics | null>(null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(
     initialOverview?.feedback ?? null,
   );
@@ -68,73 +56,81 @@ export default function MyPage() {
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
       api.users.getTitle(),
-    ]).then(([userResult, statsResult, feedbackResult, titleResult]) => {
-      if (!active) return;
-      setLoading(false);
-      const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
+      api.myPage.getStatistics({ period: "ALL" }),
+    ]).then(
+      ([
+        userResult,
+        statsResult,
+        feedbackResult,
+        titleResult,
+        lifetimeResult,
+      ]) => {
+        if (!active) return;
+        setLoading(false);
+        if (lifetimeResult.status === "fulfilled")
+          setLifetimeStatistics(lifetimeResult.value);
+        const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
 
-      if (userResult.status === "fulfilled") {
-        setAccount(userResult.value);
-        cachePatch.nickname = userResult.value.nickname;
-      }
-      if (statsResult.status === "fulfilled") {
-        setStatistics(statsResult.value);
-        cachePatch.statistics = statsResult.value;
-      }
-      if (feedbackResult.status === "fulfilled") {
-        setFeedback(feedbackResult.value);
-        cachePatch.feedback = feedbackResult.value;
-      }
+        if (userResult.status === "fulfilled") {
+          setAccount(userResult.value);
+          cachePatch.nickname = userResult.value.nickname;
+        }
+        if (statsResult.status === "fulfilled") {
+          setStatistics(statsResult.value);
+          cachePatch.statistics = statsResult.value;
+        }
+        if (feedbackResult.status === "fulfilled") {
+          setFeedback(feedbackResult.value);
+          cachePatch.feedback = feedbackResult.value;
+        }
 
-      if (titleResult.status === "fulfilled") {
-        setTitleProgress(titleResult.value);
-        cachePatch.titleProgress = titleResult.value;
-      } else if (
-        statsResult.status === "fulfilled" &&
-        !initialOverview?.titleProgress
-      ) {
-        const fallback = getUserTitleProgress(
-          "ABSOLUTE_BEGINNER",
-          statsResult.value.totalSessionCount,
-        );
-        // Only the title API can grant exam eligibility.
-        if (fallback.next) fallback.next.eligible = false;
-        setTitleProgress(fallback);
-        cachePatch.titleProgress = fallback;
-      }
+        if (titleResult.status === "fulfilled") {
+          setTitleProgress(titleResult.value);
+          cachePatch.titleProgress = titleResult.value;
+        } else if (
+          statsResult.status === "fulfilled" &&
+          !initialOverview?.titleProgress
+        ) {
+          const fallback = getUserTitleProgress(
+            "ABSOLUTE_BEGINNER",
+            statsResult.value.totalSessionCount,
+          );
+          // Only the title API can grant exam eligibility.
+          if (fallback.next) fallback.next.eligible = false;
+          setTitleProgress(fallback);
+          cachePatch.titleProgress = fallback;
+        }
 
-      if (Object.keys(cachePatch).length > 0) {
-        updateMyPageOverviewCache(cachePatch);
-      }
+        if (Object.keys(cachePatch).length > 0) {
+          updateMyPageOverviewCache(cachePatch);
+        }
 
-      const firstUncoveredFailure =
-        userResult.status === "rejected" &&
-        !cachedUser &&
-        !initialOverview?.nickname
-          ? userResult
-          : statsResult.status === "rejected" && !initialOverview?.statistics
-            ? statsResult
-            : feedbackResult.status === "rejected" && !initialOverview?.feedback
-              ? feedbackResult
-              : null;
-      if (firstUncoveredFailure) {
-        setError(
-          firstUncoveredFailure.reason instanceof Error
-            ? firstUncoveredFailure.reason.message
-            : "마이페이지를 불러오지 못했습니다.",
-        );
-      }
-    });
+        const firstUncoveredFailure =
+          userResult.status === "rejected" &&
+          !cachedUser &&
+          !initialOverview?.nickname
+            ? userResult
+            : statsResult.status === "rejected" && !initialOverview?.statistics
+              ? statsResult
+              : feedbackResult.status === "rejected" &&
+                  !initialOverview?.feedback
+                ? feedbackResult
+                : null;
+        if (firstUncoveredFailure) {
+          setError(
+            firstUncoveredFailure.reason instanceof Error
+              ? firstUncoveredFailure.reason.message
+              : "마이페이지를 불러오지 못했습니다.",
+          );
+        }
+      },
+    );
     return () => {
       active = false;
     };
   }, [initialOverview, retry]);
 
-  const percent = titlePercent(titleProgress);
-  const titleTrainingCount = titleProgress
-    ? getTitleTrainingCountDisplay(titleProgress)
-    : null;
-  const totalSeconds = statistics?.totalLearningSeconds ?? 0;
+  const totalSeconds = lifetimeStatistics?.totalLearningSeconds ?? 0;
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const learningTime = hours ? `${hours}시간 ${minutes}분` : `${minutes}분`;
@@ -157,156 +153,23 @@ export default function MyPage() {
   }
 
   return (
-    <AppShell
-      chromeColor="#c5d6ff"
-      viewportLocked
-      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
-    >
-      <div className="absolute inset-x-0 top-0 h-[262px] bg-[#c5d6ff]" />
-
-      <header className="absolute inset-x-0 top-0 z-10 grid h-10 grid-cols-[24px_1fr_24px] items-center px-5">
-        <span aria-hidden="true" />
-        <h1 className="text-center text-[17px] leading-6 font-bold text-[#191f28]">
-          마이
-        </h1>
-        <Link
-          href="/mypage/settings"
-          aria-label="설정"
-          className="flex size-10 -translate-x-2 items-center justify-center justify-self-center"
-        >
-          <Image
-            src="/figma/mypage/settings.svg"
-            alt=""
-            width={24}
-            height={24}
-          />
-        </Link>
-      </header>
-
-      <section className="absolute inset-x-0 top-10 z-10 flex h-[222px] flex-col items-center pt-5">
-        <div
-          className="relative size-[104px] rounded-[42px] p-1.5"
-          style={{
-            background: `conic-gradient(#2f6bff ${percent * 3.6}deg, rgba(255,255,255,.58) 0deg)`,
-          }}
-        >
-          <span className="relative block size-full overflow-hidden rounded-[37px] border-2 border-white bg-[#edf2ff]">
-            <Image
-              src="/figma/mypage/avatar-character.png"
-              alt=""
-              fill
-              sizes="92px"
-              className="scale-[1.18] object-contain object-bottom"
-              priority
-            />
-          </span>
-          {titleProgress ? (
-            <span className="absolute top-[89px] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border-2 border-white bg-primary px-2.5 py-1 text-[11px] leading-[14px] font-bold text-white">
-              {titleProgress.label}
-            </span>
-          ) : null}
-        </div>
-        <NicknameEditor
+    <AppShell chromeColor="#ccdbff" viewportLocked className={layout.shell}>
+      <div className={layout.content}>
+        <MyProfileBand
           account={account}
           fallbackName={initialOverview?.nickname}
+          statistics={statistics}
+          titleProgress={titleProgress}
+          loading={loading}
         />
-        {statistics ? (
-          <p className="mt-1 flex items-center gap-2 text-[13px] leading-[18px] font-medium text-[#3d4a5c]">
-            <span>연속 {statistics.consecutiveLearningDays}일</span>
-            <span className="h-2.5 w-px bg-[#8fa0bc]" />
-            <span>총 {statistics.totalSessionCount}회 연습</span>
-          </p>
-        ) : (
-          <p className="mt-1 text-[13px] leading-[18px] text-[#3d4a5c]">
-            {loading
-              ? "학습 기록을 불러오는 중"
-              : "학습 기록을 확인하지 못했어요"}
-          </p>
-        )}
-      </section>
-
-      <div
-        className={`absolute inset-x-0 top-[262px] bottom-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] ${layout.content}`}
-      >
-        <div className="bg-white px-5 pt-4">
-          {titleProgress ? (
-            <button
-              type="button"
-              disabled={!titleProgress.next?.eligible || examStarting}
-              onClick={() => void startTitleExam()}
-              className="flex min-h-[72px] w-full items-center rounded-[20px] bg-[#edf2ff] py-4 pr-4 pl-[18px] text-left disabled:opacity-100"
-            >
-              <span className="min-w-0 flex-1">
-                <strong className="block text-[15px] leading-[22px] font-bold text-[#191f28]">
-                  {titleProgress.next
-                    ? titleProgress.next.eligible
-                      ? "승급 시험 응시 가능"
-                      : `연습 ${titleProgress.next.remainingTrainingCount}회 남았어요`
-                    : `누적 ${titleProgress.completedTrainingCount}회 연습했어요`}
-                </strong>
-                <span className="mt-[3px] block text-[12px] leading-4 font-medium text-[#4e5968]">
-                  {titleProgress.next
-                    ? `다음 칭호  ${titleProgress.next.label}  `
-                    : "최고 칭호"}
-                  <b className="text-primary">
-                    {titleTrainingCount?.completed}
-                  </b>
-                  <span className="text-[#8b95a1]">
-                    /{titleTrainingCount?.required}회
-                  </span>
-                </span>
-              </span>
-              {titleProgress.next?.eligible ? (
-                <span className="flex shrink-0 items-center gap-0.5 rounded-xl bg-primary px-3.5 py-2.5 text-[14px] leading-5 font-bold text-white">
-                  {examStarting ? "준비 중" : "시험 보기"}
-                  <Image
-                    src="/figma/mypage/chevron-right-white.svg"
-                    alt=""
-                    width={20}
-                    height={20}
-                  />
-                </span>
-              ) : (
-                <span className="shrink-0 text-[17px] leading-6 font-bold text-primary">
-                  {percent}%
-                </span>
-              )}
-            </button>
-          ) : loading ? (
-            <div className="h-[76px] animate-pulse rounded-2xl bg-[#edf2ff]" />
-          ) : (
-            <p className="flex min-h-[76px] items-center justify-center rounded-2xl bg-[#edf2ff] px-4 text-center text-[13px] text-[#6b7684]">
-              칭호 정보를 확인하지 못했어요
-            </p>
-          )}
-
-          <nav
-            aria-label="마이페이지 메뉴"
-            className="mt-3 grid h-11 grid-cols-3 border-b border-[#e5e8eb]"
-          >
-            <Link
-              href="/mypage"
-              aria-current="page"
-              className="relative flex items-center justify-center text-[15px] font-bold text-[#191f28] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#191f28]"
-            >
-              요약
-            </Link>
-            <Link
-              href="/mypage/history"
-              className="flex items-center justify-center text-[15px] font-medium text-[#8b95a1]"
-            >
-              기록
-            </Link>
-            <Link
-              href="/mypage/plan"
-              className="flex items-center justify-center text-[15px] font-medium text-[#8b95a1]"
-            >
-              계획
-            </Link>
-          </nav>
-        </div>
-
-        <div className="space-y-3 px-5 pt-4 pb-6">
+        <MyPageHead
+          active="summary"
+          titleProgress={titleProgress}
+          examStarting={examStarting}
+          onExam={() => void startTitleExam()}
+          loading={loading}
+        />
+        <div className="space-y-3 px-5 pt-3 pb-6">
           {error ? (
             <div className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive">
               <p role="alert">{error}</p>
@@ -326,64 +189,74 @@ export default function MyPage() {
             </div>
           ) : null}
 
-          <section className="rounded-2xl bg-white px-4 py-[18px]">
-            <p className="text-[15px] leading-[22px] font-bold text-[#333d4b]">
-              이번 달 연습 기록
-            </p>
-            <div className="mt-4 grid grid-cols-3 divide-x divide-[#e5e8eb] text-center">
+          <section className="rounded-[20px] bg-white py-4">
+            <div className="grid grid-cols-3 divide-x divide-[#f2f4f6] text-center">
               <Metric
                 label="연습 횟수"
-                value={statistics ? `${statistics.totalSessionCount}회` : "—"}
+                value={
+                  lifetimeStatistics
+                    ? `${lifetimeStatistics.totalSessionCount}회`
+                    : "—"
+                }
               />
               <Metric
-                label="연습 시간"
-                value={statistics ? learningTime : "—"}
+                label="누적 연습 시간"
+                value={lifetimeStatistics ? learningTime : "—"}
               />
               <Metric
                 label="평균 점수"
                 value={
-                  statistics?.totalSessionCount
-                    ? `${Math.round(statistics.averageOverallScore)}점`
+                  lifetimeStatistics?.totalSessionCount
+                    ? `${Math.round(lifetimeStatistics.averageOverallScore)}점`
                     : "—"
                 }
               />
             </div>
           </section>
 
-          <section className="rounded-2xl bg-white px-4 py-[18px]">
+          <MyGrowthChart />
+
+          <section className="rounded-[20px] bg-white p-[18px]">
             <div className="flex items-center justify-between">
               <h2 className="text-[15px] leading-[22px] font-bold text-[#333d4b]">
-                나의 발음 리포트
+                내 리포트
               </h2>
               <span className="text-[11px] leading-[14px] text-[#8b95a1]">
                 이번 달 기준
               </span>
             </div>
-            <div className="mt-4 space-y-4">
+            <div className="mt-3.5 space-y-3.5">
               <ReportRow
                 title="잘하는 발음"
+                tone="strength"
                 items={(feedback?.strengths ?? []).map((item) => item.label)}
                 pending={loading && !feedback}
                 failed={!loading && !feedback}
               />
               <ReportRow
                 title="자주 틀리는 발음"
+                tone="weakness"
                 items={(feedback?.weaknesses ?? []).map((item) => item.label)}
                 pending={loading && !feedback}
                 failed={!loading && !feedback}
               />
-              <ReportRow title="억양 특성" items={[]} unavailable />
+              <ReportRow
+                tone="intonation"
+                title="억양 특성"
+                items={[]}
+                unavailable
+              />
             </div>
             <Link
               href="/class/pronunciation"
-              className="mt-5 flex min-h-12 items-center justify-center rounded-xl bg-[#edf2ff] text-[14px] font-bold text-primary"
+              className="mt-3.5 flex min-h-11 items-center justify-center rounded-full bg-[#eaf0ff] text-[14px] font-bold text-primary"
             >
               약점 집중 연습하기
               <Image
-                src="/figma/mypage/chevron-right-blue.svg"
+                src="/figma/mypage-improved/practice-chevron.svg"
                 alt=""
-                width={20}
-                height={20}
+                width={16}
+                height={16}
                 className="ml-1"
               />
             </Link>
@@ -400,27 +273,56 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="truncate text-[17px] leading-6 font-bold text-[#191f28]">
         {value}
       </p>
-      <p className="mt-1 text-[11px] leading-[14px] text-[#8b95a1]">{label}</p>
+      <p className="mt-1 text-xs leading-4 text-[#8b95a1]">{label}</p>
     </div>
   );
 }
 
 function ReportRow({
   title,
+  tone,
   items,
   unavailable = false,
   pending = false,
   failed = false,
 }: {
   title: string;
+  tone: "strength" | "weakness" | "intonation";
   items: string[];
   unavailable?: boolean;
   pending?: boolean;
   failed?: boolean;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <h3 className="shrink-0 pt-1 text-[13px] leading-[18px] text-[#6b7684]">
+    <div className="flex items-center justify-between gap-3">
+      <h3 className="flex shrink-0 items-center gap-1.5 text-[13px] leading-[18px] text-[#4e5968]">
+        <span className="relative size-4">
+          <Image
+            src={`/figma/mypage-improved/${tone}.svg`}
+            alt=""
+            width={
+              tone === "strength" ? 25.1309 : tone === "weakness" ? 28.9157 : 18
+            }
+            height={
+              tone === "strength"
+                ? 25.1309
+                : tone === "weakness"
+                  ? 28.9157
+                  : 14.625
+            }
+            className="absolute max-w-none"
+            style={{
+              left:
+                tone === "strength" ? -4.82 : tone === "weakness" ? -6.51 : 0,
+              top:
+                tone === "strength"
+                  ? -5.03
+                  : tone === "weakness"
+                    ? -6.46
+                    : 0.69,
+            }}
+          />
+        </span>
         {title}
       </h3>
       <div className="flex flex-wrap justify-end gap-1.5">
@@ -428,7 +330,7 @@ function ReportRow({
           items.map((item) => (
             <span
               key={item}
-              className="rounded-full bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 font-semibold text-[#333d4b]"
+              className={`rounded-full px-2 py-[3px] text-xs leading-4 font-medium ${tone === "strength" ? "bg-[#e6f7ee] text-[#0e7a47]" : tone === "weakness" ? "bg-[#ffedef] text-[#f04452]" : "bg-[#eaf0ff] text-primary"}`}
             >
               {item}
             </span>

@@ -16,7 +16,7 @@
     "native:assets": "node scripts/sync-native-icons.mjs && npx --yes @capacitor/assets@3.0.5 generate --ios --android --iconBackgroundColor '#2f6bff' --iconBackgroundColorDark '#2f6bff' --splashBackgroundColor '#336fff' --splashBackgroundColorDark '#336fff'",
     "native:doctor": "cap doctor",
     "native:android": "cap open android",
-    "native:ios": "cap open ios"
+    "native:ios": "cap sync ios && cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -27,6 +27,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@google-cloud/text-to-speech": "^7.1.0",
     "@hookform/resolvers": "^5.2.2",
+    "@portone/browser-sdk": "^0.1.13",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",

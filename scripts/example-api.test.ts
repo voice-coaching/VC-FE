@@ -35,6 +35,14 @@ test("DB examples use the course/step API with pinned session", async () => {
     7,
   );
 });
+test("class entry resolves examples without a frontend-selected step", async () => {
+  globalThis.fetch = async (url) => {
+    assert.equal(String(url), "/api/backend/api/courses/60/practice-examples");
+    return json({ courseId: 60, stepId: 12, revision: 8, items: [] });
+  };
+  const result = await createRemoteApi("/api/backend").examples.listCourse(60);
+  assert.equal(result.stepId, 12);
+});
 test("MP3 requests share token refresh with JSON requests", async () => {
   saveAccessToken("expired");
   let refreshes = 0;

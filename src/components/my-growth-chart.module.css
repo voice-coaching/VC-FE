@@ -1,0 +1,119 @@
+.card {
+  padding: 20px 20px 18px;
+  border-radius: 20px;
+  background: white;
+}
+.period {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 999px;
+  background: #f2f4f6;
+  color: #4e5968;
+  font-size: 12px;
+  line-height: 16px;
+}
+.period[data-state="open"] {
+  color: #2f6bff;
+  background: #eaf0ff;
+  outline: 1px solid #2f6bff;
+}
+.menu {
+  z-index: 50;
+  width: 170px;
+  padding: 6px;
+  border: 1px solid #edf0f5;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 6px 20px #1a338014;
+}
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  outline: none;
+  color: #191f28;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.menuItem small {
+  display: block;
+  color: #8b95a1;
+  font-size: 11px;
+  line-height: 16px;
+}
+.menuItem[data-state="checked"],
+.menuItem[data-highlighted] {
+  background: #f2f6ff;
+  color: #2f6bff;
+}
+.chart {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  overflow-x: auto;
+  margin-top: 18px;
+  scrollbar-width: thin;
+}
+.barButton {
+  min-width: 22px;
+  flex: 1;
+  text-align: center;
+}
+.barArea {
+  display: flex;
+  position: relative;
+  height: 118px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.bar {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  background: #e5ecff;
+  transition: background-color 160ms ease;
+}
+.bar[data-recent="true"] {
+  background: #c9d9ff;
+}
+.bar[data-active="true"] {
+  background: linear-gradient(#5b8dff, #2f6bff);
+}
+.tooltip {
+  margin-bottom: 6px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #2f6bff;
+  color: white;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tooltip[data-historical="true"] {
+  background: #191f28;
+}
+.barLabel {
+  display: block;
+  margin-top: 6px;
+  color: #b0b8c1;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.barLabel[data-active="true"] {
+  color: #2f6bff;
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}

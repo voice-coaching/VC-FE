@@ -1,10 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEventHandler } from "react";
+import { CreditCard } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { NicknameEditor } from "@/components/nickname-editor";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import {
   Dialog,
@@ -17,8 +20,13 @@ import {
   api,
   type NotificationPreferences,
   type NoticeSummary,
+  type UserAccount,
 } from "@/lib/api";
-import { getAuthenticatedUserId } from "@/lib/auth-session";
+import {
+  getAuthenticatedUserId,
+  getCachedUser,
+  markAuthenticatedUser,
+} from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import {
   CLIENT_CACHE_DAY_MAX_AGE_MS,
@@ -101,6 +109,27 @@ export default function AccountSettings() {
   const [inquiryEmail, setInquiryEmail] = useState("");
   const [inquirySending, setInquirySending] = useState(false);
   const [inquirySent, setInquirySent] = useState(false);
+  const [account, setAccount] = useState<UserAccount | null>(() =>
+    getCachedUser(),
+  );
+
+  useEffect(() => {
+    if (account) return;
+    let active = true;
+    api.users
+      .getMe()
+      .then((user) => {
+        if (!active) return;
+        markAuthenticatedUser(user);
+        setAccount(user);
+      })
+      .catch(() => {
+        // The row stays disabled; the rest of settings remains usable.
+      });
+    return () => {
+      active = false;
+    };
+  }, [account]);
 
   useEffect(() => {
     let active = true;
@@ -295,6 +324,39 @@ export default function AccountSettings() {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
+        <section className="bg-white">
+          <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
+            계정
+          </h2>
+          <NicknameEditor account={account} row />
+          <Link
+            href="/mypage/payments"
+            className="flex h-14 w-full items-center gap-3.5 px-5 py-2 text-left"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center text-[#4e5968]">
+              <CreditCard aria-hidden className="size-[22px]" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] leading-[22px] font-medium">
+                이용권 · 결제 내역
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-4 text-[#8b95a1]">
+                {account?.membershipType === "paid"
+                  ? "월간 이용권 이용 중"
+                  : account?.membershipType === "admin"
+                    ? "테스트 이용등급 이용 중"
+                    : "무료 이용 중"}
+              </span>
+            </span>
+            <Image
+              src="/figma/settings/chevron-right.svg"
+              alt=""
+              width={18}
+              height={18}
+            />
+          </Link>
+        </section>
+
         <section className="bg-white">
           <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
             연습 환경

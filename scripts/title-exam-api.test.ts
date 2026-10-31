@@ -140,9 +140,21 @@ test("grading sends only the server analysis ID, never a client score", async ()
     );
     assert.equal(init?.method, "POST");
     assert.deepEqual(JSON.parse(String(init?.body)), { analysisId: 789 });
-    return json({ examId: 456, passed: true, status: "PASSED", score: 80 });
+    return json({
+      examId: 456,
+      passed: true,
+      status: "PASSED",
+      score: 80,
+      passingScore: 75,
+      previousTitle: "초보",
+      currentTitle: "동네 아나운서",
+      evaluatedAt: "2026-10-16T00:00:00Z",
+    });
   };
-  assert.equal((await api().users.submitTitleExam(456, 789)).passed, true);
+  const result = await api().users.submitTitleExam(456, 789);
+  assert.equal(result.passed, true);
+  assert.ok(result.score >= result.passingScore);
+  assert.equal(result.currentTitle, "동네 아나운서");
 });
 
 test("all example difficulties use the existing content API and pronunciation filter", async () => {

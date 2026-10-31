@@ -43,6 +43,11 @@ export type UserTitleLabel =
 export type DayOfWeek = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 export type InquiryStatus = "RECEIVED" | "IN_PROGRESS" | "ANSWERED" | "CLOSED";
 export type AnalysisMediaType = "AUDIO_ONLY" | "AUDIO_VISUAL";
+export type MembershipType = "free" | "paid" | "admin";
+export type MembershipEnvironment = string | null;
+export type PaymentOrderStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+export type PaymentActionStatus =
+  "UNKNOWN" | "PENDING" | "SUCCEEDED" | "FAILED";
 
 export interface ApiEnvelope<T> {
   result: boolean;
@@ -69,6 +74,46 @@ export interface UserAccount {
   loginProviders: Array<"LOCAL" | SocialProvider>;
   onboardingCompleted: boolean;
   createdAt: string;
+  membershipType: MembershipType;
+  membershipExpiresAt: string | null;
+  membershipEnvironment: MembershipEnvironment;
+}
+
+export interface PaymentOrder {
+  orderId: string;
+  product: string;
+  orderName: string;
+  totalAmount: number;
+  currency: "KRW";
+  status: PaymentOrderStatus;
+  environment: "TEST";
+  expiresAt: string | null;
+  storeId: string;
+  channelKey: string;
+}
+
+export interface PaymentHistoryItem {
+  orderId: string;
+  product: string;
+  orderName: string;
+  totalAmount: number;
+  currency: "KRW";
+  status: PaymentOrderStatus;
+  environment: "TEST";
+  createdAt: string;
+  paidAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface PaymentActionResult {
+  requestId: string;
+  orderId: string;
+  status: PaymentActionStatus;
+  amount?: number;
+  currency?: "KRW";
+  environment?: "TEST";
+  requestedAt: string;
+  updatedAt: string;
 }
 
 export interface ProfileImage {
@@ -842,6 +887,7 @@ export interface ApiContract {
     getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
   };
   examples: {
+    listCourse(courseId: Id): Promise<PracticeExamples>;
     list(courseId: Id, stepId: Id, sessionId?: Id): Promise<PracticeExamples>;
     getAudio(exampleId: string, signal?: AbortSignal): Promise<Blob>;
   };
@@ -972,6 +1018,21 @@ export interface ApiContract {
       limit?: number;
       contentType?: ContentType;
     }): Promise<WeaknessRecommendations>;
+  };
+  payments: {
+    createOrder(idempotencyKey: string): Promise<PaymentOrder>;
+    getOrder(orderId: string): Promise<PaymentOrder>;
+    verifyOrder(orderId: string): Promise<PaymentOrder>;
+    listOrders(filters?: {
+      page?: number;
+      size?: number;
+    }): Promise<PageResult<PaymentHistoryItem>>;
+    cancel(orderId: string, reason: string): Promise<PaymentActionResult>;
+    requestRefund(
+      orderId: string,
+      reason: string,
+    ): Promise<PaymentActionResult>;
+    getRefundRequest(requestId: string): Promise<PaymentActionResult>;
   };
   notifications: {
     getPreferences(): Promise<NotificationPreferences>;

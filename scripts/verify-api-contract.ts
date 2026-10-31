@@ -216,6 +216,7 @@ await api.content.get(1);
 await api.content.getRecommendations(1, 5);
 await api.content.getReferenceAudios(1);
 await api.content.getReferenceAudioPlaybackUrl(1);
+await api.examples.listCourse(1);
 await api.examples.list(1, 1, 1);
 await api.examples.getAudio("example-1");
 await api.courses.list({ type: "PRONUNCIATION", page: 0, size: 20 });

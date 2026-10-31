@@ -1,4 +1,3 @@
-import { requireAnalysisScope } from "./api/analysis-capabilities";
 import type { ApiContract, Id } from "./api/types";
 import { ApiError } from "./api/client";
 
@@ -33,7 +32,6 @@ export async function prepareTitleExam(
   returnTo: string,
   idempotencyKey: string,
 ) {
-  await requireAnalysisScope("TITLE_EXAM");
   const created = await api.users.createTitleExam(idempotencyKey);
   // Creation may replay the original READY response for an existing exam.
   const exam = await api.users.getTitleExam(created.id);
@@ -59,7 +57,6 @@ export async function createTitleExamSession(
   examId: Id,
   contentId: Id,
 ) {
-  await requireAnalysisScope("TITLE_EXAM");
   const exam = await api.users.getTitleExam(examId);
   if (String(exam.practiceContentId) !== String(contentId))
     throw new Error(

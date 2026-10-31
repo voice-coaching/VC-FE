@@ -6,7 +6,13 @@ import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
 import { CanonicalLipResult } from "@/components/canonical-lip-result";
-import { CanonicalScoreCriteria } from "@/components/canonical-score-criteria";
+import { canonicalCriterionPoints } from "@/lib/canonical-score";
+import {
+  CorrectionComparison,
+  type ReportCorrection,
+} from "@/components/report-correction";
+import { ReportScore } from "@/components/report-score";
+import styles from "./report-design.module.css";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -20,10 +26,6 @@ const CONTENT_LABEL: Record<PracticeContent["contentType"], string> = {
   ANNOUNCER: "아나운서 따라 읽기",
   CLASS_PRACTICE: "클래스",
 };
-
-function scoreText(score: number | null) {
-  return score == null ? "—" : score.toFixed(1);
-}
 
 function segmentText(segment: AnalysisSegment) {
   return segment.expectedText?.trim() || `문장 ${segment.sequenceNo}`;
@@ -59,6 +61,7 @@ export function AnalysisView({
   recordingId,
   courseMode = false,
   reportParameter = "report",
+  corrections,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -67,9 +70,18 @@ export function AnalysisView({
   recordingId?: Id;
   courseMode?: boolean;
   reportParameter?: string;
+  corrections?: ReportCorrection[];
 }) {
+  const canonicalCore = analysis.canonical?.canonicalAnalysis;
+  const reviewItems =
+    corrections ??
+    (canonicalCore?.feedbackDeliveryAllowed &&
+    canonicalCore.coaching?.adapterStatus === "READY"
+      ? canonicalCore.coaching.items
+      : []);
   const [report, setReport] = useHistoryPanel(reportParameter, [
     "pronunciation",
+    ...reviewItems.map((item) => `correction:${item.candidate.candidateId}`),
     ...segments.map((segment) => `sentence:${segment.id}`),
   ]);
   const selected = segments.find(
@@ -99,6 +111,20 @@ export function AnalysisView({
     ? "클래스"
     : CONTENT_LABEL[content.contentType];
   const scoreRows = useMemo(() => {
+    const score = analysis.canonical?.canonicalAnalysis?.score;
+    if (score?.validity === "RUBRIC_COMPUTED") {
+      return canonicalCriterionPoints(score).map((row) => ({
+        id: row.criterionId,
+        label: row.label,
+        description:
+          "이번 녹음에서 분석한 발음 항목의 점수예요. 원고에 없는 항목은 종합 점수에서 제외해요.",
+        score: row.points,
+        maxScore: row.maxPoints,
+        available: row.points != null,
+        phones: [] as string[],
+        sampleCount: null as number | null,
+      }));
+    }
     if (analysis.scoreBreakdown?.items.length) {
       return analysis.scoreBreakdown.items.map((item) => ({
         id: item.criterionId,
@@ -107,6 +133,8 @@ export function AnalysisView({
         score: item.score,
         maxScore: item.maxScore,
         available: item.applicable,
+        phones: item.expectedPhones,
+        sampleCount: item.sampleCount,
       }));
     }
     if (analysis.scoreHierarchy?.groups.length) {
@@ -117,38 +145,30 @@ export function AnalysisView({
         score: group.score,
         maxScore: group.maxScore,
         available: group.score != null,
+        phones: [] as string[],
+        sampleCount: null as number | null,
       }));
     }
     return [];
-  }, [analysis.scoreBreakdown, analysis.scoreHierarchy]);
+  }, [analysis.canonical, analysis.scoreBreakdown, analysis.scoreHierarchy]);
 
   let overlay: ReactNode = null;
   if (report === "pronunciation") {
     overlay = (
       <ReportOverlay title="발음 분석" onBack={() => setReport(null)}>
         <div className="px-5 pt-1">
-          <section className="flex min-h-[112px] items-center gap-3 rounded-[18px] bg-white px-5 py-[18px]">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] leading-[22px] font-bold">
-                종합 점수
-              </h2>
-              <p className="mt-1 text-[12px] leading-4 text-[#8b95a1]">
-                이번 녹음의 발음 분석 결과예요
-              </p>
-            </div>
-            <ScoreRing score={overallScore} />
+          <section className="flex flex-col items-center gap-1.5 rounded-[18px] bg-white px-5 pt-7 pb-6">
+            <ReportScore score={overallScore} large />
+            <h2 className="text-[15px] leading-[22px] font-bold">종합 점수</h2>
+            <p className="text-xs leading-4 text-[#8b95a1]">
+              이번 녹음의 발음 분석 결과예요
+            </p>
           </section>
         </div>
         <div className="space-y-2.5 px-5 pt-3 pb-6">
-          {analysis.canonical?.canonicalAnalysis?.score.validity ===
-          "RUBRIC_COMPUTED" ? (
-            <CanonicalScoreCriteria view={analysis.canonical} />
-          ) : scoreRows.length ? (
+          {scoreRows.length ? (
             scoreRows.map((row) => (
-              <details
-                key={row.id}
-                className="overflow-hidden rounded-2xl bg-white"
-              >
+              <details key={row.id} className={styles.criterion}>
                 <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2.5 px-[18px] py-4 marker:hidden">
                   <strong className="min-w-0 flex-1 text-[16px] leading-6">
                     {row.label}
@@ -174,12 +194,29 @@ export function AnalysisView({
                     alt=""
                     width={18}
                     height={18}
-                    className="rotate-90"
                   />
                 </summary>
-                <p className="border-t border-[#f2f4f6] px-[18px] py-4 text-[13px] leading-5 text-[#6b7684]">
-                  {row.description || "세부 설명이 제공되지 않았습니다."}
-                </p>
+                <div className={styles.criterionBody}>
+                  {row.phones.length > 0 && (
+                    <>
+                      <p className="text-xs font-bold text-[#8b95a1]">
+                        이번 문장에서 분석한 소리
+                      </p>
+                      <div className={styles.phones}>
+                        {row.phones.map((phone, index) => (
+                          <span key={`${phone}-${index}`}>{phone}</span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <p>{row.description || "세부 설명이 제공되지 않았습니다."}</p>
+                  {row.sampleCount != null && (
+                    <p className="mt-3 text-xs text-[#8b95a1]">
+                      분석 대상{" "}
+                      <b className="text-[#4e5968]">{row.sampleCount}개</b>
+                    </p>
+                  )}
+                </div>
               </details>
             ))
           ) : (
@@ -229,7 +266,12 @@ export function AnalysisView({
               </span>
             </div>
             <p className="mt-2 text-[17px] leading-6 font-bold">
-              {segmentText(selected)}
+              <HighlightedText
+                text={segmentText(selected)}
+                targets={
+                  problem && selected.targetUnit ? [selected.targetUnit] : []
+                }
+              />
             </p>
           </section>
         </div>
@@ -257,17 +299,14 @@ export function AnalysisView({
             <h2 className="text-[20px] leading-7 font-bold">
               {selected.targetUnit || segmentText(selected)}
             </h2>
-            <p className="mt-2.5 text-[15px] leading-6 font-medium">
-              {selected.feedback?.trim() ||
-                (problem
-                  ? "이 문장에 대한 세부 피드백이 제공되지 않았어요."
-                  : "이번 문장은 또렷하게 읽었어요.")}
-            </p>
-            {problem && selected.recognizedText ? (
-              <p className="mt-3 rounded-xl bg-[#fff2f3] px-3 py-2 text-[13px] text-[#f04f5f]">
-                인식된 소리: {selected.recognizedText}
-              </p>
-            ) : null}
+            <div className="mt-2.5">
+              <CorrectionCard
+                segment={selected}
+                recordingUrl={recordingUrl}
+                recordingId={recordingId}
+                content={content}
+              />
+            </div>
             <h3 className="mt-[18px] text-[15px] leading-[22px] font-bold">
               소리 비교
             </h3>
@@ -277,6 +316,7 @@ export function AnalysisView({
                   source={recordingUrl}
                   recordingId={recordingId}
                   title="내 음성 듣기"
+                  {...recordingRange(selected)}
                   buttonTone="primary"
                 />
               ) : (
@@ -329,6 +369,77 @@ export function AnalysisView({
     );
   }
 
+  const selectedCorrection = reviewItems.find(
+    (item) => report === `correction:${item.candidate.candidateId}`,
+  );
+  if (selectedCorrection) {
+    const word = selectedCorrection.candidate.facts[0]?.location.word;
+    const index = reviewItems.indexOf(selectedCorrection);
+    overlay = (
+      <ReportOverlay
+        title="발음별 피드백"
+        trailing={`${index + 1} / ${reviewItems.length}`}
+        onBack={() => setReport(null)}
+        footer={
+          <button
+            type="button"
+            onClick={() => setReport(null)}
+            className="h-14 w-full rounded-full bg-primary text-base font-bold text-white"
+          >
+            확인하기
+          </button>
+        }
+      >
+        <div className="space-y-4 px-5 pt-1 pb-6">
+          <section className="rounded-2xl bg-white px-5 py-[18px]">
+            <p className="mb-2 text-xs font-bold text-[#f04f5f]">
+              다시 확인할 발음
+            </p>
+            <p className="text-[17px] leading-6 font-bold">
+              <HighlightedText
+                text={content.scriptText}
+                targets={word ? [word] : []}
+              />
+            </p>
+          </section>
+          <section className="rounded-2xl bg-white p-5">
+            <h2 className="mb-2.5 text-xl font-bold">
+              {word || selectedCorrection.candidate.expectedPhone}
+            </h2>
+            <CorrectionComparison
+              item={selectedCorrection}
+              recordingUrl={recordingUrl}
+              recordingId={recordingId}
+              detail
+            />
+            <h3 className="mt-[18px] text-[15px] font-bold">소리 비교</h3>
+            <div className="mt-2.5 space-y-2.5">
+              {recordingUrl || recordingId != null ? (
+                <ReferencePlayer
+                  source={recordingUrl}
+                  recordingId={recordingId}
+                  title="내 녹음 전체 듣기"
+                  buttonTone="primary"
+                />
+              ) : (
+                <UnavailableAudio label="내 음성 데이터 없음" primary />
+              )}
+              {content.referenceAudioAvailable ? (
+                <ReferencePlayer
+                  contentId={content.id}
+                  title="가이드 전체 듣기"
+                  buttonTone="neutral"
+                />
+              ) : (
+                <UnavailableAudio label="가이드 음성 데이터 없음" />
+              )}
+            </div>
+          </section>
+        </div>
+      </ReportOverlay>
+    );
+  }
+
   return (
     <>
       <div
@@ -348,18 +459,30 @@ export function AnalysisView({
         </section>
         {analysis.canonical && <CanonicalLipResult view={analysis.canonical} />}
 
-        <section className="rounded-2xl bg-white p-4">
+        <section className="rounded-2xl bg-gradient-to-b from-white to-[#f6f8ff] p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
             연습 문장
           </h2>
           <p className="mt-1.5 text-[15px] leading-[1.5] font-medium">
-            {content.scriptText}
+            <HighlightedText
+              text={content.scriptText}
+              targets={[
+                ...needsReview.flatMap((item) =>
+                  item.targetUnit ? [item.targetUnit] : [],
+                ),
+                ...reviewItems.flatMap((item) =>
+                  item.candidate.facts.map((fact) => fact.location.word),
+                ),
+              ]}
+              primary
+            />
           </p>
           <div className="mt-3.5 grid grid-cols-2 gap-2">
             {/* Stop playback and cancel pending audio loads when details open. */}
             {recordingUrl || recordingId != null ? (
               <ReferencePlayer
                 key={overlay ? "hidden-recording" : "summary-recording"}
+                dense
                 source={recordingUrl}
                 recordingId={recordingId}
                 title="내 녹음 전체 듣기"
@@ -371,6 +494,7 @@ export function AnalysisView({
             {content.referenceAudioAvailable ? (
               <ReferencePlayer
                 key={overlay ? "hidden-guide" : "summary-guide"}
+                dense
                 contentId={content.id}
                 title="가이드 전체 듣기"
                 buttonTone="neutral"
@@ -384,74 +508,78 @@ export function AnalysisView({
         <button
           type="button"
           onClick={() => setReport("pronunciation")}
-          className="flex min-h-[72px] w-full items-center gap-3 rounded-[20px] bg-white p-5 text-left"
+          className={styles.scoreCard}
         >
-          <strong className="flex-1 text-[17px] leading-6">종합 점수</strong>
-          <span className="flex items-end gap-1">
-            <b className="text-[20px] leading-7 text-primary">
-              {scoreText(overallScore)}
-            </b>
-            {overallScore != null ? (
-              <span className="text-[12px] leading-4 text-[#8b95a1]">
-                / 100
-              </span>
-            ) : null}
+          <ReportScore score={overallScore} />
+          <span className="flex items-center gap-0.5 text-[17px] leading-6 font-bold">
+            종합 점수
+            <Image
+              src="/figma/report/chevron.svg"
+              alt=""
+              width={18}
+              height={18}
+            />
           </span>
-          <Image
-            src="/figma/report/chevron.svg"
-            alt=""
-            width={18}
-            height={18}
-          />
         </button>
 
+        {reviewItems.length > 0 && (
+          <section className="rounded-[20px] bg-white px-5 py-0.5">
+            <h2 className="flex min-h-[54px] items-center gap-2 text-[17px] font-bold">
+              <ReportIcon name="warning" />
+              <span className="flex-1">다시 확인할 발음</span>
+              <span className="text-[13px] text-[#f04f5f]">
+                {reviewItems.length}개
+              </span>
+            </h2>
+            {reviewItems.map((item, index) => (
+              <div key={item.candidate.candidateId} className="pb-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReport(`correction:${item.candidate.candidateId}`)
+                  }
+                  className="flex min-h-11 w-full items-start gap-3 pb-2.5 text-left"
+                >
+                  <span className="text-[13px] leading-6 text-[#8b95a1]">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="flex-1 text-base font-medium">
+                    {item.candidate.facts[0]?.location.word ||
+                      item.candidate.expectedPhone}
+                  </span>
+                  <Image
+                    src="/figma/report/chevron.svg"
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="mt-1"
+                  />
+                </button>
+                <CorrectionComparison
+                  key={overlay ? "hidden" : "visible"}
+                  item={item}
+                  recordingUrl={recordingUrl}
+                  recordingId={recordingId}
+                  disabled={overlay != null}
+                />
+              </div>
+            ))}
+          </section>
+        )}
         {segments.length ? (
           <div className="space-y-3">
-            <section className="rounded-[20px] bg-white px-5 py-4">
-              <h2 className="text-[17px] leading-6 font-bold">
-                이번 연습 결과
-              </h2>
-              <p className="mt-[3px] text-[13px] leading-[18px] text-[#8b95a1]">
-                {segments.length}개 문장을 분석했어요
-              </p>
-              <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-[#eef0f3]">
-                <span
-                  className="bg-[#f04f5f]"
-                  style={{ flexGrow: needsReview.length }}
-                />
-                <span
-                  className="bg-[#10a87b]"
-                  style={{ flexGrow: good.length }}
-                />
-                <span
-                  className="bg-[#98a2b2]"
-                  style={{ flexGrow: unavailable.length }}
-                />
-              </div>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <StatusChip
-                  icon="warning"
-                  label="다시 확인"
-                  count={needsReview.length}
-                  tone="warning"
-                />
-                <StatusChip
-                  icon="check"
-                  label="잘 읽음"
-                  count={good.length}
-                  tone="check"
-                />
-                <StatusChip
-                  icon="info"
-                  label="분석 어려움"
-                  count={unavailable.length}
-                  tone="info"
-                />
-              </div>
-            </section>
-
             <SegmentSection
               title="다시 확인해 보세요"
+              renderCorrection={(segment) => (
+                <CorrectionCard
+                  key={overlay ? "hidden" : "visible"}
+                  segment={segment}
+                  recordingUrl={overlay ? undefined : recordingUrl}
+                  recordingId={overlay ? undefined : recordingId}
+                  content={content}
+                  disabled={overlay != null}
+                />
+              )}
               items={needsReview}
               icon="warning"
               tone="warning"
@@ -473,7 +601,7 @@ export function AnalysisView({
               onSelect={openSentence}
             />
           </div>
-        ) : (
+        ) : reviewItems.length ? null : (
           <section className="rounded-[20px] bg-white p-5">
             <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
             <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
@@ -502,53 +630,6 @@ function formatPoints(value: number) {
   );
 }
 
-function ScoreRing({ score }: { score: number | null }) {
-  const clamped = score == null ? 0 : Math.min(100, Math.max(0, score));
-  return (
-    <span
-      className="flex size-[76px] shrink-0 items-center justify-center rounded-full p-1.5"
-      style={{
-        background: `conic-gradient(#2f6bff ${clamped}%, #eef0f3 0)`,
-      }}
-    >
-      <span className="flex size-full items-center justify-center rounded-full bg-white">
-        <b className="text-[20px] leading-7">{scoreText(score)}</b>
-        {score != null ? (
-          <span className="ml-px self-center pt-2 text-[11px] font-bold text-[#8b95a1]">
-            점
-          </span>
-        ) : null}
-      </span>
-    </span>
-  );
-}
-
-function StatusChip({
-  icon,
-  label,
-  count,
-  tone,
-}: {
-  icon: "warning" | "check" | "info";
-  label: string;
-  count: number;
-  tone: "warning" | "check" | "info";
-}) {
-  const styles = {
-    warning: "bg-[#fff2f3] text-[#f04f5f]",
-    check: "bg-[#eefaf6] text-[#10a87b]",
-    info: "bg-white text-[#4e5968]",
-  };
-  return (
-    <span
-      className={`flex items-center gap-1 rounded-[10px] px-2.5 py-1.5 text-[12px] leading-4 font-medium ${styles[tone]}`}
-    >
-      <ReportIcon name={icon} size={14} />
-      {label} <b>{count}</b>
-    </span>
-  );
-}
-
 function SegmentSection({
   title,
   items,
@@ -556,6 +637,7 @@ function SegmentSection({
   tone,
   onSelect,
   defaultOpen = true,
+  renderCorrection,
 }: {
   title: string;
   items: AnalysisSegment[];
@@ -563,6 +645,7 @@ function SegmentSection({
   tone: "warning" | "check" | "info";
   onSelect: (segment: AnalysisSegment) => void;
   defaultOpen?: boolean;
+  renderCorrection?: (segment: AnalysisSegment) => ReactNode;
 }) {
   const toneText = {
     warning: "text-[#f04f5f]",
@@ -588,26 +671,37 @@ function SegmentSection({
         />
       </summary>
       {items.map((segment) => (
-        <button
-          key={String(segment.id)}
-          type="button"
-          onClick={() => onSelect(segment)}
-          className="flex min-h-[56px] w-full items-start gap-3 pb-4 pt-1 text-left"
-        >
-          <span className="shrink-0 pt-0.5 text-[13px] leading-6 text-[#8b95a1]">
-            {String(segment.sequenceNo).padStart(2, "0")}
-          </span>
-          <span className="min-w-0 flex-1 text-[16px] leading-6 font-medium">
-            {segmentText(segment)}
-          </span>
-          <Image
-            src="/figma/report/chevron.svg"
-            alt=""
-            width={16}
-            height={16}
-            className="mt-1"
-          />
-        </button>
+        <div key={String(segment.id)}>
+          <button
+            type="button"
+            onClick={() => onSelect(segment)}
+            className="flex min-h-[56px] w-full items-start gap-3 pb-4 pt-1 text-left"
+          >
+            <span className="shrink-0 pt-0.5 text-[13px] leading-6 text-[#8b95a1]">
+              {String(segment.sequenceNo).padStart(2, "0")}
+            </span>
+            <span className="min-w-0 flex-1 text-[16px] leading-6 font-medium">
+              <HighlightedText
+                text={segmentText(segment)}
+                targets={
+                  tone === "warning" && segment.targetUnit
+                    ? [segment.targetUnit]
+                    : []
+                }
+              />
+            </span>
+            <Image
+              src="/figma/report/chevron.svg"
+              alt=""
+              width={16}
+              height={16}
+              className="mt-1"
+            />
+          </button>
+          {renderCorrection && (
+            <div className="pb-4">{renderCorrection(segment)}</div>
+          )}
+        </div>
       ))}
       {items.length === 0 ? (
         <p className="pb-4 text-[13px] text-[#8b95a1]">
@@ -676,6 +770,111 @@ function ReportOverlay({
           {footer}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function recordingRange(segment: {
+  startMs: number | null;
+  endMs: number | null;
+}) {
+  if (
+    segment.startMs == null ||
+    segment.endMs == null ||
+    segment.startMs < 0 ||
+    segment.endMs <= segment.startMs
+  )
+    return {};
+  return {
+    startSeconds: segment.startMs / 1000,
+    endSeconds: segment.endMs / 1000,
+  };
+}
+
+function HighlightedText({
+  text,
+  targets,
+  primary = false,
+}: {
+  text: string;
+  targets: string[];
+  primary?: boolean;
+}) {
+  const words = [...new Set(targets.filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+  if (!words.length) return <>{text}</>;
+  const pattern = new RegExp(
+    `(${words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+    "g",
+  );
+  return (
+    <>
+      {text.split(pattern).map((part, index) =>
+        words.includes(part) ? (
+          <span
+            key={index}
+            className={`underline underline-offset-4 ${primary ? "text-primary" : "text-[#f04f5f]"}`}
+          >
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+function CorrectionCard({
+  segment,
+  recordingUrl,
+  recordingId,
+  content,
+  disabled = false,
+}: {
+  segment: AnalysisSegment;
+  recordingUrl?: string;
+  recordingId?: Id;
+  content: AnalysisViewContent;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={styles.correction}>
+      <div className={styles.comparisonLine}>
+        <span className={styles.chip}>인식된 말</span>
+        <strong>{segment.recognizedText || "데이터 미제공"}</strong>
+        <ReferencePlayer
+          source={recordingUrl}
+          recordingId={recordingId}
+          {...recordingRange(segment)}
+          title="내 음성 듣기"
+          variant="comparison"
+          disabled={disabled || (!recordingUrl && recordingId == null)}
+        />
+      </div>
+      <div className={styles.comparisonLine}>
+        <span className={styles.chip} data-tone="correct">
+          원문
+        </span>
+        <strong>{segment.expectedText || "데이터 미제공"}</strong>
+        <ReferencePlayer
+          contentId={content.id}
+          title="가이드 전체 듣기"
+          variant="comparison"
+          buttonTone="primary"
+          disabled={disabled || !content.referenceAudioAvailable}
+        />
+      </div>
+      <div className={styles.feedbackLine}>
+        <span className={styles.chip} data-tone="feedback">
+          피드백
+        </span>
+        <p>
+          {segment.feedback?.trim() ||
+            "이 문장의 세부 피드백이 제공되지 않았어요."}
+        </p>
+      </div>
     </div>
   );
 }

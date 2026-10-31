@@ -1,4 +1,6 @@
 "use client";
+import { ReportSaveDialog } from "@/components/report-save-dialog";
+import { reportSaves } from "@/lib/report-saves";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -6,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { DirectAnalysisResult } from "@/components/direct-analysis-result";
 import { ReferencePlayer } from "@/components/reference-player";
+import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { SentenceReader } from "@/components/sentence-reader";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { prepareDirectAudio } from "@/lib/direct-audio";
@@ -40,6 +43,7 @@ export function DirectPracticeSession({
   onTitleChange?: (title: string) => void;
 }) {
   const router = useRouter();
+  const [saveReportOpen, setSaveReportOpen] = useState(false);
   const recorder = useAudioRecorder();
   const [view, setView] = useState<DirectView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -330,11 +334,19 @@ export function DirectPracticeSession({
           </button>
           <button
             type="button"
-            onClick={() => router.push("/home")}
+            onClick={() => setSaveReportOpen(true)}
             className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white"
           >
             완료하기
           </button>
+          <ReportSaveDialog
+            open={saveReportOpen}
+            onOpenChange={setSaveReportOpen}
+            onConfirm={async (saved) => {
+              await reportSaves.set("DIRECT", view.jobId, saved);
+              router.push("/home");
+            }}
+          />
         </div>
       </div>
     );
@@ -345,7 +357,9 @@ export function DirectPracticeSession({
       {discardGuard.dialog}
       {(phase === "idle" || phase === "recording") && (
         <>
-          <div className="flex shrink-0 items-center px-5 pt-3 pb-4">
+          <div
+            className={`flex shrink-0 items-center px-5 pt-3 pb-4 transition-opacity duration-300 motion-reduce:transition-none ${phase === "recording" ? "opacity-0" : "opacity-100"}`}
+          >
             <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-[12px] leading-4 font-medium text-[#1f55e0]">
               {CONTENT_LABEL[content.contentType]}
             </span>
@@ -367,44 +381,17 @@ export function DirectPracticeSession({
             </span>
           </div>
           <SentenceReader
+            variant={phase === "recording" ? "recording" : "reader"}
             sentences={sentences}
             activeIndex={phase === "recording" ? activeSentence : undefined}
-            className="mx-5 max-h-[clamp(80px,calc(100dvh-440px),360px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+            className={`mx-5 max-h-[clamp(80px,calc(100dvh-380px),400px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]`}
           />
         </>
       )}
 
       {phase === "idle" && (
-        <div className="mt-auto flex flex-col items-center gap-4 px-5 pb-16">
-          <div className="flex items-start gap-9">
-            {recorder.status === "requesting" ? (
-              <span className="h-[84px] w-14" aria-hidden="true" />
-            ) : (
-              <ReferencePlayer
-                contentId={content.id}
-                variant="guide"
-                disabled={!content.referenceAudioAvailable}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => void startNewRecording()}
-              disabled={recorder.status === "requesting"}
-              className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-45"
-              aria-label="녹음 시작"
-            >
-              <Image
-                src="/figma/practice/mic.svg"
-                alt=""
-                width={32}
-                height={32}
-              />
-            </button>
-            <span className="h-[84px] w-14" aria-hidden="true" />
-          </div>
-          <p className="text-center text-[14px] leading-5 font-medium text-[#8b95a1]">
-            한 문장을 다 읽으면 가운데 문장 녹음 완료 버튼을 눌러 주세요
-          </p>
+        <div className="px-5">
+          {" "}
           {message ? (
             <p
               role="alert"
@@ -424,71 +411,30 @@ export function DirectPracticeSession({
           ) : null}
         </div>
       )}
-
-      {phase === "recording" && (
-        <div className="mt-auto flex flex-col items-center gap-4 px-5 pb-16">
-          <div
-            className="flex h-12 items-center justify-center gap-1"
-            aria-hidden="true"
-          >
-            {[
-              10, 18, 30, 22, 42, 27, 13, 33, 48, 28, 17, 38, 23, 43, 20, 32,
-              12, 27, 18, 10,
-            ].map((height, index) => (
-              <span
-                key={index}
-                className="w-1 animate-pulse rounded-sm bg-[#2f6bff]"
-                style={{ height, animationDelay: `${index * 35}ms` }}
-              />
-            ))}
-          </div>
-          <p className="flex items-center gap-2 text-[15px] leading-[22px] font-bold text-[#191f28]">
-            <Image
-              src="/figma/practice/rec-dot.svg"
-              alt=""
-              width={8}
-              height={8}
-            />
-            <span>
-              {recorder.status === "stopping" ? "녹음 마무리 중" : "녹음 중"}
-            </span>
-            {formatElapsed(recorder.elapsedMs)}
-          </p>
-          <div className="flex items-start gap-9">
-            <span className="h-[84px] w-14" aria-hidden="true" />
-            <button
-              type="button"
-              onClick={() => {
-                if (recorder.status !== "recording") return;
-                if (activeSentence < sentences.length - 1) {
-                  setSentenceBoundaries((current) => {
-                    const next = [...current];
-                    next[activeSentence + 1] = recorder.getElapsedMs() / 1_000;
-                    return next;
-                  });
-                  setActiveSentence((current) => current + 1);
-                } else recorder.stop();
-              }}
-              disabled={recorder.status !== "recording"}
-              className="flex size-[76px] items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-55"
-              aria-label={
-                activeSentence < sentences.length - 1
-                  ? "문장 녹음 완료"
-                  : "전체 녹음 완료"
-              }
-            >
-              <span className="size-6 rounded-md bg-white" />
-            </button>
-            <span className="h-[84px] w-14" aria-hidden="true" />
-          </div>
-          <p className="text-center text-[14px] leading-5 font-medium text-[#8b95a1]">
-            {activeSentence < sentences.length - 1
-              ? "문장 녹음을 완료하면 다음 문장으로 자동으로 넘어가요"
-              : "다 읽으면 가운데 정지 버튼으로 녹음을 완료해 주세요"}
-          </p>
-        </div>
+      {(phase === "idle" || phase === "recording") && (
+        <SentenceRecordingControls
+          recording={phase === "recording"}
+          requesting={recorder.status === "requesting"}
+          onStart={() => void startNewRecording()}
+          stream={recorder.getStream()}
+          contentId={content.id}
+          referenceAvailable={content.referenceAudioAvailable}
+          elapsed={formatElapsed(recorder.elapsedMs)}
+          busy={recorder.status !== "recording"}
+          last={activeSentence === sentences.length - 1}
+          onComplete={() => {
+            if (recorder.status !== "recording") return;
+            if (activeSentence < sentences.length - 1) {
+              setSentenceBoundaries((current) => {
+                const next = [...current];
+                next[activeSentence + 1] = recorder.getElapsedMs() / 1_000;
+                return next;
+              });
+              setActiveSentence((current) => current + 1);
+            } else recorder.stop();
+          }}
+        />
       )}
-
       {phase === "review" && recorder.previewUrl && (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-6">

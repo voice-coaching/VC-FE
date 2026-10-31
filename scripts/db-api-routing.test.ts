@@ -41,8 +41,12 @@ test("legacy developer flag cannot substitute DB catalog, examples or errors", a
     };
     assert.deepEqual(await api.content.get(103), { source: "database" });
     assert.deepEqual(await api.examples.list(301, 303), { source: "database" });
+    assert.deepEqual(await api.examples.listCourse(301), {
+      source: "database",
+    });
     assert.ok(paths[0].startsWith("/api/backend/api/"));
     assert.ok(paths[1].includes("/courses/301/steps/303/practice-examples"));
+    assert.ok(paths[2].includes("/courses/301/practice-examples"));
     globalThis.fetch = async () =>
       Response.json(
         { result: false, message: "Unavailable", code: "UNAVAILABLE" },
