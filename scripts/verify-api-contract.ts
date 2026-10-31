@@ -69,7 +69,9 @@ const expected = [
   "POST /api/training-sessions/1/complete",
   "GET /api/v3/analyses/1",
   "GET /api/users/me/statistics?period=MONTH",
+  "GET /api/users/me/statistics?from=2020-01-01",
   "GET /api/users/me/score-trends?metric=PRONUNCIATION&period=MONTH",
+  "GET /api/users/me/score-trends?metric=PRONUNCIATION&period=YEAR",
   "GET /api/users/me/strengths-weaknesses?period=MONTH&limit=5",
   "GET /api/users/me/training-sessions?type=SENTENCE&status=COMPLETED&page=0&size=20",
   "GET /api/users/me/training-sessions/1",
@@ -362,7 +364,9 @@ await assert.rejects(
     reason.code === "CANONICAL_REGENERATION_UNAVAILABLE",
 );
 await api.myPage.getStatistics({ period: "MONTH" });
+await api.myPage.getStatistics({ from: "2020-01-01" });
 await api.myPage.getScoreTrends("PRONUNCIATION", "MONTH");
+await api.myPage.getScoreTrends("PRONUNCIATION", "YEAR");
 await api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 });
 await api.myPage.listTrainingSessions({
   type: "SENTENCE",

@@ -611,6 +611,9 @@ export interface Statistics {
   averageIntonationScore: number;
 }
 
+export type MyPagePeriod = "WEEK" | "MONTH" | "THREE_MONTHS" | "YEAR";
+export type ScoreTrendMetric = "OVERALL" | "PRONUNCIATION" | "INTONATION";
+
 export interface ScoreTrend {
   metric: string;
   points: Array<{ date: string; score: number; sessionCount: number }>;
@@ -995,13 +998,16 @@ export interface ApiContract {
   };
   myPage: {
     getStatistics(filters?: {
-      period?: string;
+      period?: MyPagePeriod;
       from?: string;
       to?: string;
     }): Promise<Statistics>;
-    getScoreTrends(metric: string, period?: string): Promise<ScoreTrend>;
+    getScoreTrends(
+      metric: ScoreTrendMetric,
+      period?: MyPagePeriod,
+    ): Promise<ScoreTrend>;
     getStrengthsWeaknesses(filters?: {
-      period?: string;
+      period?: MyPagePeriod;
       limit?: number;
     }): Promise<StrengthsWeaknesses>;
     listTrainingSessions(filters?: {
