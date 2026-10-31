@@ -19,10 +19,10 @@ import type {
   UserAccount,
 } from "@/lib/api";
 import { paymentActionStatusLabel } from "@/lib/payment";
+import { paymentBackTarget, type PaymentView } from "@/lib/payment-navigation";
 import styles from "./membership.module.css";
 
-export type PaymentView =
-  "history" | "purchase" | "manage" | "detail" | "refund" | "success" | "error";
+export type { PaymentView } from "@/lib/payment-navigation";
 export type DisplayPaymentOrder = PaymentOrder | PaymentHistoryItem;
 
 const statusLabels = {
@@ -83,24 +83,40 @@ function Nav({
   fallback = "/mypage",
   close = false,
   large = false,
+  backTarget,
 }: {
   title: string;
   fallback?: string;
   close?: boolean;
   large?: boolean;
+  backTarget?: string | null;
 }) {
+  const icon = (
+    <Icon
+      name={close ? "close" : large ? "nav-back" : "back"}
+      width={close ? 18 : large ? 24 : 22}
+    />
+  );
   return (
     <header className={styles.nav}>
-      <BackButton
-        fallback={fallback}
-        aria-label={close ? "닫기" : "뒤로"}
-        className={styles.back}
-      >
-        <Icon
-          name={close ? "close" : large ? "nav-back" : "back"}
-          width={close ? 18 : large ? 24 : 22}
-        />
-      </BackButton>
+      {backTarget ? (
+        <Link
+          href={backTarget}
+          replace
+          aria-label="뒤로가기"
+          className={styles.back}
+        >
+          {icon}
+        </Link>
+      ) : (
+        <BackButton
+          fallback={fallback}
+          label={close ? "닫기" : "뒤로가기"}
+          className={styles.back}
+        >
+          {icon}
+        </BackButton>
+      )}
       <h1>{title}</h1>
       <span />
     </header>
@@ -190,6 +206,7 @@ export function PaymentViews(props: Props) {
           {view !== "success" && view !== "error" ? (
             <Nav
               title={title}
+              backTarget={paymentBackTarget(view)}
               fallback={
                 view === "detail" || view === "refund"
                   ? "/mypage/payments"
@@ -432,13 +449,9 @@ export function PaymentViews(props: Props) {
                     type="button"
                     className={styles.primaryButton}
                     disabled={Boolean(busy)}
-                    onClick={() =>
-                      selected?.status === "PENDING"
-                        ? props.onVerify(selected.orderId)
-                        : onNavigate("history")
-                    }
+                    onClick={() => onNavigate("history")}
                   >
-                    결제 상태 확인하기
+                    결제 내역 확인하기
                   </button>
                 </footer>
               </>

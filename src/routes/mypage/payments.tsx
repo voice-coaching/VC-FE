@@ -36,6 +36,7 @@ import {
   paymentVerificationMessage,
   runPaymentRequest,
 } from "@/lib/payment";
+import { paymentNavigation } from "@/lib/payment-navigation";
 
 type PaymentDialog = {
   kind: "cancel" | "refund";
@@ -89,10 +90,16 @@ export default function PaymentsPage() {
   const skipCleanNavigation = useRef(false);
 
   function navigatePayment(next: PaymentView, orderId?: string) {
-    const params = new URLSearchParams();
-    if (next !== "history") params.set("view", next);
-    if (orderId) params.set("order", orderId);
-    router.push(`/mypage/payments${params.size ? `?${params}` : ""}`);
+    const navigation = paymentNavigation(view, next, orderId);
+    if (view === "error" || view === "success") {
+      setError(null);
+      setNotice(null);
+      if (next === "history") {
+        skipCleanNavigation.current = false;
+        setRetry((value) => value + 1);
+      }
+    }
+    router[navigation.method](navigation.href);
   }
 
   useEffect(() => {
@@ -187,9 +194,11 @@ export default function PaymentsPage() {
           if (hasRedirectResult) {
             skipCleanNavigation.current = true;
             router.replace(
-              completedOrderId
-                ? `/mypage/payments?view=success&order=${encodeURIComponent(completedOrderId)}`
-                : "/mypage/payments",
+              redirectCode
+                ? "/mypage/payments?view=error"
+                : completedOrderId
+                  ? `/mypage/payments?view=success&order=${encodeURIComponent(completedOrderId)}`
+                  : "/mypage/payments",
               { scroll: false },
             );
           }
