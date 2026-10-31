@@ -22,6 +22,7 @@ export const cacheResources = {
   streakWeek: (from: string, to: string) => `streak-week-${from}-${to}`,
   notifications: "notifications-inbox",
   notificationPreferences: "notification-preferences",
+  paymentActions: "payment-actions",
   notices: "notices-page-0",
   historyDetail: (sessionId: Id) =>
     `training-history-detail-${value(sessionId)}`,

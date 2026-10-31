@@ -26,6 +26,7 @@ import {
   type AnalysisSegment,
   type Id,
   type PracticeContent,
+  type PracticeExamples,
   type VoiceRecording,
   type CourseDetail,
   type UserTitleExamResult,
@@ -36,6 +37,8 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
 import { courseResultProgress } from "@/lib/course-result-progress";
+import { classPracticeHref } from "@/lib/class-practice";
+import { safeInternalPath } from "@/lib/navigation";
 import {
   createTitleExamSession,
   titleExamErrorMessage,
@@ -108,6 +111,8 @@ function invalidateLearningCaches() {
 
 export function PracticeSession(props: {
   content: PracticeContent;
+  courseExamples?: PracticeExamples | null;
+  courseExampleIndex?: number | null;
   localOnly?: boolean;
   onTitleChange?: (title: string) => void;
   experienceLabel?: string;
@@ -121,6 +126,8 @@ export function PracticeSession(props: {
   const identity = [
     epoch,
     props.content.id,
+    props.courseExamples?.revision,
+    props.courseExampleIndex,
     params.get("sessionId"),
     params.get("courseStepId"),
     params.get("titleExamId"),
@@ -145,11 +152,15 @@ export function PracticeSession(props: {
 
 function PracticeSessionBody({
   content,
+  courseExamples = null,
+  courseExampleIndex = null,
   onTitleChange,
   localOnly = false,
   experienceLabel,
 }: {
   content: PracticeContent;
+  courseExamples?: PracticeExamples | null;
+  courseExampleIndex?: number | null;
   localOnly?: boolean;
   onTitleChange?: (title: string) => void;
   experienceLabel?: string;
@@ -214,10 +225,21 @@ function PracticeSessionBody({
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
+  const resolvedCourseStepId = courseExamples?.stepId ?? courseStepId;
+  const currentCourseExample =
+    courseExamples && courseExampleIndex != null
+      ? courseExamples.items[courseExampleIndex]
+      : null;
+  const courseSentenceCount = courseExamples?.items.length ?? null;
+  const isLastCourseSentence =
+    courseSentenceCount != null &&
+    courseExampleIndex != null &&
+    courseExampleIndex === courseSentenceCount - 1;
   const analysisLearningFocus =
-    titleExamId || content.learningFocus === "BOTH"
+    titleExamId ||
+    (currentCourseExample?.focus ?? content.learningFocus) === "BOTH"
       ? "PRONUNCIATION"
-      : content.learningFocus;
+      : (currentCourseExample?.focus ?? content.learningFocus);
   const submitTitleExamResult = useCallback(
     async (analysisId: Id) => {
       if (!titleExamId || titleExamSubmitBusy.current) return;
@@ -241,7 +263,9 @@ function PracticeSessionBody({
     [titleExamId],
   );
 
-  const sentences = splitSentences(content.scriptText);
+  const sentences = courseExamples
+    ? [content.scriptText]
+    : splitSentences(content.scriptText);
   useEffect(() => {
     if (!courseId) return;
     let active = true;
@@ -408,7 +432,7 @@ function PracticeSessionBody({
     }
     const session = await api.training.create({
       contentId: content.id,
-      courseStepId: courseStepId || null,
+      courseStepId: resolvedCourseStepId || null,
       titleExamId: titleExamId || null,
       learningFocus: analysisLearningFocus,
     });
@@ -425,7 +449,9 @@ function PracticeSessionBody({
     // reports TITLE_EXAM as unsupported and must not block an otherwise valid exam.
     if (!titleExamId)
       await requireAnalysisScope(
-        courseId || courseStepId || content.contentType === "CLASS_PRACTICE"
+        courseId ||
+          resolvedCourseStepId ||
+          content.contentType === "CLASS_PRACTICE"
           ? "COURSE"
           : "STANDALONE_AUDIO",
       );
@@ -659,12 +685,18 @@ function PracticeSessionBody({
     completedRef.current = true;
     analysisPendingRef.current = false;
 
-    if (courseId && courseStepId) {
+    // A course-level example set contains several independent sentence sessions.
+    // Only the last sentence may advance the class itself.
+    if (courseId && resolvedCourseStepId && !courseExamples) {
       const [steps, currentProgress] = await Promise.all([
         api.courses.getSteps(courseId),
         api.courses.getProgress(courseId),
       ]);
-      const update = courseResultProgress(steps, currentProgress, courseStepId);
+      const update = courseResultProgress(
+        steps,
+        currentProgress,
+        resolvedCourseStepId,
+      );
       const { progressPercent } = update;
       await api.courses.updateProgress(courseId, update);
       if (progressPercent >= 100) {
@@ -956,6 +988,52 @@ function PracticeSessionBody({
       return;
     }
     if (courseId) {
+      if (!completedRef.current) {
+        setRequestError(
+          "현재 문장의 완료 상태를 먼저 확인해 주세요. 결과는 그대로 유지됩니다.",
+        );
+        return;
+      }
+      if (courseExamples && courseExampleIndex != null) {
+        setLoadingNext(true);
+        setRequestError(null);
+        setRequestFailure(null);
+        try {
+          if (!isLastCourseSentence) {
+            const returnTo = safeInternalPath(
+              searchParams.get("returnTo"),
+              "/class",
+            );
+            router.push(
+              classPracticeHref(
+                courseExamples,
+                courseExampleIndex + 1,
+                returnTo,
+              ),
+            );
+            return;
+          }
+
+          await api.courses.updateProgress(courseId, {
+            lastStepId: courseExamples.stepId,
+            progressPercent: 100,
+          });
+          await api.courses.complete(courseId);
+          invalidateLearningCaches();
+          setCourseFinished(true);
+          setShowCompletion(true);
+          onTitleChange?.("클래스 완료");
+        } catch (reason) {
+          setRequestFailure(reason);
+          setRequestError(
+            reason instanceof Error
+              ? reason.message
+              : "현재 문장의 완료 상태를 저장하지 못했습니다. 다시 시도해 주세요.",
+          );
+          setLoadingNext(false);
+        }
+        return;
+      }
       if (courseFinished) {
         setShowCompletion(true);
         onTitleChange?.("클래스 완료");
@@ -1097,9 +1175,11 @@ function PracticeSessionBody({
             완료했어요
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            {courseDetail
-              ? `${courseDetail.stepCount}단계를 모두 마쳤어요`
-              : "모든 단계를 마쳤어요"}
+            {courseSentenceCount != null
+              ? `${courseSentenceCount}개 문장을 모두 마쳤어요`
+              : courseDetail
+                ? `${courseDetail.stepCount}단계를 모두 마쳤어요`
+                : "모든 단계를 마쳤어요"}
           </p>
           <section className="design-card mt-8 grid grid-cols-3 divide-x divide-border !px-2">
             <div>
@@ -1121,9 +1201,11 @@ function PracticeSessionBody({
               </p>
             </div>
             <div>
-              <b className="text-xl">{courseDetail?.stepCount ?? "—"}개</b>
+              <b className="text-xl">
+                {courseSentenceCount ?? courseDetail?.stepCount ?? "—"}개
+              </b>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                완료 단계
+                {courseSentenceCount != null ? "완료 문장" : "완료 단계"}
               </p>
             </div>
           </section>
@@ -1185,7 +1267,14 @@ function PracticeSessionBody({
               {contentTypeLabel}
             </span>
             <span className="ml-auto text-[13px] leading-[18px] text-[#8b95a1]">
-              {phase === "recording" ? (
+              {courseSentenceCount != null && courseExampleIndex != null ? (
+                <>
+                  <strong className="font-bold text-[#2f6bff]">
+                    {courseExampleIndex + 1}
+                  </strong>
+                  /{courseSentenceCount} 문장
+                </>
+              ) : phase === "recording" ? (
                 <>
                   <strong className="font-bold text-[#2f6bff]">
                     {activeSentence + 1}
@@ -1545,7 +1634,8 @@ function PracticeSessionBody({
               type="button"
               disabled={
                 loadingNext ||
-                (Boolean(courseId || titleExamId) && savingResult(analysis))
+                (Boolean(courseId || titleExamId) && savingResult(analysis)) ||
+                (Boolean(courseId) && !completedRef.current)
               }
               onClick={() => setSaveReportOpen(true)}
               className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white disabled:opacity-50"
@@ -1553,9 +1643,11 @@ function PracticeSessionBody({
               {loadingNext
                 ? "이동 중…"
                 : courseId
-                  ? courseFinished
+                  ? isLastCourseSentence || courseFinished
                     ? "클래스 완료"
-                    : "다음 단계"
+                    : courseExamples
+                      ? "다음 문장"
+                      : "다음 단계"
                   : "완료하기"}
             </button>
             <ReportSaveDialog
