@@ -57,7 +57,11 @@ function mergeProgress(
     ...course,
     progressPercent: Math.min(
       100,
-      Math.max(0, progressByCourse[String(course.id)]?.progressPercent ?? 0),
+      Math.max(
+        0,
+        progressByCourse[String(course.id)]?.progressPercent ??
+          course.progressPercent,
+      ),
     ),
   }));
 }
@@ -198,27 +202,23 @@ function CourseCatalogView({
       setLoading(true);
     }
     setError(null);
-    Promise.all([
-      refreshCatalogWindow(
-        (page) =>
-          api.courses.list({
-            type: activeType,
-            status: "PUBLISHED",
-            page,
-            size: 20,
-          }),
-        cached?.page ?? 0,
-        () => active,
-      ),
-      api.courses.getMyProgress(),
-    ])
-      .then(([result, userProgress]) => {
+    let latestProgress = cached?.progressByCourse ?? {};
+    const listRequest = refreshCatalogWindow(
+      (page) =>
+        api.courses.list({
+          type: activeType,
+          status: "PUBLISHED",
+          page,
+          size: 20,
+        }),
+      cached?.page ?? 0,
+      () => active,
+    )
+      .then((result) => {
         if (!active || !result) return;
-        const byCourse = progressMap(userProgress);
-        const nextItems = mergeProgress(result.items, byCourse);
+        const nextItems = mergeProgress(result.items, latestProgress);
         const nextHasNext =
           result.hasNext ?? result.page + 1 < (result.totalPages ?? 0);
-        setProgressByCourse(byCourse);
         setItems(nextItems);
         setPage(result.page);
         setHasNext(nextHasNext);
@@ -230,32 +230,9 @@ function CourseCatalogView({
           items: nextItems,
           page: result.page,
           hasNext: nextHasNext,
-          progressByCourse: byCourse,
+          progressByCourse: latestProgress,
           detailsByCourse: currentCache?.detailsByCourse ?? {},
           examplesByCourse: currentCache?.examplesByCourse ?? {},
-        });
-        void Promise.allSettled(
-          result.items
-            .filter((course) => !cached?.detailsByCourse[String(course.id)])
-            .map((course) => api.courses.get(course.id)),
-        ).then((results) => {
-          if (!active) return;
-          const loadedDetails = Object.fromEntries(
-            results.flatMap((detailResult) =>
-              detailResult.status === "fulfilled"
-                ? [[String(detailResult.value.id), detailResult.value]]
-                : [],
-            ),
-          );
-          const nextDetails = {
-            ...(readUserClientCache<CourseCatalogCache>(userId, cacheResource)
-              ?.detailsByCourse ?? {}),
-            ...loadedDetails,
-          };
-          setDetailsByCourse(nextDetails);
-          updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-            detailsByCourse: nextDetails,
-          });
         });
       })
       .catch(
@@ -271,8 +248,37 @@ function CourseCatalogView({
       .finally(() => {
         if (!active) return;
         setLoading(false);
-        setRefreshing(false);
       });
+    const progressRequest = api.courses
+      .getMyProgress()
+      .then((userProgress) => {
+        if (!active) return;
+        const byCourse = progressMap(userProgress);
+        latestProgress = byCourse;
+        setProgressByCourse(byCourse);
+        setItems((current) => mergeProgress(current, byCourse));
+        const currentCache = readUserClientCache<CourseCatalogCache>(
+          userId,
+          cacheResource,
+        );
+        if (currentCache) {
+          updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+            progressByCourse: byCourse,
+            items: mergeProgress(currentCache.items, byCourse),
+          });
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!active || cached) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "학습 진행 정보를 불러오지 못했습니다.",
+        );
+      });
+    void Promise.allSettled([listRequest, progressRequest]).then(() => {
+      if (active) setRefreshing(false);
+    });
     return () => {
       active = false;
       listGeneration.current += 1;

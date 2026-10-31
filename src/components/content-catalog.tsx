@@ -22,7 +22,11 @@ import { categoryLabel } from "@/lib/content-labels";
 import { newsHeadline, newsCategoryTags } from "@/lib/news-presentation";
 import { useCatalogFilters } from "@/hooks/use-catalog-filters";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
-import { refreshCatalogWindow } from "@/lib/catalog-pages";
+import {
+  createCatalogSnapshot,
+  refreshCatalogWindow,
+} from "@/lib/catalog-pages";
+import { getAuthSessionVersion } from "@/lib/api/client";
 import {
   catalogFacetsForPractice,
   catalogItemsForPractice,
@@ -137,6 +141,19 @@ export function ContentCatalog({
   const [topLoading, setTopLoading] = useState(type === "NEWS");
   const [topError, setTopError] = useState(false);
   const generation = useRef(0);
+  const newsSnapshot = useRef<{
+    userId: string | null;
+    retry: number;
+    epoch: number;
+    identity: symbol;
+    source: { read(): Promise<PracticeContentSummary[] | null> };
+  } | null>(null);
+  useEffect(
+    () => () => {
+      newsSnapshot.current = null;
+    },
+    [],
+  );
   const loadMoreBusy = useRef(false);
   const scope = `${userId}:${catalogCacheResource(type, category, difficulty)}`;
   const [loadedScope, setLoadedScope] = useState(scope);
@@ -258,26 +275,31 @@ export function ContentCatalog({
     }
     setError(null);
     async function fetchNewsTopics() {
-      const all: PracticeContentSummary[] = [];
-      let nextPage = 0;
-      let more = true;
-      while (more && active) {
-        const result = await api.content.list({
-          type: "NEWS",
-          page: nextPage,
-          size: 100,
-        });
-        all.push(...result.items);
-        nextPage += 1;
-        more =
-          result.hasNext ??
-          nextPage <
-            (result.totalPages ?? Math.ceil(result.totalElements / 100));
+      let current = newsSnapshot.current;
+      const epoch = getAuthSessionVersion();
+      if (
+        !current ||
+        current.userId !== userId ||
+        current.retry !== retry ||
+        current.epoch !== epoch
+      ) {
+        const identity = Symbol("news-snapshot");
+        current = {
+          userId,
+          retry,
+          epoch,
+          identity,
+          source: createCatalogSnapshot(
+            (page) => api.content.list({ type: "NEWS", page, size: 100 }),
+            () =>
+              newsSnapshot.current?.identity === identity &&
+              getAuthSessionVersion() === epoch,
+          ),
+        };
+        newsSnapshot.current = current;
       }
-      if (!active) return null;
-      const news = [
-        ...new Map(all.map((item) => [String(item.id), item])).values(),
-      ];
+      const news = await current.source.read();
+      if (!active || !news) return null;
       setCategories([
         ...new Set(
           news.flatMap((item) => {

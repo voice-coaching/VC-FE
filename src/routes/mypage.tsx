@@ -47,97 +47,114 @@ export default function MyPage() {
   const examRequestKey = useRef<string | null>(null);
   const examRequestBusy = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [feedbackLoading, setFeedbackLoading] = useState(
+    !initialOverview?.feedback,
+  );
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let active = true;
+    let identityPending = 2;
     setLoading(true);
+    setFeedbackLoading(!initialOverview?.feedback);
     setError(null);
     const cachedUser = getCachedUser();
+    const identitySettled = () => {
+      identityPending -= 1;
+      if (identityPending === 0) setLoading(false);
+    };
+    const watch = <T,>(
+      request: Promise<T>,
+      apply: (value: T) => void,
+      covered: boolean,
+      settled?: () => void,
+    ) => {
+      void request
+        .then((value) => {
+          if (active) apply(value);
+        })
+        .catch((reason: unknown) => {
+          if (!active || covered) return;
+          setError(
+            (current) =>
+              current ??
+              (reason instanceof Error
+                ? reason.message
+                : "마이페이지를 불러오지 못했습니다."),
+          );
+        })
+        .finally(() => {
+          if (active) settled?.();
+        });
+    };
     const userRequest = api.users.getMe();
-    void Promise.allSettled([
+    const statsRequest = api.myPage.getStatistics({ period: "MONTH" });
+    const titleRequest = api.users.getTitle();
+    watch(
       userRequest,
-      api.myPage.getStatistics({ period: "MONTH" }),
+      (user) => {
+        setAccount(user);
+        updateMyPageOverviewCache({ nickname: user.nickname });
+      },
+      Boolean(cachedUser || initialOverview?.nickname),
+      identitySettled,
+    );
+    watch(
+      titleRequest,
+      (value) => {
+        setTitleProgress(value);
+        updateMyPageOverviewCache({ titleProgress: value });
+      },
+      false,
+      identitySettled,
+    );
+    watch(
+      statsRequest,
+      (value) => {
+        setStatistics(value);
+        updateMyPageOverviewCache({ statistics: value });
+      },
+      Boolean(initialOverview?.statistics),
+    );
+    watch(
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
-      api.users.getTitle(),
-      userRequest.then((user) =>
-        api.myPage.getStatistics(lifetimeStatisticsFilters(user.createdAt)),
-      ),
-    ]).then(
-      ([
-        userResult,
-        statsResult,
-        feedbackResult,
-        titleResult,
-        lifetimeResult,
-      ]) => {
-        if (!active) return;
-        setLoading(false);
-        const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
-        if (lifetimeResult.status === "fulfilled") {
-          setLifetimeStatistics(lifetimeResult.value);
-          cachePatch.lifetimeStatistics = lifetimeResult.value;
-        }
-
-        if (userResult.status === "fulfilled") {
-          setAccount(userResult.value);
-          cachePatch.nickname = userResult.value.nickname;
-        }
-        if (statsResult.status === "fulfilled") {
-          setStatistics(statsResult.value);
-          cachePatch.statistics = statsResult.value;
-        }
-        if (feedbackResult.status === "fulfilled") {
-          setFeedback(feedbackResult.value);
-          cachePatch.feedback = feedbackResult.value;
-        }
-
-        if (titleResult.status === "fulfilled") {
-          setTitleProgress(titleResult.value);
-          cachePatch.titleProgress = titleResult.value;
-        } else if (
-          statsResult.status === "fulfilled" &&
-          !initialOverview?.titleProgress
-        ) {
+      (value) => {
+        setFeedback(value);
+        updateMyPageOverviewCache({ feedback: value });
+      },
+      Boolean(initialOverview?.feedback),
+      () => setFeedbackLoading(false),
+    );
+    // Signup time is immutable; the session gate's user can start this request
+    // while the profile revalidates instead of adding another network roundtrip.
+    const lifetimeRequest = (
+      cachedUser ? Promise.resolve(cachedUser) : userRequest
+    ).then((user) =>
+      api.myPage.getStatistics(lifetimeStatisticsFilters(user.createdAt)),
+    );
+    watch(
+      lifetimeRequest,
+      (value) => {
+        setLifetimeStatistics(value);
+        updateMyPageOverviewCache({ lifetimeStatistics: value });
+      },
+      Boolean(initialOverview?.lifetimeStatistics),
+    );
+    void titleRequest.catch(() => {
+      if (!active || initialOverview?.titleProgress) return;
+      void statsRequest
+        .then((value) => {
+          if (!active) return;
           const fallback = getUserTitleProgress(
             "ABSOLUTE_BEGINNER",
-            statsResult.value.totalSessionCount,
+            value.totalSessionCount,
           );
-          // Only the title API can grant exam eligibility.
           if (fallback.next) fallback.next.eligible = false;
           setTitleProgress(fallback);
-          cachePatch.titleProgress = fallback;
-        }
-
-        if (Object.keys(cachePatch).length > 0) {
-          updateMyPageOverviewCache(cachePatch);
-        }
-
-        const firstUncoveredFailure =
-          userResult.status === "rejected" &&
-          !cachedUser &&
-          !initialOverview?.nickname
-            ? userResult
-            : statsResult.status === "rejected" && !initialOverview?.statistics
-              ? statsResult
-              : feedbackResult.status === "rejected" &&
-                  !initialOverview?.feedback
-                ? feedbackResult
-                : lifetimeResult.status === "rejected" &&
-                    !initialOverview?.lifetimeStatistics
-                  ? lifetimeResult
-                  : titleResult.status === "rejected"
-                    ? titleResult
-                    : null;
-        if (firstUncoveredFailure) {
-          setError(
-            firstUncoveredFailure.reason instanceof Error
-              ? firstUncoveredFailure.reason.message
-              : "마이페이지를 불러오지 못했습니다.",
-          );
-        }
-      },
-    );
+          updateMyPageOverviewCache({ titleProgress: fallback });
+        })
+        .catch(() => undefined);
+    });
     return () => {
       active = false;
     };
@@ -262,15 +279,15 @@ export default function MyPage() {
                 title="잘하는 발음"
                 tone="strength"
                 items={(feedback?.strengths ?? []).map((item) => item.label)}
-                pending={loading && !feedback}
-                failed={!loading && !feedback}
+                pending={feedbackLoading && !feedback}
+                failed={!feedbackLoading && !feedback}
               />
               <ReportRow
                 title="자주 틀리는 발음"
                 tone="weakness"
                 items={(feedback?.weaknesses ?? []).map((item) => item.label)}
-                pending={loading && !feedback}
-                failed={!loading && !feedback}
+                pending={feedbackLoading && !feedback}
+                failed={!feedbackLoading && !feedback}
               />
               <ReportRow
                 tone="intonation"
