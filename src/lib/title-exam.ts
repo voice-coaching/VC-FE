@@ -66,7 +66,8 @@ export async function createTitleExamSession(
     throw new Error(
       "이미 채점된 시험입니다. 마이페이지에서 결과를 확인해 주세요.",
     );
-  if (exam.trainingSessionId != null) return exam.trainingSessionId;
+  // This endpoint reuses a live linked session under the server lock and
+  // creates a replacement for CANCELED/FAILED sessions. A cached ID cannot do so.
   const session = await api.training.create({
     contentId: exam.practiceContentId,
     titleExamId: exam.id,

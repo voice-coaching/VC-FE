@@ -2,6 +2,8 @@
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
+import { LoadingOverlay } from "./loading-overlay";
+import { loadPracticeResume } from "@/lib/practice-resume";
 
 import { DirectPracticeSession } from "./direct-practice-session";
 import { directAnalysisEnabled } from "@/lib/direct-analysis";
@@ -87,6 +89,7 @@ import {
 
 type Phase =
   | "idle"
+  | "restoring"
   | "recording"
   | "review"
   | "uploading"
@@ -176,7 +179,12 @@ function PracticeSessionBody({
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [resultAudioUrl, setResultAudioUrl] = useState<string | undefined>();
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>(
+    resumedSessionId ? "restoring" : "idle",
+  );
+  const [resumeFailed, setResumeFailed] = useState(false);
+  const [resumeRetry, setResumeRetry] = useState(0);
+  const resumePendingRef = useRef(Boolean(resumedSessionId));
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
@@ -339,6 +347,7 @@ function PracticeSessionBody({
         activeSessionId &&
         authEpochRef.current === getAuthSessionVersion() &&
         !completedRef.current &&
+        !resumePendingRef.current &&
         !analysisPendingRef.current &&
         phaseRef.current !== "analyzing"
       ) {
@@ -352,52 +361,52 @@ function PracticeSessionBody({
     if (!resumedSessionId) return;
 
     let active = true;
-    setPhase("analyzing");
+    let resumeReadComplete = false;
+    resumePendingRef.current = true;
+    setResumeFailed(false);
+    setPhase("restoring");
 
     void (async () => {
       try {
-        const [resumedSession, attempts] = await Promise.all([
-          api.training.get(resumedSessionId),
-          api.training.listRecordings(resumedSessionId),
-        ]);
-        if (
-          resumedSession.content?.id != null &&
-          String(resumedSession.content.id) !== String(content.id)
-        ) {
-          throw new Error("이어갈 학습과 현재 콘텐츠가 일치하지 않습니다.");
-        }
+        const restored = await loadPracticeResume(
+          api,
+          resumedSessionId,
+          content.id,
+          Boolean(titleExamId),
+        );
         if (!active) return;
-        const selected = attempts.find((item) => item.selected);
-        completedRef.current = resumedSession.status === "COMPLETED";
-        selectedRecordingRef.current =
-          selected?.recordingId ?? selected?.id ?? null;
-        setRecordingAttempts(attempts);
-
-        let deliveredResult: AnalysisResult;
-        try {
-          deliveredResult = await waitForAnalysis(resumedSessionId);
-        } catch (reason) {
-          if (
-            reason instanceof ApiError &&
-            reason.status === 404 &&
-            reason.code === "ANALYSIS_NOT_FOUND" &&
-            ["RECORDING", "UPLOADING"].includes(resumedSession.status)
-          ) {
-            if (active) setPhase("idle");
-            return;
-          }
-          throw reason;
+        resumeReadComplete = true;
+        resumePendingRef.current = false;
+        sessionIdRef.current = restored.sessionId;
+        setSessionId(restored.sessionId);
+        completedRef.current = restored.completed;
+        selectedRecordingRef.current = restored.selectedRecordingId;
+        setRecordingAttempts(restored.attempts);
+        analysisPendingRef.current = restored.phase === "analyzing";
+        setRequestFailure(null);
+        setRequestError(null);
+        setCanCheckAnalysis(false);
+        if (restored.phase === "idle") {
+          setPhase("idle");
+          return;
         }
+        setPhase("analyzing");
+        const deliveredResult = await waitForAnalysis(resumedSessionId);
         if (!active) return;
         await loadResult(resumedSessionId, deliveredResult.id, deliveredResult);
       } catch (reason) {
         if (!active) return;
+        setResumeFailed(!resumeReadComplete);
         setRequestFailure(reason);
         setCanRetryAnalysis(
           reason instanceof CanonicalResultUnavailable &&
             reason.view.actions.canRetry,
         );
-        setCanCheckAnalysis(!(reason instanceof CanonicalResultUnavailable));
+        setCanCheckAnalysis(
+          resumeReadComplete &&
+            selectedRecordingRef.current != null &&
+            canRecheckSubmittedAnalysis(reason),
+        );
         setRequestError(
           reason instanceof Error
             ? reason.message
@@ -417,6 +426,7 @@ function PracticeSessionBody({
     resumedSessionId,
     titleExamId,
     submitTitleExamResult,
+    resumeRetry,
   ]);
 
   async function ensureSession() {
@@ -1071,6 +1081,17 @@ function PracticeSessionBody({
     }
   }
 
+  if (phase === "restoring")
+    return (
+      <LoadingOverlay
+        label={
+          titleExamId
+            ? "승급 시험을 준비하고 있어요"
+            : "학습 상태를 확인하고 있어요"
+        }
+      />
+    );
+
   if (phase === "error") {
     const errorView = describePracticeError(requestFailure, recorder.status);
     const quality = errorView.kind === "quality";
@@ -1128,6 +1149,10 @@ function PracticeSessionBody({
             !rerecord
           }
           onClick={() => {
+            if (resumeFailed) {
+              setResumeRetry((value) => value + 1);
+              return;
+            }
             if (canonicalFailure?.actions.canRetry) {
               void retryFailedAnalysis();
               return;
@@ -1147,13 +1172,15 @@ function PracticeSessionBody({
             void resetRecording();
           }}
         >
-          {canCheckAnalysis && sessionId
-            ? "분석 상태 다시 확인"
-            : canRetryAnalysis || canonicalFailure?.actions.canRetry
-              ? "분석 다시 시도"
-              : rerecord
-                ? "다시 녹음하기"
-                : "다시 시도하기"}
+          {resumeFailed
+            ? "학습 상태 다시 확인"
+            : canCheckAnalysis && sessionId
+              ? "분석 상태 다시 확인"
+              : canRetryAnalysis || canonicalFailure?.actions.canRetry
+                ? "분석 다시 시도"
+                : rerecord
+                  ? "다시 녹음하기"
+                  : "다시 시도하기"}
         </button>
         <button
           className="mt-4 py-3 text-sm text-muted-foreground"
