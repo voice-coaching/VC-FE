@@ -23,6 +23,7 @@ import {
 } from "@/lib/my-page-cache";
 import { getUserTitleProgress } from "@/lib/user-title";
 import { weaknessPracticeHref } from "@/lib/weakness-practice";
+import { lifetimeStatisticsFilters } from "@/lib/my-page-queries";
 
 export default function MyPage() {
   const router = useRouter();
@@ -53,12 +54,15 @@ export default function MyPage() {
     setLoading(true);
     setError(null);
     const cachedUser = getCachedUser();
+    const userRequest = api.users.getMe();
     void Promise.allSettled([
-      api.users.getMe(),
+      userRequest,
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
       api.users.getTitle(),
-      api.myPage.getStatistics({ period: "ALL" }),
+      userRequest.then((user) =>
+        api.myPage.getStatistics(lifetimeStatisticsFilters(user.createdAt)),
+      ),
     ]).then(
       ([
         userResult,

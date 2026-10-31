@@ -51,6 +51,66 @@ function login(token = "expired") {
     user: { id: token, nickname: "test" },
   });
 }
+
+function jwt(expiresAt: number) {
+  return `header.${Buffer.from(JSON.stringify({ exp: expiresAt })).toString("base64url")}.signature`;
+}
+
+test("expired JWT is refreshed once before simultaneous catalog requests", async () => {
+  login(jwt(Math.floor(Date.now() / 1000) - 60));
+  const renewed = jwt(Math.floor(Date.now() / 1000) + 600);
+  const pending = deferred<Response>();
+  const started = deferred<void>();
+  let refreshes = 0;
+  const resources: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path.endsWith("/token/refresh")) {
+      refreshes++;
+      started.resolve();
+      return pending.promise;
+    }
+    assert.equal(
+      new Headers(init?.headers).get("authorization"),
+      `Bearer ${renewed}`,
+    );
+    resources.push(path);
+    return response();
+  };
+  const client = createHttpClient("");
+  const progress = client.request("/api/users/me/course-progress");
+  const courses = client.request("/api/courses?status=PUBLISHED");
+  await started.promise;
+  assert.equal(resources.length, 0);
+  pending.resolve(response(200, { ...refreshed, accessToken: renewed }));
+  await Promise.all([progress, courses]);
+  assert.equal(refreshes, 1);
+  assert.equal(resources.length, 2);
+});
+
+test("a JWT rejected after proactive renewal does not cause a second refresh", async () => {
+  login(jwt(1));
+  let refreshes = 0;
+  let resources = 0;
+  globalThis.fetch = async (input) => {
+    if (String(input).endsWith("/token/refresh")) {
+      refreshes++;
+      return response(200, {
+        ...refreshed,
+        accessToken: jwt(Math.floor(Date.now() / 1000) + 600),
+      });
+    }
+    resources++;
+    return response(401);
+  };
+  await assert.rejects(
+    createHttpClient("").request("/api/courses"),
+    (error: unknown) => error instanceof ApiError && error.status === 401,
+  );
+  assert.equal(refreshes, 1);
+  assert.equal(resources, 1);
+  assert.equal(getAccessToken(), null);
+});
 const changed = (error: unknown) =>
   error instanceof ApiError && error.code === "AUTH_SESSION_CHANGED";
 

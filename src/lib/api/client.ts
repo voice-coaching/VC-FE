@@ -158,6 +158,26 @@ export function getAccessToken() {
   return accessToken;
 }
 
+function expiresSoon(token: string) {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims: unknown = JSON.parse(atob(payload));
+    if (!claims || typeof claims !== "object" || !("exp" in claims))
+      return false;
+    const expiresAt = claims.exp;
+    return (
+      typeof expiresAt === "number" &&
+      Number.isFinite(expiresAt) &&
+      expiresAt * 1_000 <= Date.now() + 10_000
+    );
+  } catch {
+    // Opaque or malformed tokens still go through normal server authentication.
+    return false;
+  }
+}
+
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   timeoutMs?: number;
@@ -259,7 +279,7 @@ export function createHttpClient(
       "Accept",
       responseType === "audio" ? "audio/mpeg" : "application/json",
     );
-    const token = getAccessToken();
+    let token = getAccessToken();
     const version = sessionVersion;
     if (token && !skipAuth) headers.set("Authorization", `Bearer ${token}`);
 
@@ -272,7 +292,34 @@ export function createHttpClient(
     }
 
     let awaitingFetch = true;
+    let refreshedBeforeRequest = false;
     try {
+      const renew = async () => {
+        try {
+          await refreshAccessToken();
+        } catch (error) {
+          if (endpointErrorsOnly)
+            throw new ApiError(
+              "로그인 갱신에 실패했습니다.",
+              error instanceof ApiError ? error.status : 401,
+              "AUTH_REFRESH_FAILED",
+            );
+          throw error;
+        }
+      };
+      if (token && !skipAuth && !skipRefresh && expiresSoon(token)) {
+        if (signal?.aborted)
+          throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
+        // Renew before concurrent catalog requests send a known expired JWT.
+        // Reading exp is a scheduling hint; only the server authenticates it.
+        await renew();
+        assertCurrentSession(version);
+        if (signal?.aborted)
+          throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
+        refreshedBeforeRequest = true;
+        token = getAccessToken();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+      }
       const response = await fetch(joinUrl(baseUrl, path), {
         ...fetchOptions,
         headers,
@@ -283,23 +330,17 @@ export function createHttpClient(
       awaitingFetch = false;
       assertCurrentSession(version);
 
-      if (response.status === 401 && !skipAuth && !skipRefresh) {
+      if (
+        response.status === 401 &&
+        !skipAuth &&
+        !skipRefresh &&
+        (!refreshedBeforeRequest || getAccessToken() !== token)
+      ) {
         clearTimeout(timeout);
         // Another request may already have renewed the expired token while
         // this response was in flight. Reuse it instead of rotating again.
         if (getAccessToken() === token) {
-          try {
-            await refreshAccessToken();
-          } catch (error) {
-            // Keep authentication failures distinct from result endpoint errors.
-            if (endpointErrorsOnly)
-              throw new ApiError(
-                "로그인 갱신에 실패했습니다.",
-                error instanceof ApiError ? error.status : 401,
-                "AUTH_REFRESH_FAILED",
-              );
-            throw error;
-          }
+          await renew();
         }
         assertCurrentSession(version);
         if (signal?.aborted)

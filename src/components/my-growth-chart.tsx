@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { api, type ScoreTrend } from "@/lib/api";
 import { groupScoreTrend, type TrendPeriod } from "@/lib/score-trend";
+import { GROWTH_QUERY } from "@/lib/my-page-queries";
 import styles from "./my-growth-chart.module.css";
 
 const periods = [
   { value: "week", label: "주간", detail: "최근 8주" },
   { value: "month", label: "월간", detail: "최근 6개월" },
-  { value: "all", label: "전체", detail: "시작부터 지금까지" },
+  { value: "all", label: "연간", detail: "최근 1년" },
 ] as const;
 export function MyGrowthChart() {
   const [period, setPeriod] = useState<TrendPeriod>("week");
@@ -25,7 +26,7 @@ export function MyGrowthChart() {
     setLoading(true);
     setError(false);
     api.myPage
-      .getScoreTrends("PRONUNCIATION", "ALL")
+      .getScoreTrends(GROWTH_QUERY.metric, GROWTH_QUERY.period)
       .then((result) => {
         if (active) setPoints(result.points);
       })
@@ -54,11 +55,7 @@ export function MyGrowthChart() {
         <div>
           <h2 className="text-[15px] leading-[22px] font-bold">성장 그래프</h2>
           <p className="mt-1 text-xs leading-4 font-medium text-[#8b95a1]">
-            {period === "week"
-              ? "주간"
-              : period === "month"
-                ? "월간"
-                : "전체 기간"}{" "}
+            {period === "week" ? "주간" : period === "month" ? "월간" : "연간"}{" "}
             평균 발음 점수
           </p>
         </div>
