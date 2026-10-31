@@ -104,6 +104,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
   const { request, requestAudio, upload, refreshAccessToken } =
     createHttpClient(baseUrl);
   const canonical = createCanonicalAnalysisClient(baseUrl);
+  let paymentHistoryFlight: {
+    key: string;
+    promise: ReturnType<ApiContract["payments"]["listOrders"]>;
+  } | null = null;
 
   async function currentAnalysis(
     sessionId: Id,
@@ -355,6 +359,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request(`/api/reference-audios/${id(audioId)}/playback-url`),
     },
     examples: {
+      listCourse: (courseId, sessionId) =>
+        request(
+          `/api/courses/${id(courseId)}/practice-examples${query({ sessionId })}`,
+        ),
       list: (courseId, stepId, sessionId) =>
         request(
           `/api/courses/${id(courseId)}/steps/${id(stepId)}/practice-examples${query({ sessionId })}`,
@@ -532,6 +540,49 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         }),
       getWeaknessRecommendations: (filters = {}) =>
         request(`/api/users/me/weakness-recommendations${query(filters)}`),
+    },
+    payments: {
+      createOrder: (idempotencyKey) =>
+        request("/api/payment-orders", {
+          method: "POST",
+          headers: idempotencyHeaders(idempotencyKey),
+        }),
+      getOrder: (orderId) =>
+        request(`/api/payment-orders/${id(orderId)}`, {
+          cache: "no-store",
+        }),
+      verifyOrder: (orderId) =>
+        request(`/api/payment-orders/${id(orderId)}/verify`, {
+          method: "POST",
+        }),
+      listOrders(filters = {}) {
+        const path = `/api/users/me/payment-orders${query(filters)}`;
+        const key = JSON.stringify([getAuthSessionVersion(), path]);
+        if (paymentHistoryFlight?.key === key)
+          return paymentHistoryFlight.promise;
+        const promise = request<
+          Awaited<ReturnType<ApiContract["payments"]["listOrders"]>>
+        >(path, { cache: "no-store" }).finally(() => {
+          if (paymentHistoryFlight?.promise === promise)
+            paymentHistoryFlight = null;
+        });
+        paymentHistoryFlight = { key, promise };
+        return promise;
+      },
+      cancel: (orderId, reason) =>
+        request(`/api/payment-orders/${id(orderId)}/cancel`, {
+          method: "POST",
+          body: { reason },
+        }),
+      requestRefund: (orderId, reason) =>
+        request(`/api/payment-orders/${id(orderId)}/refund-requests`, {
+          method: "POST",
+          body: { reason },
+        }),
+      getRefundRequest: (requestId) =>
+        request(`/api/refund-requests/${id(requestId)}`, {
+          cache: "no-store",
+        }),
     },
     notifications: {
       getPreferences: () => request("/api/users/me/notification-preferences"),

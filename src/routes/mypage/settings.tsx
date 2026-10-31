@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEventHandler } from "react";
@@ -321,14 +322,7 @@ export default function AccountSettings() {
         </h1>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-        <section className="bg-white">
-          <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
-            계정
-          </h2>
-          <NicknameEditor account={account} row />
-        </section>
-
+      <div className="min-h-0 flex-1 overflow-y-auto pt-2 pb-6">
         <section className="bg-white">
           <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
             연습 환경
@@ -404,6 +398,37 @@ export default function AccountSettings() {
               openPanel(GROUPS[0].items[0].label, event.currentTarget)
             }
           />
+        </section>
+
+        <section className="bg-white">
+          <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
+            계정과 이용
+          </h2>
+          <NicknameEditor account={account} row />
+          <Link
+            href="/mypage/payments?view=manage"
+            className="flex h-14 w-full items-center gap-3.5 px-5 py-2 text-left"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center text-[#4e5968]">
+              <Image
+                src="/figma/membership/card.svg"
+                alt=""
+                width={22}
+                height={22}
+              />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] leading-[22px] font-medium">
+                결제 관리
+              </span>
+            </span>
+            <Image
+              src="/figma/settings/chevron-right.svg"
+              alt=""
+              width={18}
+              height={18}
+            />
+          </Link>
         </section>
 
         {GROUPS.slice(1).map((group) => (

@@ -3,7 +3,6 @@
 import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -23,6 +22,7 @@ import {
   updateMyPageOverviewCache,
 } from "@/lib/my-page-cache";
 import { getUserTitleProgress } from "@/lib/user-title";
+import { weaknessPracticeHref } from "@/lib/weakness-practice";
 
 export default function MyPage() {
   const router = useRouter();
@@ -32,7 +32,7 @@ export default function MyPage() {
     initialOverview?.statistics ?? null,
   );
   const [lifetimeStatistics, setLifetimeStatistics] =
-    useState<Statistics | null>(null);
+    useState<Statistics | null>(initialOverview?.lifetimeStatistics ?? null);
   const [feedback, setFeedback] = useState<StrengthsWeaknesses | null>(
     initialOverview?.feedback ?? null,
   );
@@ -41,6 +41,8 @@ export default function MyPage() {
   );
   const [error, setError] = useState<string | null>(null);
   const [examStarting, setExamStarting] = useState(false);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const recommendationBusy = useRef(false);
   const examRequestKey = useRef<string | null>(null);
   const examRequestBusy = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export default function MyPage() {
     setError(null);
     const cachedUser = getCachedUser();
     void Promise.allSettled([
-      cachedUser ? Promise.resolve(cachedUser) : api.users.getMe(),
+      api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
       api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 }),
       api.users.getTitle(),
@@ -67,9 +69,11 @@ export default function MyPage() {
       ]) => {
         if (!active) return;
         setLoading(false);
-        if (lifetimeResult.status === "fulfilled")
-          setLifetimeStatistics(lifetimeResult.value);
         const cachePatch: Parameters<typeof updateMyPageOverviewCache>[0] = {};
+        if (lifetimeResult.status === "fulfilled") {
+          setLifetimeStatistics(lifetimeResult.value);
+          cachePatch.lifetimeStatistics = lifetimeResult.value;
+        }
 
         if (userResult.status === "fulfilled") {
           setAccount(userResult.value);
@@ -115,7 +119,12 @@ export default function MyPage() {
               : feedbackResult.status === "rejected" &&
                   !initialOverview?.feedback
                 ? feedbackResult
-                : null;
+                : lifetimeResult.status === "rejected" &&
+                    !initialOverview?.lifetimeStatistics
+                  ? lifetimeResult
+                  : titleResult.status === "rejected"
+                    ? titleResult
+                    : null;
         if (firstUncoveredFailure) {
           setError(
             firstUncoveredFailure.reason instanceof Error
@@ -134,6 +143,25 @@ export default function MyPage() {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const learningTime = hours ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+
+  async function startWeaknessPractice() {
+    if (recommendationBusy.current) return;
+    recommendationBusy.current = true;
+    setRecommendationLoading(true);
+    setError(null);
+    try {
+      router.push(await weaknessPracticeHref(api));
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "추천 연습을 불러오지 못했어요.",
+      );
+    } finally {
+      recommendationBusy.current = false;
+      setRecommendationLoading(false);
+    }
+  }
 
   async function startTitleExam() {
     if (examRequestBusy.current) return;
@@ -156,6 +184,7 @@ export default function MyPage() {
     <AppShell chromeColor="#ccdbff" viewportLocked className={layout.shell}>
       <div className={layout.content}>
         <MyProfileBand
+          showMembership
           account={account}
           fallbackName={initialOverview?.nickname}
           statistics={statistics}
@@ -163,6 +192,7 @@ export default function MyPage() {
           loading={loading}
         />
         <MyPageHead
+          showMembership
           active="summary"
           titleProgress={titleProgress}
           examStarting={examStarting}
@@ -173,24 +203,22 @@ export default function MyPage() {
           {error ? (
             <div className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive">
               <p role="alert">{error}</p>
-              {!statistics || !feedback || !titleProgress ? (
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => {
-                    setLoading(true);
-                    setRetry((value) => value + 1);
-                  }}
-                  className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary disabled:opacity-50"
-                >
-                  다시 시도
-                </button>
-              ) : null}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setLoading(true);
+                  setRetry((value) => value + 1);
+                }}
+                className="mt-1 min-h-11 px-2 text-sm font-semibold text-primary disabled:opacity-50"
+              >
+                다시 시도
+              </button>
             </div>
           ) : null}
 
           <section className="rounded-[20px] bg-white py-4">
-            <div className="grid grid-cols-3 divide-x divide-[#f2f4f6] text-center">
+            <div className={layout.metrics}>
               <Metric
                 label="연습 횟수"
                 value={
@@ -218,10 +246,10 @@ export default function MyPage() {
 
           <section className="rounded-[20px] bg-white p-[18px]">
             <div className="flex items-center justify-between">
-              <h2 className="text-[15px] leading-[22px] font-bold text-[#333d4b]">
+              <h2 className="text-[15px] leading-[22px] font-bold text-[#191f28]">
                 내 리포트
               </h2>
-              <span className="text-[11px] leading-[14px] text-[#8b95a1]">
+              <span className="text-[12px] leading-4 font-medium text-[#8b95a1]">
                 이번 달 기준
               </span>
             </div>
@@ -247,11 +275,15 @@ export default function MyPage() {
                 unavailable
               />
             </div>
-            <Link
-              href="/class/pronunciation"
-              className="mt-3.5 flex min-h-11 items-center justify-center rounded-full bg-[#eaf0ff] text-[14px] font-bold text-primary"
+            <button
+              type="button"
+              disabled={recommendationLoading}
+              onClick={() => void startWeaknessPractice()}
+              className="mt-3.5 flex min-h-11 w-full items-center justify-center rounded-full bg-[#eaf0ff] text-[14px] font-bold text-primary disabled:opacity-50"
             >
-              약점 집중 연습하기
+              {recommendationLoading
+                ? "추천 연습 찾는 중…"
+                : "약점 집중 연습하기"}
               <Image
                 src="/figma/mypage-improved/practice-chevron.svg"
                 alt=""
@@ -259,7 +291,7 @@ export default function MyPage() {
                 height={16}
                 className="ml-1"
               />
-            </Link>
+            </button>
           </section>
         </div>
       </div>
@@ -273,7 +305,9 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="truncate text-[17px] leading-6 font-bold text-[#191f28]">
         {value}
       </p>
-      <p className="mt-1 text-xs leading-4 text-[#8b95a1]">{label}</p>
+      <p className="mt-1 text-xs leading-4 font-medium text-[#8b95a1]">
+        {label}
+      </p>
     </div>
   );
 }
@@ -318,7 +352,7 @@ function ReportRow({
                 tone === "strength"
                   ? -5.03
                   : tone === "weakness"
-                    ? -6.46
+                    ? -7.13
                     : 0.69,
             }}
           />
@@ -330,7 +364,7 @@ function ReportRow({
           items.map((item) => (
             <span
               key={item}
-              className={`rounded-full px-2 py-[3px] text-xs leading-4 font-medium ${tone === "strength" ? "bg-[#e6f7ee] text-[#0e7a47]" : tone === "weakness" ? "bg-[#ffedef] text-[#f04452]" : "bg-[#eaf0ff] text-primary"}`}
+              className={`rounded-full px-2 py-[3px] text-xs leading-4 font-medium ${tone === "strength" ? "bg-[#e6f7ee] text-[#0e7a47]" : tone === "weakness" ? "bg-[#ffedee] text-[#c9303d]" : "bg-[#eaf0ff] text-primary"}`}
             >
               {item}
             </span>

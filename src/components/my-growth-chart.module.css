@@ -109,7 +109,7 @@
   white-space: nowrap;
 }
 .barLabel[data-active="true"] {
-  color: #2f6bff;
+  color: #191f28;
   font-weight: 700;
 }
 @media (prefers-reduced-motion: reduce) {

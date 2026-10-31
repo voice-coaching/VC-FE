@@ -7,6 +7,7 @@ const RESOURCE = "mypage-overview";
 export type MyPageOverviewCache = {
   nickname?: string;
   statistics?: Statistics;
+  lifetimeStatistics?: Statistics;
   feedback?: StrengthsWeaknesses;
   titleProgress?: UserTitleProgress;
 };

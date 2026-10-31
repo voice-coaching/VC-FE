@@ -47,7 +47,7 @@ const selection = {
 function fixture(value = set, detail = content) {
   const api = createRemoteApi("/api/backend");
   const calls: unknown[][] = [];
-  api.examples.list = async (...args) => {
+  api.examples.listCourse = async (...args) => {
     calls.push(args);
     return value;
   };
@@ -60,7 +60,7 @@ function fixture(value = set, detail = content) {
 test("uses DB content and session-pinned revision instead of the course default", async () => {
   const { api, calls } = fixture();
   assert.equal(await loadPracticeContent(api, "222", selection), content);
-  assert.deepEqual(calls, [["1", "2", "99"], [222]]);
+  assert.deepEqual(calls, [["1", "99"], [222]]);
 });
 for (const [label, overrides, contentId] of [
   ["legacy static ID", { exampleId: "consonant-1" }, "222"],
@@ -74,7 +74,7 @@ for (const [label, overrides, contentId] of [
       loadPracticeContent(api, contentId, { ...selection, ...overrides }),
       (e: unknown) => e instanceof ApiError && e.code === "EXAMPLE_CHANGED",
     );
-    assert.ok(calls.every((call) => call.length === 3));
+    assert.ok(calls.every((call) => call.length === 2));
   });
 }
 test("rejects a transcript different from the displayed example", async () => {
@@ -88,7 +88,7 @@ test("normal practice uses the content API directly", async () => {
 });
 test("unavailable examples propagate the backend error", async () => {
   const { api } = fixture();
-  api.examples.list = async () => {
+  api.examples.listCourse = async () => {
     throw new ApiError("미등록", 503, "PRACTICE_EXAMPLES_UNAVAILABLE");
   };
   await assert.rejects(loadPracticeContent(api, 222, selection), /미등록/);

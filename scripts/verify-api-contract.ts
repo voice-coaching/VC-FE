@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { ApiError } from "../src/lib/api/client";
 import { createRemoteApi } from "../src/lib/api/remote";
+import {
+  CANONICAL_VIEW_SCHEMA,
+  HANDOFF_PROFILE,
+  type CanonicalAnalysisView,
+} from "../src/lib/canonical-analysis";
 
 const expected = [
   "GET /api/auth/email-availability?email=test%40example.com",
@@ -35,6 +40,8 @@ const expected = [
   "GET /api/practice-contents/1/recommendations?limit=5",
   "GET /api/practice-contents/1/reference-audios",
   "GET /api/reference-audios/1/playback-url",
+  "GET /api/courses/1/practice-examples",
+  "GET /api/courses/1/practice-examples?sessionId=1",
   "GET /api/courses/1/steps/1/practice-examples?sessionId=1",
   "GET /api/practice-examples/example-1/audio",
   "GET /api/courses?type=PRONUNCIATION&page=0&size=20",
@@ -58,12 +65,9 @@ const expected = [
   "POST /api/training-sessions/1/analyze",
   "GET /api/training-sessions/1/analysis/status",
   "POST /api/training-sessions/1/analysis/retry",
-  "GET /api/training-sessions/1/analysis",
   "GET /api/recordings/1/playback-url",
   "POST /api/training-sessions/1/complete",
-  "GET /api/analyses/1",
-  "GET /api/analyses/1/segments?page=0&size=100",
-  "POST /api/analyses/1/feedback/regenerate",
+  "GET /api/v3/analyses/1",
   "GET /api/users/me/statistics?period=MONTH",
   "GET /api/users/me/score-trends?metric=PRONUNCIATION&period=MONTH",
   "GET /api/users/me/strengths-weaknesses?period=MONTH&limit=5",
@@ -71,6 +75,13 @@ const expected = [
   "GET /api/users/me/training-sessions/1",
   "DELETE /api/users/me/training-sessions/1",
   "GET /api/users/me/weakness-recommendations?limit=10&contentType=SENTENCE",
+  "POST /api/payment-orders",
+  "GET /api/payment-orders/order-1",
+  "POST /api/payment-orders/order-1/verify",
+  "GET /api/users/me/payment-orders?page=0&size=20",
+  "POST /api/payment-orders/order-1/cancel",
+  "POST /api/payment-orders/order-1/refund-requests",
+  "GET /api/refund-requests/request-1",
   "GET /api/users/me/notification-preferences",
   "PATCH /api/users/me/notification-preferences",
   "POST /api/users/me/push-subscriptions",
@@ -95,6 +106,7 @@ const responseData = {
   id: 1,
   sessionId: 1,
   analysisId: 1,
+  selectedRecordingId: 1,
   email: "test@example.com",
   nickname: "tester",
   onboardingRequired: false,
@@ -102,6 +114,67 @@ const responseData = {
   user: { id: 1, nickname: "tester", onboardingCompleted: true },
   items: [],
 };
+
+// Use the public v3 projection. Legacy analysis payloads cannot validate the
+// retry/completion guards, which first read the current recording and actions.
+const completedView: CanonicalAnalysisView = {
+  schemaVersion: CANONICAL_VIEW_SCHEMA,
+  analysisProfile: HANDOFF_PROFILE,
+  analysisId: 1,
+  recordingId: 1,
+  requestId: "00000000-0000-4000-8000-000000000001",
+  executionId: "00000000-0000-4000-8000-000000000002",
+  jobStatus: "COMPLETED",
+  serviceFailure: null,
+  actions: {
+    canComplete: true,
+    canRerecord: true,
+    canRetry: false,
+    canRegenerate: false,
+    unavailableReasonCodes: {
+      retry: ["NOT_FAILED"],
+      rerecord: [],
+      complete: [],
+      regenerate: ["UNSUPPORTED"],
+    },
+  },
+  canonicalAnalysis: {
+    representation: "INLINE",
+    decision: { status: "ACCEPT", reason_code: null, stage: null },
+    coreStatus: "ok",
+    feedbackDeliveryAllowed: true,
+    pronunciationFeedbackSource: "REFINED_P1_ONLY",
+    selection: {
+      attemptScope: "a".repeat(64),
+      candidates: [],
+      reviewReasonCounts: {},
+      coverage: {
+        evaluatedConsonantPositions: 0,
+        visiblePositionCount: 0,
+        permittedPatternCount: 0,
+        includedCandidateIds: [],
+        omittedCandidateIds: [],
+        selectionPolicy: "repetition_then_first_occurrence_max3",
+        omittedReason: null,
+        presentationStateCounts: {},
+      },
+    },
+    coaching: {
+      schemaVersion: "canonical-llm-expression-result-v1",
+      adapterStatus: "NO_PERMITTED_COACHING_CONTENT",
+      generationStatus: "NOT_DISPATCHED",
+      items: [],
+      dispatchAttempts: 0,
+    },
+    score: {
+      overallScore: null,
+      validity: "NOT_CALIBRATED",
+      reason: "NO_APPROVED_SCORING_CONTRACT",
+    },
+    visual: { status: "NOT_CONNECTED", correctiveClaimsAllowed: false },
+  },
+};
+let currentView: CanonicalAnalysisView = completedView;
 
 globalThis.fetch = (async (
   input: string | URL | Request,
@@ -123,7 +196,11 @@ globalThis.fetch = (async (
     });
   }
   return new Response(
-    JSON.stringify({ result: true, message: "ok", data: responseData }),
+    JSON.stringify({
+      result: true,
+      message: "ok",
+      data: url.pathname === "/api/v3/analyses/1" ? currentView : responseData,
+    }),
     {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -216,6 +293,8 @@ await api.content.get(1);
 await api.content.getRecommendations(1, 5);
 await api.content.getReferenceAudios(1);
 await api.content.getReferenceAudioPlaybackUrl(1);
+await api.examples.listCourse(1);
+await api.examples.listCourse(1, 1);
 await api.examples.list(1, 1, 1);
 await api.examples.getAudio("example-1");
 await api.courses.list({ type: "PRONUNCIATION", page: 0, size: 20 });
@@ -253,13 +332,35 @@ const analysisConsent = {
 };
 await api.training.analyze(1, analysisConsent);
 await api.training.getAnalysisStatus(1);
+currentView = {
+  ...completedView,
+  jobStatus: "FAILED",
+  canonicalAnalysis: null,
+  serviceFailure: { origin: "WORKER", code: "UNAVAILABLE", stage: "ANALYSIS" },
+  actions: {
+    ...completedView.actions,
+    canRetry: true,
+    canComplete: false,
+    unavailableReasonCodes: {
+      ...completedView.actions.unavailableReasonCodes,
+      retry: [],
+      complete: ["NOT_COMPLETED"],
+    },
+  },
+};
 await api.training.retryAnalysis(1, analysisConsent);
+currentView = completedView;
 await api.training.getSessionAnalysis(1);
 await api.training.getRecordingPlaybackUrl(1);
 await api.training.complete(1, 60);
 await api.analyses.get(1);
 await api.analyses.getSegments(1, { page: 0, size: 100 });
-await api.analyses.regenerateFeedback(1, "COACHING");
+await assert.rejects(
+  api.analyses.regenerateFeedback(1, "COACHING"),
+  (reason: unknown) =>
+    reason instanceof ApiError &&
+    reason.code === "CANONICAL_REGENERATION_UNAVAILABLE",
+);
 await api.myPage.getStatistics({ period: "MONTH" });
 await api.myPage.getScoreTrends("PRONUNCIATION", "MONTH");
 await api.myPage.getStrengthsWeaknesses({ period: "MONTH", limit: 5 });
@@ -275,6 +376,13 @@ await api.myPage.getWeaknessRecommendations({
   limit: 10,
   contentType: "SENTENCE",
 });
+await api.payments.createOrder("payment-order-key");
+await api.payments.getOrder("order-1");
+await api.payments.verifyOrder("order-1");
+await api.payments.listOrders({ page: 0, size: 20 });
+await api.payments.cancel("order-1", "결제 취소");
+await api.payments.requestRefund("order-1", "환불 신청");
+await api.payments.getRefundRequest("request-1");
 await api.notifications.getPreferences();
 await api.notifications.updatePreferences({
   practiceReminder: { enabled: true },
@@ -307,9 +415,9 @@ await api.support.listInquiries({ page: 0, size: 20 });
 await api.support.getInquiry(1);
 
 assert.equal(
+  new Set(expected).size,
   expected.length,
-  80,
-  "Frontend adapter must cover every endpoint in the updated API contract.",
+  "Endpoint expectations must not contain duplicates.",
 );
 assert.deepEqual([...new Set(calls)].sort(), [...expected].sort());
 for (const [path, key] of [
@@ -318,6 +426,7 @@ for (const [path, key] of [
   ["POST /api/practice-contents/custom", "custom-content-key"],
   ["POST /api/users/me/push-subscriptions", "push-subscription-key"],
   ["POST /api/inquiries", "inquiry-key"],
+  ["POST /api/payment-orders", "payment-order-key"],
 ] as const) {
   const callIndex = calls.indexOf(path);
   assert.equal(
@@ -347,12 +456,17 @@ assert.deepEqual(JSON.parse(String(requestOptions[recordingIndex]?.body)), {
   videoProcessingConsentAccepted: true,
   videoProcessingConsentPolicyRevision: "voice-video-processing-consent-v1",
 });
-const regenerateIndex = calls.indexOf(
-  "POST /api/analyses/1/feedback/regenerate",
-);
-assert.deepEqual(JSON.parse(String(requestOptions[regenerateIndex]?.body)), {
-  feedbackStyle: "COACHING",
-});
+for (const [path, reason] of [
+  ["POST /api/payment-orders/order-1/cancel", "결제 취소"],
+  ["POST /api/payment-orders/order-1/refund-requests", "환불 신청"],
+] as const) {
+  assert.deepEqual(
+    JSON.parse(String(requestOptions[calls.indexOf(path)]?.body)),
+    {
+      reason,
+    },
+  );
+}
 assert.ok(requestOptions.every((init) => init.credentials === "include"));
 assert.ok(
   requestOptions.every((init, index) =>
