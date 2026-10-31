@@ -12,7 +12,10 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { safeInternalPath } from "@/lib/navigation";
-import { loadPracticeContent } from "@/lib/practice-examples";
+import {
+  loadPracticeSelection,
+  type LoadedPracticeSelection,
+} from "@/lib/practice-examples";
 
 export default function Practice({ contentId }: { contentId: string }) {
   const searchParams = useSearchParams();
@@ -37,18 +40,25 @@ export default function Practice({ contentId }: { contentId: string }) {
     Boolean(exampleId) || startImmediately,
   );
   const [sessionTitle, setSessionTitle] = useState("연습하기");
-  const [content, setContent] = useState<PracticeContent | null>(
-    initialContent,
+  const [selection, setSelection] = useState<LoadedPracticeSelection | null>(
+    initialContent && !exampleId
+      ? { content: initialContent, courseExamples: null, currentIndex: null }
+      : null,
   );
+  const content = selection?.content ?? null;
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const cached = readUserClientCache<PracticeContent>(userId, cacheResource);
-    setContent(cached);
+    setSelection(
+      cached && !exampleId
+        ? { content: cached, courseExamples: null, currentIndex: null }
+        : null,
+    );
     setError(null);
     setStarted(Boolean(exampleId) || startImmediately);
-    loadPracticeContent(api, contentId, {
+    loadPracticeSelection(api, contentId, {
       exampleId,
       courseId,
       stepId,
@@ -57,13 +67,12 @@ export default function Practice({ contentId }: { contentId: string }) {
     })
       .then((value) => {
         if (!active) return;
-        setContent(value);
-        writeUserClientCache(userId, cacheResource, value);
+        setSelection(value);
+        writeUserClientCache(userId, cacheResource, value.content);
       })
       .catch(
         (reason) =>
           active &&
-          !cached &&
           setError(
             reason instanceof Error
               ? reason.message
@@ -117,6 +126,8 @@ export default function Practice({ contentId }: { contentId: string }) {
             <PracticeSession
               key={String(content.id)}
               content={content}
+              courseExamples={selection?.courseExamples}
+              courseExampleIndex={selection?.currentIndex}
               onTitleChange={setSessionTitle}
             />
           ) : (

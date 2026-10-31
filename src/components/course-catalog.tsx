@@ -3,7 +3,6 @@
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
-import { Check, ChevronRight } from "lucide-react";
 import {
   Suspense,
   useEffect,
@@ -16,24 +15,26 @@ import styles from "./course-catalog.module.css";
 import { usePathname, useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
-import { CourseLesson } from "@/components/course-lesson";
 import {
   ApiError,
   api,
   type CourseDetail,
-  type CourseStep,
-  type CourseProgress,
+  type PracticeExamples,
   type CourseSummary,
   type CourseType,
   type UserCourseProgress,
 } from "@/lib/api";
-import type { PracticeExample } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { refreshCatalogWindow } from "@/lib/catalog-pages";
+import {
+  classExamplesErrorMessage,
+  classPracticeHref,
+  orderedCourseExamples,
+} from "@/lib/class-practice";
 
 type CourseCatalogCache = {
   items: CourseSummary[];
@@ -41,7 +42,7 @@ type CourseCatalogCache = {
   hasNext: boolean;
   progressByCourse: Record<string, UserCourseProgress>;
   detailsByCourse: Record<string, CourseDetail>;
-  stepsByCourse: Record<string, CourseStep[]>;
+  examplesByCourse: Record<string, PracticeExamples>;
 };
 
 function progressMap(items: UserCourseProgress[]) {
@@ -104,9 +105,9 @@ function CourseCatalogView({
     readUserClientCache<CourseCatalogCache>(userId, cacheResource),
   );
   const [loadedType, setLoadedType] = useState(activeType);
-  const [stepsByCourse, setStepsByCourse] = useState<
-    Record<string, CourseStep[]>
-  >(initialCache?.stepsByCourse ?? {});
+  const [examplesByCourse, setExamplesByCourse] = useState<
+    Record<string, PracticeExamples>
+  >(initialCache?.examplesByCourse ?? {});
   const [items, setItems] = useState<CourseSummary[]>(
     initialCache?.items ?? [],
   );
@@ -125,12 +126,6 @@ function CourseCatalogView({
   const [expandedId, setExpandedId] = useHistoryPanel(
     "course",
     items.map((item) => String(item.id)),
-  );
-  const [lessonId, setLessonId] = useHistoryPanel(
-    "lesson",
-    (expandedId ? (stepsByCourse[expandedId] ?? []) : []).map((step) =>
-      String(step.id),
-    ),
   );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailsByCourse, setDetailsByCourse] = useState<
@@ -191,7 +186,7 @@ function CourseCatalogView({
       setHasNext(cached.hasNext);
       setProgressByCourse(cached.progressByCourse);
       setDetailsByCourse(cached.detailsByCourse);
-      setStepsByCourse(cached.stepsByCourse);
+      setExamplesByCourse(cached.examplesByCourse ?? {});
       setLoading(false);
     } else {
       setItems([]);
@@ -199,7 +194,7 @@ function CourseCatalogView({
       setHasNext(false);
       setProgressByCourse({});
       setDetailsByCourse({});
-      setStepsByCourse({});
+      setExamplesByCourse({});
       setLoading(true);
     }
     setError(null);
@@ -237,7 +232,7 @@ function CourseCatalogView({
           hasNext: nextHasNext,
           progressByCourse: byCourse,
           detailsByCourse: currentCache?.detailsByCourse ?? {},
-          stepsByCourse: currentCache?.stepsByCourse ?? {},
+          examplesByCourse: currentCache?.examplesByCourse ?? {},
         });
         void Promise.allSettled(
           result.items
@@ -327,84 +322,62 @@ function CourseCatalogView({
     }
   }
 
-  async function start(course: CourseSummary, requestedStep?: CourseStep) {
+  async function start(course: CourseSummary) {
     if (startBusy.current) return;
     startBusy.current = true;
     const requestLifecycle = lifecycle.current;
     setStartingId(String(course.id));
     setError(null);
     try {
-      const savedProgress = progressByCourse[String(course.id)];
-      let replayFromStart = course.progressPercent >= 100;
-      let currentProgress: CourseProgress | undefined = savedProgress;
+      const key = String(course.id);
+      const savedProgress = progressByCourse[key];
 
       if (savedProgress) {
         try {
-          currentProgress = await api.courses.getProgress(course.id);
+          await api.courses.getProgress(course.id);
         } catch (reason) {
           if (reason instanceof ApiError && reason.status === 404) {
-            currentProgress = await api.courses.start(course.id);
+            await api.courses.start(course.id);
           } else {
             throw reason;
           }
         }
       } else {
         try {
-          currentProgress = await api.courses.start(course.id);
+          await api.courses.start(course.id);
         } catch (reason) {
           if (reason instanceof ApiError && reason.status === 409) {
-            currentProgress = await api.courses.getProgress(course.id);
+            await api.courses.getProgress(course.id);
           } else {
             throw reason;
           }
         }
       }
-      replayFromStart =
-        replayFromStart || currentProgress?.status === "COMPLETED";
       if (requestLifecycle !== lifecycle.current) return;
 
-      const steps = [
-        ...(stepsByCourse[String(course.id)] ??
-          (await api.courses.getSteps(course.id))),
-      ].sort((a, b) => a.stepOrder - b.stepOrder);
-      if (requestLifecycle !== lifecycle.current) return;
-      const nextSteps = {
-        ...stepsByCourse,
-        [String(course.id)]: steps,
-      };
-      setStepsByCourse(nextSteps);
-      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-        stepsByCourse: nextSteps,
-      });
-      if (requestedStep) {
-        setLessonId(String(requestedStep.id));
-        return;
-      }
-      const lastStepIndex = steps.findIndex(
-        (step) => String(step.id) === String(currentProgress?.lastStepId),
+      const examples = orderedCourseExamples(
+        examplesByCourse[key] ?? (await api.examples.listCourse(course.id)),
+        course.id,
       );
-      const remainingSteps = replayFromStart
-        ? steps
-        : lastStepIndex >= 0
-          ? steps.slice(
-              (currentProgress?.progressPercent ?? 0) > 0
-                ? lastStepIndex + 1
-                : lastStepIndex,
-            )
-          : steps;
-      const practice =
-        remainingSteps.find((step) => step.practiceContentId != null) ??
-        steps.find((step) => step.practiceContentId != null);
-      if (!practice?.practiceContentId)
-        throw new Error("이 클래스의 연습 콘텐츠가 아직 준비되지 않았습니다.");
-      setLessonId(String(practice.id));
+      if (requestLifecycle !== lifecycle.current) return;
+      const nextExamples = {
+        ...examplesByCourse,
+        [key]: examples,
+      };
+      setExamplesByCourse(nextExamples);
+      updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
+        examplesByCourse: nextExamples,
+      });
+      router.push(
+        classPracticeHref(
+          examples,
+          0,
+          `${window.location.pathname}${window.location.search}`,
+        ),
+      );
     } catch (reason) {
       if (requestLifecycle !== lifecycle.current) return;
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "클래스를 시작하지 못했습니다.",
-      );
+      setError(classExamplesErrorMessage(reason));
     } finally {
       if (requestLifecycle === lifecycle.current) {
         startBusy.current = false;
@@ -418,8 +391,8 @@ function CourseCatalogView({
     let active = true;
     const key = expandedId;
     const cachedDetail = detailsByCourse[key];
-    const cachedSteps = stepsByCourse[key];
-    if (cachedDetail && cachedSteps) {
+    const cachedExamples = examplesByCourse[key];
+    if (cachedDetail && cachedExamples) {
       setDetailLoadingId(null);
       return;
     }
@@ -428,29 +401,28 @@ function CourseCatalogView({
     setDetailError(null);
     void Promise.all([
       cachedDetail ? Promise.resolve(cachedDetail) : api.courses.get(key),
-      cachedSteps ? Promise.resolve(cachedSteps) : api.courses.getSteps(key),
+      cachedExamples
+        ? Promise.resolve(cachedExamples)
+        : api.examples.listCourse(key),
     ])
-      .then(([detail, steps]) => {
+      .then(([detail, exampleResponse]) => {
         if (!active) return;
-        const nextSteps = {
-          ...stepsByCourse,
-          [key]: [...steps].sort((a, b) => a.stepOrder - b.stepOrder),
+        const examples = orderedCourseExamples(exampleResponse, key);
+        const nextExamples = {
+          ...examplesByCourse,
+          [key]: examples,
         };
         const nextDetails = { ...detailsByCourse, [key]: detail };
-        setStepsByCourse(nextSteps);
+        setExamplesByCourse(nextExamples);
         setDetailsByCourse(nextDetails);
         updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-          stepsByCourse: nextSteps,
+          examplesByCourse: nextExamples,
           detailsByCourse: nextDetails,
         });
       })
       .catch((reason) => {
         if (!active) return;
-        setDetailError(
-          reason instanceof Error
-            ? reason.message
-            : "클래스 상세를 불러오지 못했습니다.",
-        );
+        setDetailError(classExamplesErrorMessage(reason));
       })
       .finally(() => {
         if (active) setDetailLoadingId(null);
@@ -461,7 +433,7 @@ function CourseCatalogView({
   }, [
     expandedId,
     detailsByCourse,
-    stepsByCourse,
+    examplesByCourse,
     cacheResource,
     userId,
     detailRetry,
@@ -469,61 +441,13 @@ function CourseCatalogView({
 
   const selectedCourse = items.find((item) => String(item.id) === expandedId);
   const detail = expandedId ? detailsByCourse[expandedId] : undefined;
-  const steps = expandedId ? (stepsByCourse[expandedId] ?? []) : [];
-  const requestedLessonStep = steps.find(
-    (step) => String(step.id) === lessonId,
-  );
-  const firstIncomplete = steps.findIndex((step) => !step.completed);
-  const lessonUnlocked =
-    requestedLessonStep &&
-    (requestedLessonStep.completed ||
-      firstIncomplete < 0 ||
-      steps.indexOf(requestedLessonStep) <= firstIncomplete);
-  const lesson =
-    selectedCourse && requestedLessonStep && lessonUnlocked
-      ? {
-          course: selectedCourse,
-          step: requestedLessonStep,
-          count: steps.length,
-        }
-      : null;
+  const courseExamples = expandedId ? examplesByCourse[expandedId] : undefined;
   const scrollRef = useHistoryScroll(
     `${userId}:courses:${activeType}:${expandedId ?? "list"}`,
-    !loading && !lesson,
+    !loading,
   );
   const level = (value: CourseSummary["difficulty"]) =>
     ({ BEGINNER: "초급", INTERMEDIATE: "중급", ADVANCED: "고급" })[value];
-
-  if (lesson)
-    return (
-      <AppShell
-        nav={false}
-        viewportLocked
-        chromeColor="#f2f4f6"
-        className="min-h-0 bg-[#f2f4f6]"
-      >
-        <CourseLesson
-          key={`${lesson.course.id}:${lesson.step.id}`}
-          course={lesson.course}
-          step={lesson.step}
-          stepCount={lesson.count}
-          description={detailsByCourse[String(lesson.course.id)]?.description}
-          onClose={() => setLessonId(null)}
-          onPractice={(example: PracticeExample, revision: number) => {
-            const params = new URLSearchParams({
-              courseId: String(lesson.course.id),
-              courseStepId: String(lesson.step.id),
-              returnTo: `${window.location.pathname}${window.location.search}`,
-              exampleId: example.id,
-              exampleRevision: String(revision),
-            });
-            router.push(
-              `/practice/${example.practiceContentId}?${params.toString()}`,
-            );
-          }}
-        />
-      </AppShell>
-    );
 
   return (
     <AppShell
@@ -668,9 +592,9 @@ function CourseCatalogView({
                   <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-primary">
                     {level(selectedCourse.difficulty)}
                   </span>
-                  {detail ? (
+                  {courseExamples ? (
                     <span className="px-0 py-1 text-[#6b7684]">
-                      {detail.stepCount}단계
+                      {courseExamples.items.length}문장
                     </span>
                   ) : null}
                 </div>
@@ -678,7 +602,7 @@ function CourseCatalogView({
                   {detail?.description || selectedCourse.title}
                 </h2>
                 <p className="mt-1 text-sm leading-5 text-[#6b7684]">
-                  발음 원리를 단계별로 익히고 직접 소리 내어 연습해요
+                  문장을 하나씩 녹음하고 평가를 확인하며 연습해요
                 </p>
                 <section className="mt-4 rounded-2xl bg-white p-4 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
                   <strong className="block text-[15px] leading-[22px]">
@@ -689,49 +613,29 @@ function CourseCatalogView({
                   </p>
                 </section>
                 <div className="mt-5 mb-3 flex justify-between">
-                  <h3 className="text-[17px] leading-6 font-bold">구성 단계</h3>
+                  <h3 className="text-[17px] leading-6 font-bold">진행 방식</h3>
                   <span className="text-[13px] leading-[18px] text-[#8b95a1]">
-                    {steps.length}단계
+                    {courseExamples
+                      ? `총 ${courseExamples.items.length}문장`
+                      : "문장 불러오는 중"}
                   </span>
                 </div>
                 <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
-                  {steps.map((step, index) => {
-                    const firstIncomplete = steps.findIndex(
-                      (item) => !item.completed,
-                    );
-                    const locked =
-                      !step.completed &&
-                      firstIncomplete >= 0 &&
-                      index > firstIncomplete;
-                    return (
-                      <li key={String(step.id)}>
-                        <button
-                          type="button"
-                          disabled={locked || startingId !== null}
-                          onClick={() => void start(selectedCourse, step)}
-                          className="flex min-h-[57px] w-full items-center gap-3 text-left disabled:cursor-default"
-                        >
-                          <span
-                            className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] font-medium ${step.completed ? "bg-primary text-white" : locked ? "bg-[#f2f4f6] text-[#b0b8c1]" : "border-2 border-primary text-primary"}`}
-                          >
-                            {step.completed ? (
-                              <Check className="size-4" />
-                            ) : (
-                              step.stepOrder
-                            )}
-                          </span>
-                          <span
-                            className={`flex-1 text-[15px] leading-[22px] font-medium ${locked ? "text-[#b0b8c1]" : "text-[#333d4b]"}`}
-                          >
-                            {step.title}
-                          </span>
-                          {!locked ? (
-                            <ChevronRight className="size-5 text-[#b0b8c1]" />
-                          ) : null}
-                        </button>
+                  {["현재 문장 녹음", "AI 평가 확인", "다음 문장으로 이동"].map(
+                    (label, index) => (
+                      <li
+                        key={label}
+                        className="flex min-h-[57px] items-center gap-3"
+                      >
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-primary text-[13px] font-medium text-primary">
+                          {index + 1}
+                        </span>
+                        <span className="text-[15px] leading-[22px] font-medium text-[#333d4b]">
+                          {label}
+                        </span>
                       </li>
-                    );
-                  })}
+                    ),
+                  )}
                 </ol>
               </>
             ) : loading || loadedType !== activeType ? (
@@ -774,9 +678,7 @@ function CourseCatalogView({
                           <span
                             className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
                           >
-                            {detail
-                              ? `${Math.round((progress / 100) * detail.stepCount)}/${detail.stepCount}`
-                              : `${Math.round(progress)}%`}
+                            {Math.round(progress)}%
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
@@ -789,9 +691,7 @@ function CourseCatalogView({
                           />
                         </div>
                         <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
-                          {detail
-                            ? `${detail.stepCount}단계`
-                            : "단계 정보 불러오는 중"}
+                          문장별 녹음 · 평가
                         </p>
                       </div>
                     </button>
