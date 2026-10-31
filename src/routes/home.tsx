@@ -188,12 +188,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [coursesLoading, setCoursesLoading] = useState(true);
+  const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(true);
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [newsLoading, setNewsLoading] = useState(true);
   const [newsItems, setNewsItems] = useState<PracticeContentSummary[]>([]);
   const [newsFailed, setNewsFailed] = useState(false);
-  const [imagesLoading, setImagesLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -215,30 +214,6 @@ export default function Home() {
     };
   }, [userId, reloadKey]);
 
-  useEffect(() => {
-    let active = true;
-    const sources = [
-      "/figma/home/news-character.png",
-      "/figma/home-before/brand.svg",
-      "/figma/home-before/bell.svg",
-      ...PRACTICE_CARDS.map((card) => card.icon),
-    ];
-    const images = sources.map(
-      (source) =>
-        new Promise<void>((resolve) => {
-          const image = new window.Image();
-          image.onload = () => resolve();
-          image.onerror = () => resolve();
-          image.src = source;
-        }),
-    );
-    void Promise.all(images).then(() => {
-      if (active) setImagesLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
   const [coursesUnavailable, setCoursesUnavailable] = useState(false);
 
   useEffect(() => {
@@ -246,69 +221,77 @@ export default function Home() {
     const from = localDateKey(weekRange.monday);
     const to = localDateKey(weekRange.sunday);
     setCoursesLoading(true);
+    setStatisticsLoading(true);
     setCoursesUnavailable(false);
 
-    void Promise.allSettled([
-      api.courses.getMyProgress("IN_PROGRESS"),
-      api.myPage.getStatistics({ from, to }),
-      api.myPage.listTrainingSessions({
+    void api.myPage
+      .getStatistics({ from, to })
+      .then((value) => {
+        if (!active) return;
+        setStatistics(value);
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          statistics: value,
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setStatisticsLoading(false);
+      });
+    void api.myPage
+      .listTrainingSessions({
         status: "COMPLETED",
         from,
         to,
         page: 0,
         size: 100,
-      }),
-    ]).then(async ([courseResult, statisticsResult, historyResult]) => {
-      if (!active) return;
-
-      if (statisticsResult.status === "fulfilled") {
-        setStatistics(statisticsResult.value);
+      })
+      .then((value) => {
+        if (!active) return;
+        setWeekSessions(value.items);
         updateUserClientCache<HomeCache>(userId, cacheResource, {
-          statistics: statisticsResult.value,
+          weekSessions: value.items,
         });
-      }
-      if (historyResult.status === "fulfilled") {
-        setWeekSessions(historyResult.value.items);
-        updateUserClientCache<HomeCache>(userId, cacheResource, {
-          weekSessions: historyResult.value.items,
-        });
-      }
-      if (courseResult.status !== "fulfilled") {
-        setCoursesLoading(false);
-        setCoursesUnavailable(true);
-        return;
-      }
-
-      const courseResults = await Promise.allSettled(
-        courseResult.value
-          .filter((item) => item.status === "IN_PROGRESS")
-          .slice(0, 2)
-          .map(async (item) => {
-            const course = await api.courses.get(item.courseId);
-            return {
-              ...course,
-              progressPercent: item.progressPercent,
-              progress: {
-                ...course.progress,
-                status: item.status,
+      })
+      .catch(() => undefined);
+    void api.courses
+      .getMyProgress("IN_PROGRESS")
+      .then(async (progress) => {
+        if (!active) return;
+        const courseResults = await Promise.allSettled(
+          progress
+            .filter((item) => item.status === "IN_PROGRESS")
+            .slice(0, 2)
+            .map(async (item) => {
+              const course = await api.courses.get(item.courseId);
+              return {
+                ...course,
                 progressPercent: item.progressPercent,
-              },
-            };
-          }),
-      );
-      if (!active) return;
-      const courses = courseResults.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : [],
-      );
-      setRecentCourses(courses);
-      setCoursesLoading(false);
-      setCoursesUnavailable(
-        courseResults.some((result) => result.status === "rejected"),
-      );
-      updateUserClientCache<HomeCache>(userId, cacheResource, {
-        recentCourses: courses,
+                progress: {
+                  ...course.progress,
+                  status: item.status,
+                  progressPercent: item.progressPercent,
+                },
+              };
+            }),
+        );
+        if (!active) return;
+        const courses = courseResults.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        setRecentCourses(courses);
+        setCoursesUnavailable(
+          courseResults.some((result) => result.status === "rejected"),
+        );
+        updateUserClientCache<HomeCache>(userId, cacheResource, {
+          recentCourses: courses,
+        });
+      })
+      .catch(() => {
+        if (active) setCoursesUnavailable(true);
+      })
+      .finally(() => {
+        if (active) setCoursesLoading(false);
       });
-    });
 
     return () => {
       active = false;
@@ -320,41 +303,44 @@ export default function Home() {
     setError(null);
     setDashboardLoading(true);
 
-    void (async () => {
-      const [dashboardResult, recommendationResult] = await Promise.allSettled([
-        api.home.get(),
-        api.home.getRecommendations({ type: "NEWS", limit: 3 }),
-      ]);
-      if (!active) return;
-
-      const nextDashboard =
-        dashboardResult.status === "fulfilled"
-          ? dashboardResult.value
-          : (initialCache?.dashboard ?? EMPTY_DASHBOARD);
-      setDashboard(nextDashboard);
-      if (dashboardResult.status === "fulfilled") {
+    const dashboardRequest = api.home.get();
+    void dashboardRequest
+      .then((value) => {
+        if (!active) return;
+        setDashboard(value);
         updateUserClientCache<HomeCache>(userId, cacheResource, {
-          dashboard: dashboardResult.value,
+          dashboard: value,
         });
-      }
-      if (dashboardResult.status === "rejected") {
+      })
+      .catch((reason: unknown) => {
+        if (!active) return;
         if (!initialCache?.dashboard) {
+          setDashboard(EMPTY_DASHBOARD);
           setError(
-            dashboardResult.reason instanceof Error
-              ? dashboardResult.reason.message
+            reason instanceof Error
+              ? reason.message
               : "오늘의 학습 현황을 불러오지 못했습니다.",
           );
         }
-      }
+      })
+      .finally(() => {
+        if (active) setDashboardLoading(false);
+      });
 
-      if (recommendationResult.status === "fulfilled") {
-        const nextRecommendations = recommendationResult.value.slice(0, 3);
+    void api.home
+      .getRecommendations({ type: "NEWS", limit: 3 })
+      .then((value) => {
+        if (!active) return;
+        const nextRecommendations = value.slice(0, 3);
         setRecommendations(nextRecommendations);
         updateUserClientCache<HomeCache>(userId, cacheResource, {
           recommendations: nextRecommendations,
         });
-      } else if (nextDashboard.recommendations.length === 0) {
+      })
+      .catch(async () => {
         try {
+          const nextDashboard = await dashboardRequest.catch(() => null);
+          if (!active || nextDashboard?.recommendations.length) return;
           const fallback = await api.content.list({
             type: "NEWS",
             page: 0,
@@ -376,10 +362,7 @@ export default function Home() {
             );
           }
         }
-      }
-    })().finally(() => {
-      if (active) setDashboardLoading(false);
-    });
+      });
 
     return () => {
       active = false;
@@ -399,9 +382,6 @@ export default function Home() {
       })
       .catch(() => {
         if (active) setHasUnreadNotifications(false);
-      })
-      .finally(() => {
-        if (active) setNotificationsLoading(false);
       });
     return () => {
       active = false;
@@ -446,16 +426,6 @@ export default function Home() {
   const ongoingCourses = recentCourses.filter(
     (course) => course.progress?.status === "IN_PROGRESS",
   );
-  if (
-    dashboardLoading ||
-    coursesLoading ||
-    newsLoading ||
-    notificationsLoading ||
-    imagesLoading
-  ) {
-    return <HomeSkeleton />;
-  }
-
   return (
     <AppShell
       animateRoute={false}
@@ -508,7 +478,11 @@ export default function Home() {
                   연속 연습
                 </span>
                 <strong className="text-sm leading-5 tracking-[0.203px]">
-                  {streakDays}일째
+                  {statistics
+                    ? `${streakDays}일째`
+                    : statisticsLoading
+                      ? "불러오는 중"
+                      : "—"}
                 </strong>
               </span>
               <span className="mt-2 flex justify-between">
@@ -597,51 +571,61 @@ export default function Home() {
                 </div>
               ) : null}
 
-              <section
-                className={`${styles.todayCard} relative h-[200px] overflow-hidden rounded-[20px] p-5`}
-              >
-                <span className="inline-flex h-[26px] items-center rounded-full pr-3 pl-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
-                  {dashboard?.courseProgress
-                    ? dashboard.courseProgress.title
-                    : "오늘의 추천"}
-                </span>
-                <h1 className="mt-3 text-xl leading-7 font-bold tracking-[-0.24px]">
-                  {dailyDone ? (
-                    <>
-                      오늘 연습을 마쳤어요
-                      <br />
-                      내일 다시 만나요
-                    </>
-                  ) : (
-                    <>
-                      오늘은 뉴스예요
-                      <br />
-                      {today.goalCount > 0
-                        ? `${today.goalCount}문장이면 끝나요`
-                        : "가볍게 시작해 봐요"}
-                    </>
-                  )}
-                </h1>
-                <Link
-                  href={dailyDone ? "/mypage/history" : todayHref}
-                  className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
+              {dashboardLoading && !dashboard ? (
+                <div role="status" aria-label="오늘의 학습 불러오는 중">
+                  <SkeletonBlock className="h-[200px] w-full rounded-[20px] bg-[#e5e8eb]" />
+                </div>
+              ) : (
+                <section
+                  className={`${styles.todayCard} relative h-[200px] overflow-hidden rounded-[20px] p-5`}
                 >
-                  {dailyDone ? "기록 보기" : "시작하기"}
-                </Link>
-                <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
-                  <Image
-                    src="/figma/home/news-character.png"
-                    unoptimized
-                    alt="뉴스를 읽는 Speak AI 캐릭터"
-                    width={217}
-                    height={216}
-                    priority
-                    className="absolute top-[-8.21%] left-[-20.36%] h-[116.76%] w-[140.85%] max-w-none"
-                  />
-                </span>
-              </section>
+                  <span className="inline-flex h-[26px] items-center rounded-full pr-3 pl-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+                    {dashboard?.courseProgress
+                      ? dashboard.courseProgress.title
+                      : "오늘의 추천"}
+                  </span>
+                  <h1 className="mt-3 text-xl leading-7 font-bold tracking-[-0.24px]">
+                    {dailyDone ? (
+                      <>
+                        오늘 연습을 마쳤어요
+                        <br />
+                        내일 다시 만나요
+                      </>
+                    ) : (
+                      <>
+                        오늘은 뉴스예요
+                        <br />
+                        {today.goalCount > 0
+                          ? `${today.goalCount}문장이면 끝나요`
+                          : "가볍게 시작해 봐요"}
+                      </>
+                    )}
+                  </h1>
+                  <Link
+                    href={dailyDone ? "/mypage/history" : todayHref}
+                    className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
+                  >
+                    {dailyDone ? "기록 보기" : "시작하기"}
+                  </Link>
+                  <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
+                    <Image
+                      src="/figma/home/news-character.png"
+                      unoptimized
+                      alt="뉴스를 읽는 Speak AI 캐릭터"
+                      width={217}
+                      height={216}
+                      priority
+                      className="absolute top-[-8.21%] left-[-20.36%] h-[116.76%] w-[140.85%] max-w-none"
+                    />
+                  </span>
+                </section>
+              )}
 
-              <HomeNewsTicker items={newsItems} failed={newsFailed} />
+              <HomeNewsTicker
+                items={newsItems}
+                failed={newsFailed}
+                loading={newsLoading}
+              />
 
               <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
@@ -781,9 +765,11 @@ export default function Home() {
 function HomeNewsTicker({
   items,
   failed,
+  loading,
 }: {
   items: PracticeContentSummary[];
   failed: boolean;
+  loading: boolean;
 }) {
   const [index, setIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
@@ -857,6 +843,7 @@ function HomeNewsTicker({
   return (
     <Link
       href={item ? `/practice/${item.id}?returnTo=%2Fhome` : "/news"}
+      aria-busy={loading}
       aria-label={
         item
           ? `인기 뉴스 ${index + 1}위: ${newsHeadline(item.title)}`
@@ -895,7 +882,9 @@ function HomeNewsTicker({
             {(item ? newsHeadline(item.title) : null) ??
               (failed
                 ? "뉴스 목록에서 다시 확인해 주세요"
-                : "새로운 뉴스를 준비하고 있어요")}
+                : loading
+                  ? "뉴스를 불러오고 있어요"
+                  : "새로운 뉴스를 준비하고 있어요")}
           </span>
         </span>
       </span>
@@ -992,44 +981,5 @@ function ContinueCard({
         <Image src={chevron} alt="" width={18} height={18} />
       </span>
     </Link>
-  );
-}
-
-function HomeSkeleton() {
-  return (
-    <AppShell
-      animateRoute={false}
-      viewportLocked
-      chromeColor="#f2f4f6"
-      className="!bg-[#f2f4f6]"
-    >
-      <div
-        role="status"
-        aria-busy="true"
-        aria-label="홈 화면 불러오는 중"
-        className="h-full overflow-hidden px-5 pb-8"
-      >
-        <span className="sr-only">홈 화면을 준비하고 있어요</span>
-        <div className="flex h-16 items-center justify-between">
-          <SkeletonBlock className="h-8 w-6 bg-[#e5e8eb]" />
-          <SkeletonBlock className="size-7 bg-[#e5e8eb]" />
-        </div>
-        <SkeletonBlock className="mt-2 h-[90px] w-full rounded-[20px] bg-[#e5e8eb]" />
-        <SkeletonBlock className="mt-10 h-[200px] w-full rounded-[24px] bg-[#e5e8eb]" />
-        <SkeletonBlock className="mt-7 h-14 w-full rounded-[16px] bg-[#e5e8eb]" />
-        <SkeletonBlock className="mt-7 h-6 w-32 bg-[#e5e8eb]" />
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {[0, 1, 2, 3].map((i) => (
-            <SkeletonBlock
-              key={i}
-              className="h-[136px] rounded-[20px] bg-[#e5e8eb]"
-            />
-          ))}
-        </div>
-        <SkeletonBlock className="mt-3 h-20 w-full rounded-[18px] bg-[#e5e8eb]" />
-        <SkeletonBlock className="mt-6 h-6 w-28 bg-[#e5e8eb]" />
-        <SkeletonBlock className="mt-3 h-20 w-full rounded-[18px] bg-[#e5e8eb]" />
-      </div>
-    </AppShell>
   );
 }
