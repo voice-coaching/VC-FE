@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { setTabTransitionDirection } from "@/lib/tab-transition";
 import styles from "./prototype-bottom-nav.module.css";
@@ -27,6 +27,22 @@ const tabs = [
     icon: "/figma/home-density/tab-person-fill.svg",
   },
 ] as const;
+
+function TabPending({ label }: { label: string }) {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      role="status"
+      aria-hidden={!pending}
+      data-pending={pending}
+      className={styles.pending}
+    >
+      <span className="sr-only">
+        {pending ? `${label} 화면을 여는 중` : ""}
+      </span>
+    </span>
+  );
+}
 
 export function PrototypeBottomNav() {
   const pathname = usePathname();
@@ -60,6 +76,7 @@ export function PrototypeBottomNav() {
                   )
                 }
               >
+                <TabPending label={label} />
                 <span
                   aria-hidden="true"
                   className={styles.icon}

@@ -7,7 +7,7 @@ import { NativeOAuthBridge } from "@/components/native-oauth-bridge";
 import { NativeSessionBridge } from "@/components/native-session-bridge";
 
 const designFont = localFont({
-  src: "../assets/fonts/NotoSansKR.woff",
+  src: "../assets/fonts/NotoSansKR.woff2",
   display: "swap",
   weight: "100 900",
 });
