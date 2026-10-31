@@ -1,0 +1,15 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Spinner" clip-path="url(#clip0_0_4)">
+<path id="Ellipse" d="M72 36C72 55.8823 55.8823 72 36 72C16.1177 72 0 55.8823 0 36C0 16.1177 16.1177 0 36 0C55.8823 0 72 16.1177 72 36ZM5.76 36C5.76 52.7011 19.2989 66.24 36 66.24C52.7011 66.24 66.24 52.7011 66.24 36C66.24 19.2989 52.7011 5.76 36 5.76C19.2989 5.76 5.76 19.2989 5.76 36Z" fill="#E8EEFB"/>
+<path id="Ellipse_2" d="M36 0C41.2992 -2.31638e-07 46.5331 1.16992 51.3281 3.42623C56.123 5.68254 60.3606 8.96959 63.7385 13.0527C67.1163 17.1359 69.5511 21.9144 70.869 27.0472C72.1869 32.1799 72.3553 37.5403 71.3623 42.7457L65.7044 41.6664C66.5385 37.2939 66.397 32.7911 65.29 28.4796C64.1829 24.1681 62.1377 20.1541 59.3003 16.7243C56.4629 13.2945 52.9033 10.5333 48.8756 8.63803C44.8478 6.74273 40.4514 5.76 36 5.76V0Z" fill="url(#paint0_linear_0_4)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_4" x1="0" y1="36" x2="72" y2="36" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8DB2FF"/>
+<stop offset="1" stop-color="#2F6BFF"/>
+</linearGradient>
+<clipPath id="clip0_0_4">
+<rect width="72" height="72" fill="white"/>
+</clipPath>
+</defs>
+</svg>

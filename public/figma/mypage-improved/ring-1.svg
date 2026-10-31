@@ -1,7 +1,7 @@
 <svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="104" height="104" viewBox="0 0 104 104" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path id="Progress" d="M104 52C104 80.7188 80.7188 104 52 104C23.2812 104 0 80.7188 0 52C0 23.2812 23.2812 0 52 0C80.7188 0 104 23.2812 104 52ZM3 52C3 79.062 24.938 101 52 101C79.062 101 101 79.062 101 52C101 24.938 79.062 3 52 3C24.938 3 3 24.938 3 52Z" fill="url(#paint0_linear_0_67)"/>
+<path id="Progress" d="M104 52C104 80.7188 80.7188 104 52 104C23.2812 104 0 80.7188 0 52C0 23.2812 23.2812 0 52 0C80.7188 0 104 23.2812 104 52ZM3 52C3 79.062 24.938 101 52 101C79.062 101 101 79.062 101 52C101 24.938 79.062 3 52 3C24.938 3 3 24.938 3 52Z" fill="url(#paint0_linear_0_72)"/>
 <defs>
-<linearGradient id="paint0_linear_0_67" x1="20.8" y1="10.4" x2="83.2" y2="93.6" gradientUnits="userSpaceOnUse">
+<linearGradient id="paint0_linear_0_72" x1="20.8" y1="10.4" x2="83.2" y2="93.6" gradientUnits="userSpaceOnUse">
 <stop stop-color="#7FA6FF"/>
 <stop offset="1" stop-color="#9BBBFF"/>
 </linearGradient>

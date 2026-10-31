@@ -123,9 +123,8 @@ export default function PracticePlan() {
   useEffect(() => {
     let active = true;
     setOverviewLoading(true);
-    const cached = getCachedUser();
     void Promise.allSettled([
-      cached ? Promise.resolve(cached) : api.users.getMe(),
+      api.users.getMe(),
       api.myPage.getStatistics({ period: "MONTH" }),
       api.users.getTitle(),
     ]).then(([userResult, statsResult, titleResult]) => {

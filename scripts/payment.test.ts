@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { ApiError } from "../src/lib/api/client";
+import { ApiError, clearAccessToken } from "../src/lib/api/client";
 import { createRemoteApi } from "../src/lib/api/remote";
-import { runPaymentRequest } from "../src/lib/payment";
+import {
+  normalizePaymentReason,
+  paymentErrorMessage,
+  paymentVerificationMessage,
+  runPaymentRequest,
+} from "../src/lib/payment";
 
 const originalFetch = globalThis.fetch;
 
@@ -55,6 +60,82 @@ test("payment requests do not automatically retry 503", async () => {
   assert.equal(calls, 1);
 });
 
+test("an aborted payment request never performs a mutation", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  await assert.rejects(
+    runPaymentRequest(
+      async () => {
+        calls += 1;
+      },
+      {
+        signal: controller.signal,
+      },
+    ),
+    (reason: unknown) =>
+      reason instanceof ApiError && reason.code === "REQUEST_ABORTED",
+  );
+  assert.equal(calls, 0);
+});
+
+test("cancellation while rate limited prevents the retry from reaching the backend", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  await assert.rejects(
+    runPaymentRequest(
+      async () => {
+        calls += 1;
+        throw new ApiError(
+          "rate limited",
+          429,
+          "PAYMENT_RATE_LIMITED",
+          undefined,
+          1,
+        );
+      },
+      {
+        signal: controller.signal,
+        wait: async () => {
+          controller.abort();
+        },
+      },
+    ),
+    (reason: unknown) =>
+      reason instanceof ApiError && reason.code === "REQUEST_ABORTED",
+  );
+  assert.equal(calls, 1);
+});
+
+test("cancel and refund reasons follow the backend's UTF-16 length and ISO control rules", () => {
+  assert.equal(normalizePaymentReason("  테스트 환불  "), "테스트 환불");
+  assert.equal(normalizePaymentReason("가".repeat(200)).length, 200);
+  for (const reason of [
+    " ",
+    "가".repeat(201),
+    "환불\n신청",
+    "취소\t사유",
+    "사유\u0085",
+  ]) {
+    assert.throws(() => normalizePaymentReason(reason), /줄바꿈 없이 1~200자/);
+  }
+});
+
+test("terminal payment states and active-membership errors do not claim processing is pending", () => {
+  assert.match(paymentVerificationMessage("FAILED"), /실패/);
+  assert.match(paymentVerificationMessage("CANCELLED"), /취소/);
+  assert.match(
+    paymentErrorMessage(
+      new ApiError(
+        "MEMBERSHIP_ALREADY_ACTIVE",
+        409,
+        "MEMBERSHIP_ALREADY_ACTIVE",
+      ),
+    ),
+    /만료 후/,
+  );
+});
+
 test("concurrent payment history reads share one backend request", async () => {
   let requests = 0;
   let resolveFetch: ((response: Response) => void) | undefined;
@@ -83,6 +164,30 @@ test("concurrent payment history reads share one backend request", async () => {
     }),
   );
   assert.deepEqual(await first, await second);
+});
+
+test("a new login session does not reuse the previous session's payment history request", async () => {
+  const responses: Array<(response: Response) => void> = [];
+  globalThis.fetch = async () =>
+    new Promise<Response>((resolve) => responses.push(resolve));
+  const api = createRemoteApi("/api/backend");
+  const first = api.payments.listOrders();
+  const previous = assert.rejects(
+    first,
+    (reason: unknown) =>
+      reason instanceof ApiError && reason.code === "AUTH_SESSION_CHANGED",
+  );
+  clearAccessToken();
+  const second = api.payments.listOrders();
+  assert.equal(responses.length, 2);
+  responses[0](
+    Response.json({ result: true, data: { items: [{ orderId: "old" }] } }),
+  );
+  responses[1](
+    Response.json({ result: true, data: { items: [{ orderId: "current" }] } }),
+  );
+  await previous;
+  assert.equal((await second).items[0].orderId, "current");
 });
 
 test("payment adapter matches the published backend contract", async () => {

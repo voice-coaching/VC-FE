@@ -359,8 +359,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request(`/api/reference-audios/${id(audioId)}/playback-url`),
     },
     examples: {
-      listCourse: (courseId) =>
-        request(`/api/courses/${id(courseId)}/practice-examples`),
+      listCourse: (courseId, sessionId) =>
+        request(
+          `/api/courses/${id(courseId)}/practice-examples${query({ sessionId })}`,
+        ),
       list: (courseId, stepId, sessionId) =>
         request(
           `/api/courses/${id(courseId)}/steps/${id(stepId)}/practice-examples${query({ sessionId })}`,
@@ -555,7 +557,8 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         }),
       listOrders(filters = {}) {
         const path = `/api/users/me/payment-orders${query(filters)}`;
-        if (paymentHistoryFlight?.key === path)
+        const key = JSON.stringify([getAuthSessionVersion(), path]);
+        if (paymentHistoryFlight?.key === key)
           return paymentHistoryFlight.promise;
         const promise = request<
           Awaited<ReturnType<ApiContract["payments"]["listOrders"]>>
@@ -563,7 +566,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           if (paymentHistoryFlight?.promise === promise)
             paymentHistoryFlight = null;
         });
-        paymentHistoryFlight = { key: path, promise };
+        paymentHistoryFlight = { key, promise };
         return promise;
       },
       cancel: (orderId, reason) =>

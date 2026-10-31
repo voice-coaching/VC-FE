@@ -43,6 +43,21 @@ test("class entry resolves examples without a frontend-selected step", async () 
   const result = await createRemoteApi("/api/backend").examples.listCourse(60);
   assert.equal(result.stepId, 12);
 });
+
+test("resumed class practice requests the session-pinned example revision", async () => {
+  globalThis.fetch = async (url) => {
+    assert.equal(
+      String(url),
+      "/api/backend/api/courses/60/practice-examples?sessionId=56",
+    );
+    return json({ courseId: 60, stepId: 12, revision: 7, items: [] });
+  };
+  const result = await createRemoteApi("/api/backend").examples.listCourse(
+    60,
+    56,
+  );
+  assert.equal(result.revision, 7);
+});
 test("MP3 requests share token refresh with JSON requests", async () => {
   saveAccessToken("expired");
   let refreshes = 0;
