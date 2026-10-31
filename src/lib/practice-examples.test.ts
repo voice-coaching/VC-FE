@@ -60,7 +60,7 @@ function fixture(value = set, detail = content) {
 test("uses DB content and session-pinned revision instead of the course default", async () => {
   const { api, calls } = fixture();
   assert.equal(await loadPracticeContent(api, "222", selection), content);
-  assert.deepEqual(calls, [["1"], [222]]);
+  assert.deepEqual(calls, [["1", "99"], [222]]);
 });
 for (const [label, overrides, contentId] of [
   ["legacy static ID", { exampleId: "consonant-1" }, "222"],
@@ -74,7 +74,7 @@ for (const [label, overrides, contentId] of [
       loadPracticeContent(api, contentId, { ...selection, ...overrides }),
       (e: unknown) => e instanceof ApiError && e.code === "EXAMPLE_CHANGED",
     );
-    assert.ok(calls.every((call) => call.length === 1));
+    assert.ok(calls.every((call) => call.length === 2));
   });
 }
 test("rejects a transcript different from the displayed example", async () => {

@@ -887,7 +887,7 @@ export interface ApiContract {
     getReferenceAudioPlaybackUrl(audioId: Id): Promise<PlaybackUrl>;
   };
   examples: {
-    listCourse(courseId: Id): Promise<PracticeExamples>;
+    listCourse(courseId: Id, sessionId?: Id): Promise<PracticeExamples>;
     list(courseId: Id, stepId: Id, sessionId?: Id): Promise<PracticeExamples>;
     getAudio(exampleId: string, signal?: AbortSignal): Promise<Blob>;
   };

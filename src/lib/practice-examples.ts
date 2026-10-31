@@ -39,7 +39,10 @@ export async function loadPracticeSelection(
     );
   if (!selection.courseId) throw invalid();
   const set = orderedCourseExamples(
-    await api.examples.listCourse(selection.courseId),
+    await api.examples.listCourse(
+      selection.courseId,
+      selection.sessionId ?? undefined,
+    ),
     selection.courseId,
   );
   if (

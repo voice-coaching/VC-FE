@@ -3,6 +3,24 @@
   background: #f2f4f6;
   color: #191f28;
 }
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  text-align: center;
+}
+.metrics > div {
+  position: relative;
+}
+.metrics > div + div::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 1px;
+  height: 28px;
+  transform: translateY(-50%);
+  background: #f2f4f6;
+}
 .content {
   height: 100%;
   overflow-y: auto;
@@ -27,6 +45,23 @@
 }
 .profileBand[data-highest="true"] .profile {
   padding-bottom: 24px;
+}
+.profileBand[data-membership="true"] .profile {
+  padding-bottom: 28px;
+}
+.wings {
+  position: absolute;
+  left: -32px;
+  top: 29px;
+  width: 168px;
+  height: 71px;
+}
+.wings img {
+  position: absolute;
+  max-width: none;
+}
+.wingRight {
+  transform: scaleX(-1);
 }
 .avatar {
   position: relative;
@@ -84,6 +119,9 @@
   background: linear-gradient(90deg, #d6e3ff, #c3d4ff);
   color: #1f3a80;
 }
+.titleBadge[data-level="3"] b {
+  color: #1f50e0;
+}
 .titleBadge[data-level="4"] {
   background: linear-gradient(90deg, #4f86ff, #2f6bff);
   color: white;
@@ -110,6 +148,10 @@
   padding: 16px 16px 16px 18px;
   border-radius: 20px;
   background: white;
+}
+.promotion[data-membership="true"] {
+  border: 1px solid white;
+  background: #ffffffb3;
 }
 .tabs {
   display: grid;
