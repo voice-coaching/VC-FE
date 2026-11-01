@@ -146,6 +146,9 @@ export function RecordingPracticeSession({
   const resumedSessionId = localOnly ? null : searchParams.get("sessionId");
   const resumeType = searchParams.get("resumeType");
   const restoreSession = workflow?.restoreSession;
+  // Exam IDs own the current session link. A fresh exam URL has no sessionId,
+  // even after its first analysis, so resolve specialized workflows on every entry.
+  const needsSessionRestore = Boolean(resumedSessionId || restoreSession);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
@@ -158,11 +161,11 @@ export function RecordingPracticeSession({
       ? content
       : { ...content, scriptText: resumedScriptText };
   const [phase, setPhase] = useState<Phase>(
-    resumedSessionId ? "restoring" : capturedRecording ? "review" : "idle",
+    needsSessionRestore ? "restoring" : capturedRecording ? "review" : "idle",
   );
   const [resumeFailed, setResumeFailed] = useState(false);
   const [resumeRetry, setResumeRetry] = useState(0);
-  const resumePendingRef = useRef(Boolean(resumedSessionId));
+  const resumePendingRef = useRef(needsSessionRestore);
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
@@ -229,12 +232,19 @@ export function RecordingPracticeSession({
     localRecorder.sentenceIndex,
     localRecorder.boundaries,
   ]);
-  const discardGuard = useRecordingDiscardGuard(
-    phase === "recording" ||
+  const shouldConfirmExit =
+    !background &&
+    phase !== "result" &&
+    !showCompletion &&
+    (sentences.length > 1 ||
+      phase === "recording" ||
       phase === "review" ||
-      recorder.status === "requesting",
-    !background,
-  );
+      phase === "uploading" ||
+      phase === "analyzing" ||
+      recorder.status === "requesting" ||
+      recorder.blob != null ||
+      recordingAttempts.length > 0);
+  const discardGuard = useRecordingDiscardGuard(shouldConfirmExit, !background);
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
@@ -358,7 +368,7 @@ export function RecordingPracticeSession({
   );
 
   useEffect(() => {
-    if (!resumedSessionId) return;
+    if (!resumedSessionId && !restoreSession) return;
 
     let active = true;
     let resumeReadComplete = false;
@@ -370,7 +380,7 @@ export function RecordingPracticeSession({
       try {
         const restored = restoreSession
           ? await restoreSession(() => active)
-          : await loadPracticeResume(api, resumedSessionId, content.id);
+          : await loadPracticeResume(api, resumedSessionId!, content.id);
         if (!active) return;
         resumeReadComplete = true;
         resumePendingRef.current = false;
@@ -1198,9 +1208,12 @@ export function RecordingPracticeSession({
 
   if (phase === "restoring")
     return (
-      <LoadingOverlay
-        label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
-      />
+      <>
+        {discardGuard.dialog}
+        <LoadingOverlay
+          label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
+        />
+      </>
     );
 
   if (phase === "error") {
@@ -1215,6 +1228,7 @@ export function RecordingPracticeSession({
       : quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
       <div className="flex min-h-full flex-col px-5 pb-8">
+        {discardGuard.dialog}
         <div className="my-auto py-10 text-center">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
             <CircleAlert className="size-9" />

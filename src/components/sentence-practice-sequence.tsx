@@ -86,12 +86,18 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   });
   const recording = capture.recorder.status === "recording";
   const waiting = capture.allCaptured && !recording;
-  const guard = useRecordingDiscardGuard(
-    recording ||
+  const allAdmitted = admissions.length === items.length;
+  const allCompleted =
+    allAdmitted && items.every((_, index) => results[index]?.result != null);
+  const shouldConfirmExit =
+    !allCompleted &&
+    (items.length > 1 ||
+      capture.recorder.status === "requesting" ||
+      recording ||
       capture.saving ||
-      (!capture.allCaptured && capture.recordedCount > 0),
-    true,
-  );
+      capture.recordedCount > 0 ||
+      admissions.length > 0);
+  const guard = useRecordingDiscardGuard(shouldConfirmExit, true);
   useEffect(() => {
     if (error) capture.recorder.reset();
   }, [error, capture.recorder.reset]);
@@ -205,9 +211,6 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
 
   const currentIndex = admissions.length;
   const current = items[currentIndex];
-  const allAdmitted = currentIndex === items.length;
-  const allCompleted =
-    allAdmitted && items.every((_, index) => results[index]?.result != null);
   const canAdvance =
     allCompleted &&
     capture.allCaptured &&
@@ -220,10 +223,16 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   }, [waiting, onTitleChange]);
 
   if (!ready || !capture.ready)
-    return <LoadingOverlay label="문장별 진행 상태를 확인하고 있어요" />;
+    return (
+      <>
+        {guard.dialog}
+        <LoadingOverlay label="문장별 진행 상태를 확인하고 있어요" />
+      </>
+    );
   if (error || items.length === 0)
     return (
       <div className="space-y-4 px-5 py-10">
+        {guard.dialog}
         <p role="alert">{error ?? "연습할 문장을 찾지 못했습니다."}</p>
         <button
           className="design-action"
@@ -375,6 +384,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
 
   return (
     <div className="space-y-4 px-5 py-5">
+      {guard.dialog}
       <h2 className="text-xl font-bold">문장별 분석 결과</h2>
       <p role="status" className="text-sm text-muted-foreground">
         {Object.values(results).filter((item) => item.result).length}/
