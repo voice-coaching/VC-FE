@@ -1,3 +1,4 @@
+import { readCoachingUsage } from "../coaching-usage";
 import {
   ApiError,
   clearAccessToken,
@@ -249,6 +250,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
     },
     users: {
+      getCoachingUsage: () =>
+        request<unknown>("/api/users/me/coaching-usage", {
+          cache: "no-store",
+        }).then(readCoachingUsage),
       async getMe() {
         const user =
           await request<Awaited<ReturnType<ApiContract["users"]["getMe"]>>>(

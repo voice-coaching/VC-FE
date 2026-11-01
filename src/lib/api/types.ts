@@ -79,6 +79,19 @@ export interface UserAccount {
   membershipEnvironment: MembershipEnvironment;
 }
 
+export interface CoachingUsage {
+  membershipType: MembershipType;
+  environment: "TEST" | null;
+  unlimited: boolean;
+  startsAt: string | null;
+  expiresAt: string | null;
+  limit: number | null;
+  used: number;
+  reserved: number;
+  remaining: number | null;
+  canRequestCoaching: boolean;
+}
+
 export interface PaymentOrder {
   orderId: string;
   product: string;
@@ -827,6 +840,7 @@ export interface ApiContract {
   };
   users: {
     getMe(): Promise<UserAccount>;
+    getCoachingUsage(): Promise<CoachingUsage>;
     updateProfile(input: {
       nickname: string;
     }): Promise<{ id: Id; nickname: string; updatedAt: string }>;

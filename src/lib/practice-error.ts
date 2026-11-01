@@ -5,6 +5,7 @@ import {
 } from "./analysis-polling";
 import { ApiError } from "./api/client";
 import { CanonicalResultUnavailable } from "./canonical-presentation";
+import { coachingLimitNotice } from "./coaching-usage";
 
 export type PracticeErrorKind =
   "quality" | "input" | "unsupported" | "preparation";
@@ -23,6 +24,8 @@ export function describePracticeError(
   reason: unknown,
   recorderStatus?: string,
 ) {
+  const coaching = coachingLimitNotice(reason);
+  if (coaching) return coaching;
   if (reason instanceof CanonicalResultUnavailable) {
     return {
       kind: "analysis",

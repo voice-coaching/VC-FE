@@ -9,6 +9,7 @@ import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
 import { canonicalApi } from "@/lib/api/canonical";
+import { assertCoachingInput, coachingLimitNotice } from "@/lib/coaching-usage";
 
 import {
   Check,
@@ -20,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { analysisRequestWasRejected } from "@/lib/canonical-recovery";
 import {
   useCallback,
   useEffect,
@@ -66,14 +69,7 @@ import {
   prepareRecordingAudio,
 } from "@/lib/recording-audio";
 import { prepareAudioForAnalysis } from "@/hooks/use-audio-recorder";
-import { prepareDirectAudio } from "@/lib/direct-audio";
-import {
-  directAnalysisEnabled,
-  submitDirect,
-  observeDirect,
-  linkDirectHistory,
-  type DirectView,
-} from "@/lib/direct-analysis";
+import type { DirectView } from "@/lib/direct-analysis";
 import { DirectAnalysisResult } from "@/components/direct-analysis-result";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readLipConsent, writeLipConsent } from "@/lib/lip-consent";
@@ -138,6 +134,8 @@ export default function LipPractice() {
   const mediaBusy = useRef(false);
   const analysisBusyRef = useRef(false);
   const analysisOwnerRef = useRef<AbortController | null>(null);
+  const submittedClipsRef = useRef(new WeakSet<Blob>());
+  const [submittedPrompts, setSubmittedPrompts] = useState<number[]>([]);
   const analysisBusy =
     analysisPhase === "preparing" ||
     analysisPhase === "uploading" ||
@@ -160,6 +158,8 @@ export default function LipPractice() {
         setAnalyses({});
         setDirectResults({});
         directAttemptsRef.current.clear();
+        submittedClipsRef.current = new WeakSet<Blob>();
+        setSubmittedPrompts([]);
         setAnalysisError(null);
         setAnalysisPhase("idle");
       }),
@@ -290,6 +290,9 @@ export default function LipPractice() {
         });
         contentByPromptRef.current.delete(promptIndex);
         directAttemptsRef.current.delete(promptIndex);
+        setSubmittedPrompts((current) =>
+          current.filter((index) => index !== promptIndex),
+        );
         setDirectResults((current) => {
           const next = { ...current };
           delete next[promptIndex];
@@ -422,6 +425,16 @@ export default function LipPractice() {
 
   async function analyzeSelectedClip() {
     if (!reportClip || analysisBusyRef.current || !mounted.current) return;
+    if (
+      reportClip.audioBlob &&
+      submittedClipsRef.current.has(reportClip.audioBlob)
+    ) {
+      setAnalysisError(
+        "이미 전송한 녹음이에요. 추가 코칭을 요청하지 않고 학습 기록에서 기존 분석과 재시도 가능 여부를 확인해 주세요.",
+      );
+      setAnalysisPhase("error");
+      return;
+    }
     if (!videoConsentAccepted) {
       setAnalysisError("음성 AI 분석 및 처리에 먼저 동의해 주세요.");
       setAnalysisPhase("error");
@@ -434,6 +447,7 @@ export default function LipPractice() {
     analysisOwnerRef.current = owner;
     const epoch = getAuthSessionVersion();
     let previewShown = false;
+    let awaitingAdmission = false;
     setAnalysisPhase("preparing");
     setAnalysisTarget(selectedClip);
     setAnalysisError(null);
@@ -451,59 +465,8 @@ export default function LipPractice() {
     try {
       if (!reportClip.audioBlob)
         throw new Error("분석할 음성이 없어요. 다시 촬영해 주세요.");
-      if (directAnalysisEnabled) {
-        const prepared = await prepareDirectAudio(reportClip.audioBlob);
-        requireActive();
-        let attempt = directAttemptsRef.current.get(selectedClip);
-        if (!attempt) {
-          attempt = {
-            id: crypto.randomUUID(),
-            claim: btoa(
-              Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
-                String.fromCharCode(b),
-              ).join(""),
-            )
-              .replaceAll("+", "-")
-              .replaceAll("/", "_")
-              .replace(/=+$/, ""),
-          };
-          directAttemptsRef.current.set(selectedClip, attempt);
-        }
-        setAnalysisPhase("uploading");
-        const reply = await submitDirect(
-          prepared.blob,
-          prompts[selectedClip],
-          null,
-          attempt.id,
-          attempt.claim,
-          owner.signal,
-        );
-        requireActive();
-        attempt.jobId = reply.jobId;
-        setUploadProgress(100);
-        setAnalysisPhase("analyzing");
-        const update = (view: DirectView) => {
-          requireActive();
-          setDirectResults((current) => ({ ...current, [selectedClip]: view }));
-        };
-        update(reply);
-        const result = reply.result
-          ? reply
-          : await observeDirect(reply.jobId, owner.signal, update);
-        requireActive();
-        if (!result?.result)
-          throw new Error(result?.failure || "음성 분석을 완료하지 못했어요.");
-        update(result);
-        setAnalysisPhase("result");
-        previewShown = true;
-        try {
-          await linkDirectHistory(reply.jobId, attempt.claim, owner.signal);
-        } catch {
-          requireActive();
-          setAnalysisError("분석은 완료됐지만 학습 이력을 저장하지 못했어요.");
-        }
-        return;
-      }
+
+      assertCoachingInput(prompts[selectedClip], reportClip.durationMs);
       await requireAnalysisScope("STANDALONE_AUDIO", owner.signal);
       const capabilities = await api.training.getAnalysisCapabilities();
       requireActive();
@@ -623,6 +586,11 @@ export default function LipPractice() {
 
       await api.training.selectRecording(sessionId, recordingId);
       requireActive();
+      submittedClipsRef.current.add(reportClip.audioBlob);
+      setSubmittedPrompts((current) =>
+        current.includes(selectedClip) ? current : [...current, selectedClip],
+      );
+      awaitingAdmission = true;
       const requested = await canonicalApi.analyzeAudiovisual(
         sessionId,
         {
@@ -632,6 +600,7 @@ export default function LipPractice() {
         owner.signal,
       );
       requireActive();
+      awaitingAdmission = false;
       setAnalysisPhase("analyzing");
       let analysis = await waitForCanonicalResult({
         sessionId,
@@ -700,10 +669,23 @@ export default function LipPractice() {
         });
         previewShown = false;
       }
+      if (
+        awaitingAdmission &&
+        analysisRequestWasRejected(reason) &&
+        reportClip.audioBlob
+      ) {
+        submittedClipsRef.current.delete(reportClip.audioBlob);
+        setSubmittedPrompts((current) =>
+          current.filter((index) => index !== selectedClip),
+        );
+      }
+      const coaching = coachingLimitNotice(reason);
       setAnalysisError(
-        reason instanceof Error
-          ? reason.message
-          : "영상 발음 분석을 완료하지 못했어요.",
+        coaching
+          ? `${coaching.title} ${coaching.hint}`
+          : reason instanceof Error
+            ? reason.message
+            : "영상 발음 분석을 완료하지 못했어요.",
       );
       setAnalysisPhase(previewShown ? "result" : "error");
     } finally {
@@ -1022,13 +1004,23 @@ export default function LipPractice() {
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void analyzeSelectedClip()}
-                  className="mt-4 min-h-12 w-full rounded-full bg-primary text-sm font-bold text-white"
-                >
-                  다시 분석하기
-                </button>
+                {reportClip?.audioBlob &&
+                submittedPrompts.includes(selectedClip) ? (
+                  <Link
+                    href="/mypage/history"
+                    className="mt-4 flex min-h-12 w-full items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
+                  >
+                    학습 기록에서 기존 분석 확인
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void analyzeSelectedClip()}
+                    className="mt-4 min-h-12 w-full rounded-full bg-primary text-sm font-bold text-white"
+                  >
+                    다시 분석하기
+                  </button>
+                )}
               </section>
             ) : selectedDirectResult ? (
               <div className="mt-5">

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { UserAccount } from "@/lib/api";
 import styles from "./membership.module.css";
+import { CoachingUsageSummary } from "./coaching-usage-summary";
 
 export function MembershipCard({
   account,
@@ -14,13 +15,6 @@ export function MembershipCard({
 }) {
   const paid = account?.membershipType === "paid";
   const test = account?.membershipType === "admin";
-  const expires = account?.membershipExpiresAt
-    ? new Intl.DateTimeFormat("ko-KR", {
-        timeZone: "Asia/Seoul",
-        month: "numeric",
-        day: "numeric",
-      }).format(new Date(account.membershipExpiresAt))
-    : null;
   return (
     <section className={styles.membershipCard} aria-label="내 이용권">
       <div className={styles.cardHead}>
@@ -53,8 +47,8 @@ export function MembershipCard({
                 : "무료"
             : "—"}
         </strong>
-        {expires ? <span>{expires}까지</span> : null}
       </div>
+      <CoachingUsageSummary compact={compact} />
       {!compact ? (
         <Link
           href={`/mypage/payments?view=${paid || test ? "manage" : "purchase"}`}

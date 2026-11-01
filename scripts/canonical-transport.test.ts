@@ -38,6 +38,11 @@ test("new audio/video requests and retries all select the unified V6 result cont
       new Headers(init?.headers).get("X-Analysis-Result-Schema"),
       AUDIOVISUAL_RESULT_HEADER,
     );
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      accepted: true,
+      policyRevision: "current",
+    });
+    assert.equal(init?.method, "POST");
     return json({ analysisId: 1 });
   };
   const client = createCanonicalAnalysisClient("https://qa.example.test");
