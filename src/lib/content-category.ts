@@ -1,21 +1,33 @@
-import type { ContentType } from "./api/types";
-import { categoryLabel } from "./content-labels";
+import type { ContentFacetOption, ContentFacets } from "./api/types";
 
-/** Display labels and legacy names must not become the sentence API's category value. */
-export function contentCategoryCode(
-  type: ContentType | undefined,
-  category: string | undefined,
-) {
-  if (type === "SENTENCE" && category && categoryLabel(category) === "된소리")
-    return "tense";
-  return category;
+const SENTENCE_CATEGORY_CODES = [
+  "FINAL_CONSONANT",
+  "TENSE_CONSONANT",
+  "CONSONANT",
+  "VOWEL",
+];
+
+/** Only the backend can supply selectable values and labels; absent codes stay absent. */
+export function sentenceCategoryOptions(
+  facets: ContentFacets,
+): ContentFacetOption[] {
+  if (facets.type !== "SENTENCE")
+    throw new Error("문장 카테고리 정보를 확인하지 못했어요.");
+  return SENTENCE_CATEGORY_CODES.flatMap((code) => {
+    const option = facets.categories.find(
+      (item) => item.value === code && item.label.trim(),
+    );
+    return option ? [option] : [];
+  });
 }
 
-export function contentFilterCodes<
-  T extends { type?: ContentType; category?: string },
->(filters: T): T {
-  return {
-    ...filters,
-    category: contentCategoryCode(filters.type, filters.category),
-  };
+/** null holds a filtered request; undefined means an unfiltered request. */
+export function sentenceCategoryRequest(
+  selected: string,
+  options: readonly ContentFacetOption[],
+  ready: boolean,
+): string | null | undefined {
+  if (selected === "") return undefined;
+  if (!ready) return null;
+  return options.find((option) => option.value === selected)?.value ?? null;
 }

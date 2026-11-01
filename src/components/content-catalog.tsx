@@ -12,6 +12,7 @@ import { BackButton } from "@/components/back-button";
 import {
   api,
   type ContentFacets,
+  type ContentFacetOption,
   type ContentType,
   type Difficulty,
   type PracticeContentSummary,
@@ -20,7 +21,10 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { categoryLabel } from "@/lib/content-labels";
-import { contentCategoryCode } from "@/lib/content-category";
+import {
+  sentenceCategoryOptions,
+  sentenceCategoryRequest,
+} from "@/lib/content-category";
 import { newsHeadline, newsCategoryTags } from "@/lib/news-presentation";
 import { useCatalogFilters } from "@/hooks/use-catalog-filters";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
@@ -59,12 +63,15 @@ const difficultyStyle: Record<Difficulty, string> = {
   ADVANCED: "bg-[#fff0f2] text-[#ff4d62]",
 };
 
-const SENTENCE_FILTERS = [
-  { label: "받침", symbol: "ㄹ", description: "끝소리를 또렷하게" },
-  { label: "된소리", symbol: "ㄲ", description: "힘주어 정확하게" },
-  { label: "자음", symbol: "ㄹ", description: "첫소리를 분명하게" },
-  { label: "모음", symbol: "ㅏ", description: "입모양을 정확하게" },
-];
+const SENTENCE_FILTER_PRESENTATION: Record<
+  string,
+  { symbol: string; description: string }
+> = {
+  FINAL_CONSONANT: { symbol: "ㄹ", description: "끝소리를 또렷하게" },
+  TENSE_CONSONANT: { symbol: "ㄲ", description: "힘주어 정확하게" },
+  CONSONANT: { symbol: "ㄹ", description: "첫소리를 분명하게" },
+  VOWEL: { symbol: "ㅏ", description: "입모양을 정확하게" },
+};
 
 type CatalogCache = {
   items: PracticeContentSummary[];
@@ -78,7 +85,7 @@ function catalogCacheResource(
   category: string,
   difficulty: Difficulty | "",
 ) {
-  return `content-${type === "NEWS" ? "NEWS-topics-v1" : type}-${contentCategoryCode(type, category) || "all"}-${difficulty || "all"}`;
+  return `content-${type === "NEWS" ? "NEWS-topics-v1" : type === "SENTENCE" ? "SENTENCE-facets-v2" : type}-${category || "all"}-${difficulty || "all"}`;
 }
 
 function durationLabel(seconds: number) {
@@ -108,15 +115,32 @@ export function ContentCatalog({
         : "/announcer";
   const userId = getAuthenticatedUserId();
   const { category, difficulty, setCategory, setDifficulty } =
-    useCatalogFilters(`${userId}:${type}`);
-  const categoryValues = useRef<Record<string, string>>({});
-  const fallbackCategories =
-    type === "NEWS"
-      ? []
-      : type === "SENTENCE"
-        ? ["받침", "된소리", "자음", "모음"]
-        : [];
-  const [categories, setCategories] = useState(fallbackCategories);
+    useCatalogFilters(
+      `${userId}:${type === "SENTENCE" ? "SENTENCE-facets-v2" : type}`,
+    );
+  const [categories, setCategories] = useState<string[]>([]);
+  const [facetRetry, setFacetRetry] = useState(0);
+  const facetScope = `${userId}:${type}`;
+  const [sentenceFacets, setSentenceFacets] = useState<{
+    scope: string;
+    status: "loading" | "ready" | "error";
+    options: ContentFacetOption[];
+    error?: string;
+  }>({ scope: facetScope, status: "loading", options: [] });
+  const facetsCurrent = sentenceFacets.scope === facetScope;
+  const facetsReady = facetsCurrent && sentenceFacets.status === "ready";
+  const facetError =
+    facetsCurrent && sentenceFacets.status === "error"
+      ? sentenceFacets.error
+      : undefined;
+  const sentenceOptions = facetsCurrent ? sentenceFacets.options : [];
+  const requestedCategory =
+    type === "SENTENCE"
+      ? sentenceCategoryRequest(category, sentenceOptions, facetsReady)
+      : category || undefined;
+  const previousFilters = useRef(
+    JSON.stringify([userId, type, category, difficulty]),
+  );
   const [difficultyOptions, setDifficultyOptions] = useState(DIFFICULTIES);
   const [initialCache] = useState(() =>
     readUserClientCache<CatalogCache>(
@@ -196,18 +220,19 @@ export function ContentCatalog({
 
   useEffect(() => {
     let active = true;
+    if (type === "SENTENCE")
+      setSentenceFacets({ scope: facetScope, status: "loading", options: [] });
     const resource = cacheResources.contentFacets(type);
     const applyFacets = (facets: ContentFacets) => {
       const visibleFacets = catalogFacetsForPractice(type, facets);
-      categoryValues.current = {
-        ...categoryValues.current,
-        ...Object.fromEntries(
-          visibleFacets.categories.map((option) => [
-            option.label,
-            option.value,
-          ]),
-        ),
-      };
+      if (type === "SENTENCE") {
+        setSentenceFacets({
+          scope: facetScope,
+          status: "ready",
+          options: sentenceCategoryOptions(facets),
+        });
+        return;
+      }
       if (type !== "NEWS" && visibleFacets.categories.length)
         setCategories(visibleFacets.categories.map((option) => option.label));
       if (visibleFacets.difficulties.length)
@@ -220,7 +245,7 @@ export function ContentCatalog({
         ]);
     };
     const cached = readUserClientCache<ContentFacets>(userId, resource);
-    if (cached) applyFacets(cached);
+    if (cached && type !== "SENTENCE") applyFacets(cached);
     api.content
       .getFacets(type)
       .then((facets) => {
@@ -233,12 +258,18 @@ export function ContentCatalog({
         );
       })
       .catch(() => {
-        // Keep the bundled labels when the optional facet endpoint is unavailable.
+        if (active && type === "SENTENCE")
+          setSentenceFacets({
+            scope: facetScope,
+            status: "error",
+            options: [],
+            error: "문장 카테고리를 불러오지 못했어요. 다시 시도해 주세요.",
+          });
       });
     return () => {
       active = false;
     };
-  }, [type, userId]);
+  }, [type, userId, facetScope, facetRetry]);
 
   useEffect(() => {
     let active = true;
@@ -248,24 +279,31 @@ export function ContentCatalog({
     setLoadingMore(false);
     setLoadMoreError(null);
     setRefreshing(true);
-    const cached = readUserClientCache<CatalogCache>(userId, resource);
+    if (requestedCategory === null) {
+      setItems([]);
+      setTotalElements(0);
+      setPage(0);
+      setHasNext(false);
+      setLoading(false);
+      setRefreshing(false);
+      setError(null);
+      return () => {
+        active = false;
+        generation.current += 1;
+      };
+    }
+    const filterIdentity = JSON.stringify([userId, type, category, difficulty]);
+    const filtersChanged = previousFilters.current !== filterIdentity;
+    previousFilters.current = filterIdentity;
+    const cached = filtersChanged
+      ? null
+      : readUserClientCache<CatalogCache>(userId, resource);
     setLoadedScope(scope);
     if (cached) {
       setItems(cached.items);
       setTotalElements(cached.totalElements);
       setPage(cached.page);
       setHasNext(cached.hasNext);
-      if (!category) {
-        categoryValues.current = {
-          ...categoryValues.current,
-          ...Object.fromEntries(
-            cached.items.map((item) => [
-              categoryLabel(item.category),
-              item.category,
-            ]),
-          ),
-        };
-      }
       setLoading(false);
     } else {
       setItems([]);
@@ -331,8 +369,7 @@ export function ContentCatalog({
           (page) =>
             api.content.list({
               type,
-              category:
-                categoryValues.current[category] ?? (category || undefined),
+              category: requestedCategory,
               difficulty: difficulty || undefined,
               page,
               size: 20,
@@ -345,17 +382,6 @@ export function ContentCatalog({
         if (!active || !result) return;
         setItems(result.items);
         setTotalElements(result.totalElements);
-        if (!category) {
-          categoryValues.current = {
-            ...categoryValues.current,
-            ...Object.fromEntries(
-              result.items.map((item) => [
-                categoryLabel(item.category),
-                item.category,
-              ]),
-            ),
-          };
-        }
         setPage(result.page);
         setHasNext(Boolean(result.hasNext));
         writeUserClientCache<CatalogCache>(userId, resource, {
@@ -383,10 +409,17 @@ export function ContentCatalog({
       active = false;
       generation.current += 1;
     };
-  }, [category, difficulty, type, userId, retry, scope]);
+  }, [category, difficulty, type, userId, retry, scope, requestedCategory]);
 
   async function loadMore() {
-    if (loadMoreBusy.current || refreshing || !hasNext) return;
+    if (
+      loadMoreBusy.current ||
+      refreshing ||
+      !hasNext ||
+      requestedCategory === null ||
+      loadedScope !== scope
+    )
+      return;
     loadMoreBusy.current = true;
     const requestGeneration = generation.current;
     setLoadingMore(true);
@@ -394,7 +427,7 @@ export function ContentCatalog({
     try {
       const result = await api.content.list({
         type,
-        category: categoryValues.current[category] ?? (category || undefined),
+        category: requestedCategory,
         difficulty: difficulty || undefined,
         page: page + 1,
         size: 20,
@@ -472,7 +505,22 @@ export function ContentCatalog({
       ) : null}
 
       {type === "SENTENCE" ? (
-        <SentenceFilters category={category} onCategory={setCategory} />
+        <SentenceFilters
+          category={category}
+          options={sentenceOptions}
+          loading={!facetsReady && !facetError}
+          error={facetError}
+          onRetry={() => setFacetRetry((value) => value + 1)}
+          onCategory={(value) => {
+            if (
+              value &&
+              !sentenceOptions.some((option) => option.value === value)
+            )
+              return;
+            setPage(0);
+            setCategory(value);
+          }}
+        />
       ) : null}
 
       {type === "ANNOUNCER" && featured ? (
@@ -499,7 +547,9 @@ export function ContentCatalog({
             {type === "ANNOUNCER" ? "전체 멘트" : null}
             {type === "SENTENCE" ? (
               <>
-                {category || "전체"} 문장
+                {sentenceOptions.find((option) => option.value === category)
+                  ?.label ?? (category ? "선택한" : "전체")}{" "}
+                문장
                 <span className="ml-2 text-primary">
                   {visibleTotalElements}
                 </span>
@@ -516,7 +566,13 @@ export function ContentCatalog({
           )}
         </div>
 
-        {loading ? (
+        {requestedCategory === null ? (
+          <p role="status" className="py-12 text-center text-sm text-[#8b95a1]">
+            {facetsReady
+              ? "선택한 카테고리를 사용할 수 없어요. 전체 문장을 선택해 주세요."
+              : "카테고리를 확인한 뒤 문장을 불러올게요."}
+          </p>
+        ) : loading ? (
           <CatalogListSkeleton type={type} />
         ) : error ? (
           <div className="mt-4 rounded-2xl bg-[#fff0f2] p-4 text-sm text-[#d91b34] [overflow-wrap:anywhere]">
@@ -850,41 +906,84 @@ function DifficultyMeter({ difficulty }: { difficulty: Difficulty }) {
 function SentenceFilters({
   category,
   onCategory,
+  options,
+  loading,
+  error,
+  onRetry,
 }: {
   category: string;
   onCategory: (value: string) => void;
+  options: ContentFacetOption[];
+  loading: boolean;
+  error?: string;
+  onRetry: () => void;
 }) {
   return (
     <section className="px-5 pt-3">
       <h2 className="text-[17px] leading-6 font-bold">
         연습할 소리를 골라보세요
       </h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {SENTENCE_FILTERS.map((item) => {
-          const selected = category === item.label;
-          return (
-            <button
-              key={item.label}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onCategory(selected ? "" : item.label)}
-              className={`flex h-[72px] items-center gap-3 rounded-2xl bg-white px-4 text-left shadow-[0_2px_6px_rgba(23,23,23,0.05)] ${selected ? "border-2 border-primary" : "border-2 border-transparent"}`}
-            >
-              <span className="w-8 shrink-0 text-center text-[34px] leading-9 font-black text-primary">
-                {item.symbol}
-              </span>
-              <span className="min-w-0">
-                <strong className="block text-[15px] leading-[22px]">
-                  {item.label}
-                </strong>
-                <span className="block truncate text-xs leading-4 text-[#8b95a1]">
-                  {item.description}
+      {loading ? (
+        <div
+          role="status"
+          aria-label="문장 카테고리 불러오는 중"
+          className="mt-3 grid grid-cols-2 gap-2"
+        >
+          {[0, 1, 2, 3].map((index) => (
+            <SkeletonBlock key={index} className="h-[72px] rounded-2xl" />
+          ))}
+        </div>
+      ) : error || !options.length ? (
+        <div className="mt-3 rounded-2xl bg-white p-4 text-sm">
+          <p role={error ? "alert" : "status"}>
+            {error ?? "현재 선택할 수 있는 연습 카테고리가 없어요."}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 min-h-11 font-semibold text-primary"
+          >
+            카테고리 다시 불러오기
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {options.map((item) => {
+            const selected = category === item.value;
+            const presentation = SENTENCE_FILTER_PRESENTATION[item.value];
+            return (
+              <button
+                key={item.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onCategory(selected ? "" : item.value)}
+                className={`flex h-[72px] items-center gap-3 rounded-2xl bg-white px-4 text-left shadow-[0_2px_6px_rgba(23,23,23,0.05)] ${selected ? "border-2 border-primary" : "border-2 border-transparent"}`}
+              >
+                <span className="w-8 shrink-0 text-center text-[34px] leading-9 font-black text-primary">
+                  {presentation.symbol}
                 </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                <span className="min-w-0">
+                  <strong className="block text-[15px] leading-[22px]">
+                    {item.label}
+                  </strong>
+                  <span className="block truncate text-xs leading-4 text-[#8b95a1]">
+                    {presentation.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {category && (
+        <button
+          type="button"
+          onClick={() => onCategory("")}
+          className="mt-2 min-h-11 text-sm font-semibold text-primary"
+        >
+          전체 문장 보기
+        </button>
+      )}
     </section>
   );
 }

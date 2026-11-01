@@ -9,10 +9,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, CircleAlert } from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  prepareAudioForAnalysis,
-  useAudioRecorder,
-} from "@/hooks/use-audio-recorder";
+import { prepareAudioForAnalysis } from "@/hooks/use-audio-recorder";
+import { usePracticeRecorder } from "@/hooks/use-practice-recorder";
 import {
   api,
   type AnalysisCapabilities,
@@ -128,11 +126,19 @@ export function RecordingPracticeSession({
   sentenceIndex,
   onAnalysisAdmitted,
   autoSubmit = false,
+  capturedRecording,
+  background = false,
+  submissionRetry = 0,
+  onSubmissionError,
 }: PracticeSessionProps & {
   workflow?: PracticeSessionWorkflow;
   sentenceIndex?: number;
   onAnalysisAdmitted?: (admission: SentenceAnalysisAdmission) => void;
   autoSubmit?: boolean;
+  capturedRecording?: { blob: Blob; durationMs: number; previewUrl?: string };
+  background?: boolean;
+  submissionRetry?: number;
+  onSubmissionError?: (message: string) => void;
 }) {
   const router = useRouter();
   const [saveReportOpen, setSaveReportOpen] = useState(false);
@@ -152,7 +158,7 @@ export function RecordingPracticeSession({
       ? content
       : { ...content, scriptText: resumedScriptText };
   const [phase, setPhase] = useState<Phase>(
-    resumedSessionId ? "restoring" : "idle",
+    resumedSessionId ? "restoring" : capturedRecording ? "review" : "idle",
   );
   const [resumeFailed, setResumeFailed] = useState(false);
   const [resumeRetry, setResumeRetry] = useState(0);
@@ -198,12 +204,36 @@ export function RecordingPracticeSession({
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
-  const recorder = useAudioRecorder();
+  const sentences =
+    sentenceIndex != null
+      ? [displayedContent.scriptText]
+      : splitSentences(displayedContent.scriptText);
+  const localRecorder = usePracticeRecorder(sentences.length);
+  const recorder = capturedRecording
+    ? { ...localRecorder, ...capturedRecording, status: "recorded" as const }
+    : localRecorder;
+  const retryOwner = useRef(submissionRetry);
+  const submissionErrorOwner = useRef(onSubmissionError);
+  submissionErrorOwner.current = onSubmissionError;
+  useEffect(() => {
+    if (background && requestError)
+      submissionErrorOwner.current?.(requestError);
+  }, [background, requestError]);
+  useEffect(() => {
+    if (!capturedRecording) {
+      setActiveSentence(localRecorder.sentenceIndex);
+      sentenceBoundaries.current = localRecorder.boundaries;
+    }
+  }, [
+    capturedRecording,
+    localRecorder.sentenceIndex,
+    localRecorder.boundaries,
+  ]);
   const discardGuard = useRecordingDiscardGuard(
     phase === "recording" ||
       phase === "review" ||
       recorder.status === "requesting",
-    true,
+    !background,
   );
 
   const courseId = searchParams.get("courseId");
@@ -224,11 +254,6 @@ export function RecordingPracticeSession({
       ? "PRONUNCIATION"
       : (currentCourseExample?.focus ?? content.learningFocus));
 
-  const sentences = courseExamples
-    ? [displayedContent.scriptText]
-    : sentenceIndex != null
-      ? [displayedContent.scriptText]
-      : splitSentences(displayedContent.scriptText);
   useEffect(() => {
     if (!courseId) return;
     let active = true;
@@ -292,18 +317,27 @@ export function RecordingPracticeSession({
   useEffect(() => {
     if (
       !autoSubmit ||
-      phase !== "review" ||
+      (!capturedRecording && phase !== "review") ||
       recorder.status !== "recorded" ||
       !recorder.blob ||
-      autoSubmittedBlobRef.current === recorder.blob
+      (autoSubmittedBlobRef.current === recorder.blob &&
+        retryOwner.current === submissionRetry)
     )
       return;
     // One automatic attempt per captured sentence. A failure needs an explicit retry.
     autoSubmittedBlobRef.current = recorder.blob;
+    retryOwner.current = submissionRetry;
     void analyze();
     // The captured blob owns this submission; status/progress renders must not restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSubmit, phase, recorder.status, recorder.blob]);
+  }, [
+    autoSubmit,
+    phase,
+    recorder.status,
+    recorder.blob,
+    capturedRecording,
+    submissionRetry,
+  ]);
 
   useEffect(
     () => () => {
@@ -810,7 +844,19 @@ export function RecordingPracticeSession({
   }
 
   async function analyze() {
-    if (submissionBusyRef.current) return;
+    if (
+      submissionBusyRef.current ||
+      !mountedRef.current ||
+      authEpochRef.current !== getAuthSessionVersion()
+    )
+      return;
+    const assertOwner = () => {
+      if (
+        !mountedRef.current ||
+        authEpochRef.current !== getAuthSessionVersion()
+      )
+        throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
+    };
     // Once submitted (including a lost acknowledgement), recover by reading.
     // Never issue another upload against an ANALYZING session.
     if (analysisPendingRef.current && sessionIdRef.current) {
@@ -835,6 +881,7 @@ export function RecordingPracticeSession({
     setPhase("uploading");
     try {
       const capabilities = await getAnalysisCapabilities();
+      assertOwner();
       checkingAvailability = false;
       if (recorder.durationMs < capabilities.minimumDurationMs) {
         throw new PracticeInputError(
@@ -865,7 +912,9 @@ export function RecordingPracticeSession({
           "녹음 파일이 서버의 업로드 제한을 초과했습니다.",
         );
       }
+      assertOwner();
       const activeSessionId = await ensureSession();
+      assertOwner();
       setPhase("uploading");
       const previousUpload = uploadedRecordingRef.current;
       let recordingId =
@@ -881,16 +930,21 @@ export function RecordingPracticeSession({
           fileSizeBytes: prepared.blob.size,
         };
         const uploadInfo = await uploadRecordingWithFreshUrl({
-          issueUploadUrl: () =>
-            api.training.getUploadUrl(activeSessionId, uploadInput),
-          upload: (currentUpload) =>
-            api.training.uploadRecording(
+          issueUploadUrl: () => {
+            assertOwner();
+            return api.training.getUploadUrl(activeSessionId, uploadInput);
+          },
+          upload: (currentUpload) => {
+            assertOwner();
+            return api.training.uploadRecording(
               currentUpload,
               prepared.blob,
               setUploadProgress,
-            ),
+            );
+          },
           onRetry: () => setUploadProgress(0),
         });
+        assertOwner();
         const recording = await api.training.registerRecording(
           activeSessionId,
           {
@@ -900,6 +954,7 @@ export function RecordingPracticeSession({
             durationMs: recorder.durationMs,
           },
         );
+        assertOwner();
         recordingId = recording.recordingId ?? recording.id ?? null;
         if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
         uploadedRecordingRef.current = {
@@ -913,6 +968,7 @@ export function RecordingPracticeSession({
         activeSessionId,
         recordingId,
       );
+      assertOwner();
       if (!qualified.selected)
         await api.training.selectRecording(activeSessionId, recordingId);
       selectedRecordingRef.current = recordingId;
@@ -922,12 +978,15 @@ export function RecordingPracticeSession({
           selected: String(item.recordingId ?? item.id) === String(recordingId),
         })),
       );
+      assertOwner();
       const consent = await getConsentInput();
+      assertOwner();
       waitingAnalysisRef.current = undefined;
       analysisPendingRef.current = true;
       awaitingAdmission = true;
       setCanCheckAnalysis(true);
       const requested = await api.training.analyze(activeSessionId, consent);
+      assertOwner();
       awaitingAdmission = false;
       setPhase("analyzing");
       if (onAnalysisAdmitted) {
@@ -944,6 +1003,11 @@ export function RecordingPracticeSession({
       );
       await loadResult(activeSessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
+      if (
+        !mountedRef.current ||
+        authEpochRef.current !== getAuthSessionVersion()
+      )
+        return;
       if (awaitingAdmission && analysisRequestWasRejected(reason)) {
         analysisPendingRef.current = false;
         setCanCheckAnalysis(false);
@@ -1129,6 +1193,8 @@ export function RecordingPracticeSession({
       setLoadingNext(false);
     }
   }
+
+  if (background) return null;
 
   if (phase === "restoring")
     return (
@@ -1386,17 +1452,10 @@ export function RecordingPracticeSession({
               referenceAvailable={content.referenceAudioAvailable}
               scriptText={sentences[activeSentence] ?? content.scriptText}
               elapsed={formatElapsed(recorder.elapsedMs)}
-              busy={recorder.status !== "recording"}
+              busy={recorder.status !== "recording" || recorder.splitting}
               last={activeSentence === sentences.length - 1}
               onComplete={() => {
-                if (recorder.status !== "recording") return;
-                if (activeSentence < sentences.length - 1) {
-                  sentenceBoundaries.current[activeSentence + 1] =
-                    recorder.getElapsedMs() / 1_000;
-                  setActiveSentence((current) => current + 1);
-                } else {
-                  recorder.stop();
-                }
+                void recorder.stop();
               }}
             />
           )}

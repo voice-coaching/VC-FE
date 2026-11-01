@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createSentenceAudio } from "@/lib/sentence-audio";
 import { prepareRecordingAudio } from "@/lib/recording-audio";
 
@@ -16,7 +22,9 @@ export function useSentenceRecorder(
   const [splitting, setSplitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const callback = useRef(onSegment);
-  callback.current = onSegment;
+  useLayoutEffect(() => {
+    callback.current = onSegment;
+  }, [onSegment]);
   const audio = useRef<Awaited<ReturnType<typeof createSentenceAudio>> | null>(
     null,
   );
@@ -87,7 +95,7 @@ export function useSentenceRecorder(
   }, [release]);
   const start = useCallback(
     async (initialIndex: number) => {
-      if (starting.current || running.current) return;
+      if (starting.current || running.current) return false;
       const epoch = ++generation.current;
       starting.current = true;
       setError(null);
@@ -106,17 +114,17 @@ export function useSentenceRecorder(
         });
         if (epoch !== generation.current) {
           activeStream.getTracks().forEach((track) => track.stop());
-          return;
+          return false;
         }
         stream.current = activeStream;
         const capture = await createSentenceAudio(activeContext, activeStream);
         if (epoch !== generation.current) {
           capture.dispose();
-          return;
+          return false;
         }
         audio.current = capture;
         await prepareRecordingAudio(activeContext);
-        if (epoch !== generation.current) return;
+        if (epoch !== generation.current) return false;
         currentIndex.current = initialIndex;
         setIndex(initialIndex);
         started.current = Date.now();
@@ -129,8 +137,9 @@ export function useSentenceRecorder(
           setElapsedMs(elapsed);
           if (elapsed >= 60000) void advance();
         }, 200);
+        return true;
       } catch (reason) {
-        if (epoch !== generation.current) return;
+        if (epoch !== generation.current) return false;
         release();
         const denied =
           reason instanceof DOMException &&
@@ -141,6 +150,7 @@ export function useSentenceRecorder(
             ? "마이크 권한을 허용해 주세요."
             : "이 기기에서 연속 녹음을 시작하지 못했어요. 다시 시도해 주세요.",
         );
+        return false;
       } finally {
         if (epoch === generation.current) starting.current = false;
       }
