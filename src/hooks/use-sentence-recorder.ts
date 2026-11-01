@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createSentenceAudio } from "@/lib/sentence-audio";
 import { prepareRecordingAudio } from "@/lib/recording-audio";
 
@@ -16,7 +22,9 @@ export function useSentenceRecorder(
   const [splitting, setSplitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const callback = useRef(onSegment);
-  callback.current = onSegment;
+  useLayoutEffect(() => {
+    callback.current = onSegment;
+  }, [onSegment]);
   const audio = useRef<Awaited<ReturnType<typeof createSentenceAudio>> | null>(
     null,
   );

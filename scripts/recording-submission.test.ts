@@ -84,6 +84,8 @@ function submission(
   const noop = () => {};
   const deps = {
     submissionBusyRef: busy,
+    mountedRef: { current: true },
+    authEpochRef: { current: 1 },
     analysisPendingRef: pending,
     waitingAnalysisRef: { current: undefined },
     sessionIdRef: { current: 138 },
@@ -264,14 +266,26 @@ test("a finalized sentence automatically submits exactly once and does not retry
     "recorder",
     "autoSubmittedBlobRef",
     "analyze",
+    "capturedRecording",
+    "retryOwner",
+    "submissionRetry",
     ts.transpile(`function run() {${autoSubmitBody}}`, {
       target: ts.ScriptTarget.ES2022,
     }) + "\nreturn run();",
   );
   const run = (phase = "review") =>
-    execute(true, phase, recorder, submittedBlob, () => {
-      submitted += 1;
-    });
+    execute(
+      true,
+      phase,
+      recorder,
+      submittedBlob,
+      () => {
+        submitted += 1;
+      },
+      undefined,
+      { current: 0 },
+      0,
+    );
   run("recording");
   assert.equal(submitted, 0);
   run();
