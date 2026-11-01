@@ -14,7 +14,8 @@ class RecordingProcessor extends AudioWorkletProcessor {
         this.samples = 0;
         this.port.postMessage({ type: "segment" });
       }
-      if (data === "start") this.recording = true;
+      if (data === "start" || data === "resume") this.recording = true;
+      if (data === "pause") this.recording = false;
       if (data === "stop") {
         this.recording = false;
         this.flush();
