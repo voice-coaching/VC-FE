@@ -48,3 +48,25 @@ FE는 지원 범위를 녹음/업로드 전에 확인하고, 위 필드가 빠�
 - 저장 조회는 한 번에 최대 120초, 요청별 15초, 5초 간격으로 제한한다. 지연 후 사용자가 조회만 다시 시작할 수 있고 자동 analyze/retry 제출은 없다.
 - complete 요청의 totalLearningSeconds는 새 페이지 recorder의 0초가 아닌 현재 선택된 서버 녹음 durationMs로 계산한다. duration이 없으면 임의의 1초를 만들지 않는다.
 - 실행 상태 조회로 확인한 RunPod INTERNAL_ERROR/DEPENDENCY_UNAVAILABLE terminal FAILED는 Backend failure_code=runpod_execution_failed, 공개 serviceFailure={origin:RUNPOD, code:CANONICAL_EXECUTION_FAILED, stage:EXECUTION}으로 구분한다. UNKNOWN/404/409/5xx만으로 terminal 실패를 만들지 않는다.
+
+
+## Direct 연습 결과 표시 (2026-11-01)
+
+`POST /direct/api/v1/analyses` 및 GET/SSE의 기존 공개 분석 계약·인증·경로는 유지한다. 신규 AI 결과의 선택 필드 `result.practiceResult`를 보존해 `AnalysisView`에 전달한다. 선택인 이유는 AI 배포 순서와 기존 저장 이력 호환이며, 필드가 있으면 모든 하위 필드는 필수다.
+
+| 필드 | 타입/null | 의미 |
+|---|---|---|
+| schemaVersion | string | `voice-coaching.direct-practice-result.v1` |
+| scope | string | `UTTERANCE` |
+| scriptText | string, 1~4000자 | 접수된 원고 |
+| decisionStatus | string | ACCEPT/REJECT/INCONCLUSIVE/SYSTEM_FAILURE, 기존 decision.status와 일치 |
+| score | canonicalScore | 기존 result.score와 일치, 미채점 overallScore=null 보존 |
+| feedback | string(1~4000자) 또는 null | ACCEPT이며 failure가 없으면 기존 coaching.feedback, 그 외 null |
+| sentenceResults | null | 문장별 채점 미지원 |
+| sentenceResultsReason | string | `UTTERANCE_ONLY` |
+
+중복 점수·결정·feedback이 기존 결과와 다르면 `PRACTICE_RESULT_MISMATCH`로 파싱을 거부한다. 이전 응답에 필드가 없으면 기존 검증된 전체 녹음 score/decision/coaching.feedback를 그대로 표시한다. SSE·GET·저장 이력은 같은 parser를 사용한다.
+
+`이번 연습 결과`는 segments와 교정 후보가 없더라도 전체 녹음 점수·AI 피드백을 표시한다. 실제 제공된 문장별 segments가 있으면 기존 화면을 유지한다. 실패/거부/보류를 정상 판정·0점으로 바꾸지 않는다. 문장별 채점이나 정상/주의 임계값은 추가하지 않는다.
+
+정적 확인·TypeScript 컴파일만 수행하며 실제 녹음, AI 응답, 저장 이력 재열기와 화면 QA는 개발자가 확인한다. 배포·실제 추론 성공을 주장하지 않는다.

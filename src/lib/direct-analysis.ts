@@ -14,28 +14,65 @@ const expression = z.object({
   practice: z.string(),
   selfCheck: z.string(),
 });
-export const directResultSchema = z.object({
-  decision: z.object({
-    status: z.string(),
-    reason_code: z.string().nullable(),
-    stage: z.string().nullable(),
-  }),
+const practiceResultSchema = z.object({
+  schemaVersion: z.literal("voice-coaching.direct-practice-result.v1"),
+  scope: z.literal("UTTERANCE"),
+  scriptText: z.string().min(1).max(4000),
+  decisionStatus: z.enum([
+    "ACCEPT",
+    "REJECT",
+    "INCONCLUSIVE",
+    "SYSTEM_FAILURE",
+  ]),
   score: canonicalScoreSchema,
-  coaching: z.object({
-    items: z.array(z.object({ candidate: candidateSchema, expression })),
-    generationStatus: z.string(),
-    feedback: z.string().min(1).max(4000).optional(),
-  }),
-  failure: z.string().nullable(),
-  sourceIdentity: z.object({
-    requestId: z.string().uuid(),
-    executionId: z.string().uuid(),
-    audioSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    scriptSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    coreManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
-    harnessManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  }),
+  feedback: z.string().min(1).max(4000).nullable(),
+  sentenceResults: z.null(),
+  sentenceResultsReason: z.literal("UTTERANCE_ONLY"),
 });
+export const directResultSchema = z
+  .object({
+    decision: z.object({
+      status: z.string(),
+      reason_code: z.string().nullable(),
+      stage: z.string().nullable(),
+    }),
+    score: canonicalScoreSchema,
+    coaching: z.object({
+      items: z.array(z.object({ candidate: candidateSchema, expression })),
+      generationStatus: z.string(),
+      feedback: z.string().min(1).max(4000).optional(),
+    }),
+    failure: z.string().nullable(),
+    // Optional while the AI release rolls out and for previously saved results.
+    practiceResult: practiceResultSchema.optional(),
+    sourceIdentity: z.object({
+      requestId: z.string().uuid(),
+      executionId: z.string().uuid(),
+      audioSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      scriptSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      coreManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      harnessManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    }),
+  })
+  .superRefine((result, context) => {
+    const practice = result.practiceResult;
+    if (!practice) return;
+    const feedback =
+      !result.failure && result.decision.status === "ACCEPT"
+        ? (result.coaching.feedback ?? null)
+        : null;
+    if (
+      practice.decisionStatus !== result.decision.status ||
+      JSON.stringify(practice.score) !== JSON.stringify(result.score) ||
+      practice.feedback !== feedback
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "PRACTICE_RESULT_MISMATCH",
+        path: ["practiceResult"],
+      });
+    }
+  });
 export const directViewSchema = z
   .object({
     schemaVersion: z.literal("voice-coaching.direct-analysis.v1"),
