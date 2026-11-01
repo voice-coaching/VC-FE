@@ -9,7 +9,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
   BATCHIM: "받침",
   DOUBLE_CONSONANT: "된소리",
   TENSE_CONSONANT: "된소리",
-  TENSE: "된소리",
   CONSONANT: "자음",
   VOWEL: "모음",
 };
