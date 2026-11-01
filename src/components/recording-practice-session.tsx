@@ -146,6 +146,9 @@ export function RecordingPracticeSession({
   const resumedSessionId = localOnly ? null : searchParams.get("sessionId");
   const resumeType = searchParams.get("resumeType");
   const restoreSession = workflow?.restoreSession;
+  // Exam IDs own the current session link. A fresh exam URL has no sessionId,
+  // even after its first analysis, so resolve specialized workflows on every entry.
+  const needsSessionRestore = Boolean(resumedSessionId || restoreSession);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
@@ -158,11 +161,11 @@ export function RecordingPracticeSession({
       ? content
       : { ...content, scriptText: resumedScriptText };
   const [phase, setPhase] = useState<Phase>(
-    resumedSessionId ? "restoring" : capturedRecording ? "review" : "idle",
+    needsSessionRestore ? "restoring" : capturedRecording ? "review" : "idle",
   );
   const [resumeFailed, setResumeFailed] = useState(false);
   const [resumeRetry, setResumeRetry] = useState(0);
-  const resumePendingRef = useRef(Boolean(resumedSessionId));
+  const resumePendingRef = useRef(needsSessionRestore);
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
@@ -358,7 +361,7 @@ export function RecordingPracticeSession({
   );
 
   useEffect(() => {
-    if (!resumedSessionId) return;
+    if (!resumedSessionId && !restoreSession) return;
 
     let active = true;
     let resumeReadComplete = false;
@@ -370,7 +373,7 @@ export function RecordingPracticeSession({
       try {
         const restored = restoreSession
           ? await restoreSession(() => active)
-          : await loadPracticeResume(api, resumedSessionId, content.id);
+          : await loadPracticeResume(api, resumedSessionId!, content.id);
         if (!active) return;
         resumeReadComplete = true;
         resumePendingRef.current = false;
