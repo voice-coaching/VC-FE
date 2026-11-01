@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { App, type AppState } from "@capacitor/app";
 import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 import { ApiError, api } from "@/lib/api";
-import { enableNativeSessionRecovery, getAccessToken } from "@/lib/api/client";
+import {
+  accessTokenNeedsRefresh,
+  enableNativeSessionRecovery,
+  getAccessToken,
+} from "@/lib/api/client";
 
 const BACKGROUND_REFRESH_AFTER_MS = 5 * 60 * 1_000;
 
@@ -28,10 +32,12 @@ export function NativeSessionBridge() {
 
       const startedAt = backgroundedAt.current;
       backgroundedAt.current = null;
+      const token = getAccessToken();
       if (
         startedAt === null ||
         Date.now() - startedAt < BACKGROUND_REFRESH_AFTER_MS ||
-        !getAccessToken()
+        !token ||
+        !accessTokenNeedsRefresh(token)
       ) {
         return;
       }
