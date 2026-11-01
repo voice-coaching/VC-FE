@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSentenceRecorder } from "./use-sentence-recorder";
 import { pcmCapture } from "@/lib/practice-capture";
 import { sentenceRecordings } from "@/lib/sentence-recordings";
@@ -37,7 +37,9 @@ export function useAuthenticatedSentenceCapture(
   const run = useRef<{ scope: string; runId: string } | null>(null);
   const owner = useRef(0);
   const accepted = useRef(admissions);
-  accepted.current = admissions;
+  useLayoutEffect(() => {
+    accepted.current = admissions;
+  }, [admissions]);
   const storageKey = (index: number) =>
     `${scope}:${run.current!.runId}:${index}`;
   function next(): number | null {
