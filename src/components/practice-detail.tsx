@@ -22,7 +22,6 @@ export function PracticeDetail({
   content: PracticeContent;
   onStart: () => void;
 }) {
-  const [script, setScript] = useState(false);
   const router = useRouter();
   const search = useSearchParams();
   const [navigationError, setNavigationError] = useState<string | null>(null);
@@ -114,27 +113,6 @@ export function PracticeDetail({
               ))}
             </ol>
           </>
-        ) : script ? (
-          <>
-            <h2 className="text-2xl font-bold">이 문장들을 연습해요</h2>
-            {content.referenceAudioAvailable && (
-              <ReferencePlayer contentId={content.id} title="먼저 들어보기" />
-            )}
-            <h3 className="pt-3 text-base font-semibold">연습 문장</h3>
-            <ol className="design-card space-y-5">
-              {sentences.map((sentence, index) => (
-                <li
-                  key={index}
-                  className="flex gap-3 text-base leading-relaxed"
-                >
-                  <span className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
-                    {index + 1}
-                  </span>
-                  {sentence.trim()}
-                </li>
-              ))}
-            </ol>
-          </>
         ) : (
           <>
             <section className={news ? "" : "design-card !py-7 text-center"}>
@@ -183,7 +161,7 @@ export function PracticeDetail({
         )}
       </div>
       <div className="design-dock">
-        {news && !script && (
+        {news && (
           <>
             <div className="mb-3 grid grid-cols-2 gap-2">
               <button
@@ -222,16 +200,8 @@ export function PracticeDetail({
             )}
           </>
         )}
-        <button
-          type="button"
-          onClick={() => (news && !script ? setScript(true) : onStart())}
-          className="design-action"
-        >
-          {announcer
-            ? "따라 읽기 시작"
-            : script
-              ? "녹음 시작하기"
-              : "연습 시작하기"}
+        <button type="button" onClick={onStart} className="design-action">
+          {announcer ? "따라 읽기 시작" : "연습 시작하기"}
         </button>
       </div>
     </div>

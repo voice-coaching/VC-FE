@@ -290,12 +290,15 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
               : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요."}
           </p>
         </header>
-        <SentenceReader
-          sentences={items.map((item) => item.text)}
-          activeIndex={recording ? active : undefined}
-          variant={recording ? "recording" : "reader"}
-          className="mx-5 max-h-[45dvh]"
-        />
+        {!waiting && (
+          <SentenceReader
+            sentences={items.map((item) => item.text)}
+            pageIndex={active}
+            activeIndex={recording ? active : undefined}
+            variant={recording ? "recording" : "reader"}
+            className="mx-5 max-h-[45dvh]"
+          />
+        )}
         <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
           {waiting
             ? `${Object.values(results).filter((value) => value.result).length}/${items.length} 문장 분석 완료`

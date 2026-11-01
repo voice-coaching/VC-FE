@@ -1415,30 +1415,22 @@ export function RecordingPracticeSession({
       )}
       {(phase === "idle" || phase === "recording") && (
         <>
-          <div
-            className={`flex shrink-0 items-center px-5 pt-3 pb-4 transition-opacity duration-300 motion-reduce:transition-none ${phase === "recording" ? "opacity-0" : "opacity-100"}`}
-          >
+          <div className="flex shrink-0 items-center px-5 pt-3 pb-4">
             <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-[12px] leading-4 font-medium text-[#1f55e0]">
               {contentTypeLabel}
             </span>
             <span className="ml-auto text-[13px] leading-[18px] text-[#8b95a1]">
-              {courseSentenceCount != null && courseExampleIndex != null ? (
+              {courseSentenceCount != null && courseExampleIndex != null && (
+                <span className="mr-2">
+                  예문 {courseExampleIndex + 1}/{courseSentenceCount}
+                </span>
+              )}
+              <strong className="font-bold text-[#2f6bff]">
+                {activeSentence + 1}
+              </strong>
+              /{sentences.length} 문장
+              {phase !== "recording" && (
                 <>
-                  <strong className="font-bold text-[#2f6bff]">
-                    {courseExampleIndex + 1}
-                  </strong>
-                  /{courseSentenceCount} 문장
-                </>
-              ) : phase === "recording" ? (
-                <>
-                  <strong className="font-bold text-[#2f6bff]">
-                    {activeSentence + 1}
-                  </strong>
-                  /{sentences.length} 문장
-                </>
-              ) : (
-                <>
-                  {sentences.length}문장
                   <span className="mx-2 inline-block h-2.5 w-px bg-[#dfe3e8]" />
                   약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
                 </>
@@ -1448,6 +1440,7 @@ export function RecordingPracticeSession({
           <SentenceReader
             variant={phase === "recording" ? "recording" : "reader"}
             sentences={sentences}
+            pageIndex={activeSentence}
             activeIndex={phase === "recording" ? activeSentence : undefined}
             className={`mx-5 max-h-[clamp(80px,calc(100dvh-380px),400px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]`}
           />
@@ -1463,7 +1456,9 @@ export function RecordingPracticeSession({
               onStart={() => void startRecording()}
               stream={recorder.getStream()}
               contentId={content.id}
-              referenceAvailable={content.referenceAudioAvailable}
+              referenceAvailable={
+                content.referenceAudioAvailable && sentences.length === 1
+              }
               scriptText={sentences[activeSentence] ?? content.scriptText}
               elapsed={formatElapsed(recorder.elapsedMs)}
               busy={recorder.status !== "recording" || recorder.splitting}
