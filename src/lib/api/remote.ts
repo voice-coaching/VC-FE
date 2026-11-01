@@ -14,6 +14,7 @@ import {
   CanonicalResultUnavailable,
 } from "../canonical-presentation";
 import type { TrainingSession } from "./types";
+import { contentFilterCodes } from "../content-category";
 import {
   canonicalAttemptKey,
   type CanonicalViewIdentity,
@@ -316,7 +317,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
     content: {
       list: (filters = {}) =>
         request<PageResult<PracticeContentSummary>>(
-          `/api/practice-contents${query(filters)}`,
+          `/api/practice-contents${query(contentFilterCodes(filters))}`,
         ),
       createCustom: (input, idempotencyKey) =>
         request("/api/practice-contents/custom", {
@@ -328,13 +329,13 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request(`/api/practice-contents/facets${query({ type })}`),
       getAdjacent: (contentId, filters) =>
         request(
-          `/api/practice-contents/${id(contentId)}/adjacent${query(filters)}`,
+          `/api/practice-contents/${id(contentId)}/adjacent${query(contentFilterCodes(filters))}`,
         ),
       get: (contentId) =>
         request<PracticeContent>(`/api/practice-contents/${id(contentId)}`),
       getNext: (filters) =>
         request<NextPracticeContent>(
-          `/api/practice-contents/next${query(filters)}`,
+          `/api/practice-contents/next${query(contentFilterCodes(filters))}`,
         ),
       async getRecommendations(contentId, limit) {
         const data = await request<{
