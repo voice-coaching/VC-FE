@@ -67,6 +67,7 @@ import {
 } from "@/lib/api/client";
 import { canonicalApi } from "@/lib/api/canonical";
 import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
+import { loadTitleExamResume } from "@/lib/title-exam-resume";
 import {
   awaitCanonicalPersistence,
   completeCanonicalPractice,
@@ -378,12 +379,14 @@ function PracticeSessionBody({
 
     void (async () => {
       try {
-        const restored = await loadPracticeResume(
-          api,
-          resumedSessionId,
-          content.id,
-          Boolean(titleExamId),
-        );
+        const restored = titleExamId
+          ? await loadTitleExamResume(
+              api,
+              titleExamId,
+              content.id,
+              () => active,
+            )
+          : await loadPracticeResume(api, resumedSessionId, content.id);
         if (!active) return;
         resumeReadComplete = true;
         resumePendingRef.current = false;
@@ -401,9 +404,15 @@ function PracticeSessionBody({
           return;
         }
         setPhase("analyzing");
-        const deliveredResult = await waitForAnalysis(resumedSessionId);
+        if (restored.sessionId == null)
+          throw new Error("이어갈 학습 세션을 확인하지 못했습니다.");
+        const deliveredResult = await waitForAnalysis(restored.sessionId);
         if (!active) return;
-        await loadResult(resumedSessionId, deliveredResult.id, deliveredResult);
+        await loadResult(
+          restored.sessionId,
+          deliveredResult.id,
+          deliveredResult,
+        );
       } catch (reason) {
         if (!active) return;
         setResumeFailed(!resumeReadComplete);

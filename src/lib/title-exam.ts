@@ -56,8 +56,11 @@ export async function createTitleExamSession(
   api: Pick<ApiContract, "users" | "training">,
   examId: Id,
   contentId: Id,
+  isCurrent: () => boolean = () => true,
 ) {
   const exam = await api.users.getTitleExam(examId);
+  if (!isCurrent())
+    throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
   if (String(exam.practiceContentId) !== String(contentId))
     throw new Error(
       "시험 콘텐츠가 변경되었습니다. 마이페이지에서 시험을 다시 열어 주세요.",
