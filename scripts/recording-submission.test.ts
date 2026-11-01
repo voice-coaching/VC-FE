@@ -10,9 +10,12 @@ import {
 } from "../src/lib/canonical-recovery";
 import type { TrainingSession } from "../src/lib/api/types";
 
-const source = readFileSync("src/components/practice-session.tsx", "utf8");
+const source = readFileSync(
+  "src/components/recording-practice-session.tsx",
+  "utf8",
+);
 const file = ts.createSourceFile(
-  "practice-session.tsx",
+  "recording-practice-session.tsx",
   source,
   ts.ScriptTarget.Latest,
   true,
