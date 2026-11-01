@@ -46,17 +46,16 @@ function execute(
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 for (const contentId of [5, "5"]) {
-  for (const status of [
-    "RESULT_READY",
-    "CANCELLED",
-    "RECORDING",
-    "PROCESSING",
-  ]) {
-    test(`batch restoration recovers ${status} for content ID ${typeof contentId} without creating another run`, async () => {
-      let admissions = 0;
+  for (const storageMode of ["raw", "prepared", "missing", "unavailable"]) {
+    test(`batch restoration recovers ${storageMode} recordings for content ID ${typeof contentId} without waiting for HTTP`, async () => {
+      let pumps = 0;
       let hasAttempt = false;
       let loading = false;
-      let applied: unknown;
+      let failed = false;
+      let captured: number[] = [];
+      const files = { current: new Map<number, Blob>() };
+      const raw = new Blob(["exact captured bytes"]);
+      const prepared = new Blob(["prepared bytes"]);
       const saved = { current: null as unknown };
       const sentences = ["첫 문장입니다.", "다음 문장입니다."];
       const value = {
@@ -68,6 +67,7 @@ for (const contentId of [5, "5"]) {
         AbortController,
         controller: { current: null },
         saved,
+        files,
         savedSchema: { parse: (value: unknown) => value },
         scripts: JSON.stringify(sentences),
         contentId,
@@ -83,34 +83,56 @@ for (const contentId of [5, "5"]) {
         setLoading: (value: boolean) => {
           loading = value;
         },
-        sha256: async (claim: string) => {
-          assert.equal(claim, value.historyClaim);
-          return "claim-digest";
+        recordingKey: (id: string, index: number) => `${id}:${index}`,
+        sentenceRecordings: {
+          read: async (key: string) => {
+            if (storageMode === "unavailable")
+              throw new Error("storage unavailable");
+            if (
+              key !== `${value.batchId}:0` &&
+              key !== `${value.batchId}:0:raw`
+            )
+              return undefined;
+            if (storageMode === "raw")
+              return key.endsWith(":raw") ? raw : prepared;
+            return storageMode === "prepared" && !key.endsWith(":raw")
+              ? prepared
+              : undefined;
+          },
         },
-        createSentenceBatch: async (
-          id: string,
-          text: string[],
-          content: number,
-          digest: string,
-        ) => {
-          admissions++;
-          assert.equal(id, value.batchId);
-          assert.deepEqual(text, sentences);
-          assert.equal(content, 5);
-          assert.equal(digest, "claim-digest");
-          return { status, batchId: id };
+        setCaptured: (value: number[]) => {
+          captured = value;
         },
-        apply: (value: unknown) => {
-          applied = value;
+        pumpRef: {
+          current: () => {
+            pumps++;
+          },
         },
-        captureError: (error: unknown) => assert.fail(String(error)),
+        createSentenceBatch: () =>
+          assert.fail("Local recovery must not wait for HTTP"),
+        captureError: (error: Error) => {
+          assert.equal(error.message, "storage unavailable");
+          failed = true;
+        },
       });
       await tick();
-      assert.equal(admissions, 1);
+      assert.equal(pumps, storageMode === "unavailable" ? 0 : 1);
+      assert.equal(failed, storageMode === "unavailable");
       assert.equal(hasAttempt, true);
       assert.equal(loading, false);
       assert.deepEqual(saved.current, value);
-      assert.deepEqual(applied, { status, batchId: value.batchId });
+      assert.deepEqual(
+        captured,
+        ["raw", "prepared"].includes(storageMode) ? [0] : [],
+      );
+      assert.equal(
+        files.current.get(0),
+        storageMode === "raw"
+          ? raw
+          : storageMode === "prepared"
+            ? prepared
+            : undefined,
+      );
       cleanup();
     });
   }
@@ -127,12 +149,16 @@ for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
     };
     const saved = { current: original as unknown };
     const latestView = { current: { status } as unknown };
-    const gate = { current: false };
+    const resetting = { current: false };
+    const files = { current: new Map([[0, new Blob(["pending audio"])]]) };
     const dependencies: Record<string, unknown> = {
       controller: { current: new AbortController() },
       saved,
       latestView,
-      gate,
+      resetting,
+      files,
+      running: { current: Promise.resolve() },
+      writes: { current: new Set() },
       contentId: 5,
       view: { status, results: [{ analysis: { jobId: "job", result: {} } }] },
       getAuthenticatedUserId: () => "user",
@@ -144,8 +170,9 @@ for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
         },
       }),
       sha256: async () => "claim-digest",
-      createSentenceBatch: async (id: string) => {
-        assert.equal(id, original.batchId);
+      ensure: async (value: unknown, signal: AbortSignal) => {
+        assert.equal(value, original);
+        assert.equal(signal.aborted, false);
         calls.push("recover");
       },
       cancelSentenceBatch: async () => {
@@ -173,7 +200,9 @@ for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
       "setHasAttempt",
       "setView",
       "setUrls",
-      "setPendingRecording",
+      "setCaptured",
+      "setRetryIndex",
+      "setUploading",
       "setError",
       "setHistory",
     ]) {
@@ -182,16 +211,18 @@ for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
       };
     }
     const succeeded = await execute(clearBody, dependencies, true);
-    assert.equal(gate.current, false);
+    assert.equal(resetting.current, false);
     if (status === "CANCEL_FAILED") {
       assert.equal(succeeded, false);
       assert.equal(saved.current, original);
+      assert.equal(files.current.size, 1);
       assert.deepEqual(calls, ["recover", "cancel", "error"]);
       return;
     }
     assert.equal(succeeded, true);
     assert.equal(saved.current, null);
     assert.equal(latestView.current, null);
+    assert.equal(files.current.size, 0);
     assert.equal(state.setView, null);
     assert.equal(state.setHasAttempt, false);
     assert.equal(state.setHistory, "PENDING");
@@ -201,6 +232,8 @@ for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
       "cancel",
       "remove:old-batch:0",
       "remove:old-batch:1",
+      "remove:old-batch:0:raw",
+      "remove:old-batch:1:raw",
       "manifest",
     ]);
   });
