@@ -1,4 +1,5 @@
-import { ApiError, createHttpClient } from "./client";
+import { ApiError, createHttpClient, getAuthSessionVersion } from "./client";
+import { notifyCoachingUsageChanged } from "../coaching-usage";
 import type {
   AnalysisRequest,
   AnalysisConsentInput,
@@ -41,6 +42,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
     signal?: AbortSignal,
     waitSeconds = 0,
   ) {
+    const epoch = getAuthSessionVersion();
     if (
       !Number.isSafeInteger(expected.analysisId) ||
       expected.analysisId <= 0
@@ -56,6 +58,11 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       { method: "GET", cache: "no-store", signal, endpointErrorsOnly: true },
     );
     const view = readCanonicalAnalysisView(data, expected);
+    if (
+      ["COMPLETED", "FAILED"].includes(view.jobStatus) &&
+      epoch === getAuthSessionVersion()
+    )
+      notifyCoachingUsageChanged();
     return view;
   }
 
@@ -66,19 +73,24 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
     signal?: AbortSignal,
     audiovisual = false,
   ) {
-    return request<AnalysisRequest>(
-      `/api/training-sessions/${canonicalDatabaseId(sessionId)}/${retry ? "analysis/retry" : "analyze"}`,
-      {
-        method: "POST",
-        body: consent,
-        signal,
-        cache: "no-store",
-        endpointErrorsOnly: true,
-        headers: {
-          "X-Analysis-Result-Schema": CANONICAL_RESULT_HEADER,
+    const epoch = getAuthSessionVersion();
+    try {
+      return await request<AnalysisRequest>(
+        `/api/training-sessions/${canonicalDatabaseId(sessionId)}/${retry ? "analysis/retry" : "analyze"}`,
+        {
+          method: "POST",
+          body: consent,
+          signal,
+          cache: "no-store",
+          endpointErrorsOnly: true,
+          headers: {
+            "X-Analysis-Result-Schema": CANONICAL_RESULT_HEADER,
+          },
         },
-      },
-    );
+      );
+    } finally {
+      if (epoch === getAuthSessionVersion()) notifyCoachingUsageChanged();
+    }
   }
   function status(sessionId: Id, signal?: AbortSignal) {
     return request<AnalysisProgress>(

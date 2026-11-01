@@ -15,6 +15,7 @@ const expected = [
   "POST /api/auth/token/refresh",
   "POST /api/auth/logout",
   "GET /api/users/me",
+  "GET /api/users/me/coaching-usage",
   "PATCH /api/users/me",
   "GET /api/users/me/profile-image",
   "POST /api/users/me/profile-image",
@@ -202,7 +203,23 @@ globalThis.fetch = (async (
     JSON.stringify({
       result: true,
       message: "ok",
-      data: url.pathname === "/api/v3/analyses/1" ? currentView : responseData,
+      data:
+        url.pathname === "/api/v3/analyses/1"
+          ? currentView
+          : url.pathname === "/api/users/me/coaching-usage"
+            ? {
+                membershipType: "free",
+                environment: null,
+                unlimited: false,
+                startsAt: "2026-11-01T00:00:00Z",
+                expiresAt: "2026-12-01T00:00:00Z",
+                limit: 8,
+                used: 3,
+                reserved: 1,
+                remaining: 4,
+                canRequestCoaching: true,
+              }
+            : responseData,
     }),
     {
       status: 200,
@@ -242,6 +259,7 @@ assert.equal(
 await api.auth.refresh();
 await api.auth.signOut();
 await api.users.getMe();
+await api.users.getCoachingUsage();
 await api.users.updateProfile({ nickname: "tester" });
 await api.users.getProfileImage();
 const profileImage = {

@@ -10,6 +10,9 @@ import { AnalysisView } from "./analysis-view";
 import { LoadingOverlay } from "./loading-overlay";
 import { SentenceReader } from "./sentence-reader";
 import { PracticeAnalysisLoading } from "./practice-analysis-loading";
+import { CoachingUsageSummary } from "./coaching-usage-summary";
+import { coachingLimitNotice } from "@/lib/coaching-usage";
+import Link from "next/link";
 import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
@@ -84,6 +87,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     };
   }, []);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [submissionFailure, setSubmissionFailure] = useState<unknown>(null);
   const [submissionRetry, setSubmissionRetry] = useState(0);
   const capture = useAuthenticatedSentenceCapture(items, admissions, {
     userId,
@@ -284,7 +288,10 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         autoSubmit
         onTitleChange={undefined}
         submissionRetry={submissionRetry}
-        onSubmissionError={setSubmissionError}
+        onSubmissionError={(message, reason) => {
+          setSubmissionError(message);
+          setSubmissionFailure(reason);
+        }}
         onAnalysisAdmitted={(admission) => accept(currentIndex, admission)}
       />
     ) : null;
@@ -305,6 +312,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
             <p className="mt-2 text-sm text-[#6b7684]">
               다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요.
             </p>
+            <CoachingUsageSummary compact />
           </header>
         )}
         {!waiting && (
@@ -365,25 +373,48 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
             녹음 보관 다시 시도
           </button>
         )}
+        {submissionError && (
+          <div
+            role="alert"
+            className="mx-5 my-3 space-y-3 rounded-xl bg-white p-4 text-sm"
+          >
+            <p className="font-semibold text-destructive">
+              {coachingLimitNotice(submissionFailure)?.title ?? submissionError}
+            </p>
+            <p>{coachingLimitNotice(submissionFailure)?.hint}</p>
+            {coachingLimitNotice(submissionFailure) && (
+              <Link
+                className="inline-flex min-h-11 items-center font-semibold text-primary"
+                href={
+                  ["script", "audio"].includes(
+                    coachingLimitNotice(submissionFailure)!.kind,
+                  )
+                    ? "/sentences"
+                    : "/mypage/payments?view=manage"
+                }
+              >
+                {["script", "audio"].includes(
+                  coachingLimitNotice(submissionFailure)!.kind,
+                )
+                  ? "다른 문장 선택"
+                  : "코칭 사용량·이용권 확인"}
+              </Link>
+            )}
+            <button
+              type="button"
+              className="design-action"
+              onClick={() => {
+                setSubmissionError(null);
+                setSubmissionFailure(null);
+                setSubmissionRetry((value) => value + 1);
+              }}
+            >
+              같은 녹음으로 접수 다시 시도
+            </button>
+          </div>
+        )}
         {waiting && (
           <div className="mt-auto space-y-3 px-5 py-5">
-            {submissionError && (
-              <>
-                <p role="alert" className="text-sm text-destructive">
-                  {submissionError}
-                </p>
-                <button
-                  type="button"
-                  className="design-action"
-                  onClick={() => {
-                    setSubmissionError(null);
-                    setSubmissionRetry((value) => value + 1);
-                  }}
-                >
-                  같은 문장 접수 상태 다시 확인
-                </button>
-              </>
-            )}
             {items.map((item, index) =>
               results[index]?.error && admissions[index] ? (
                 <div key={item.key} className="space-y-2">

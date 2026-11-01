@@ -4,6 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 import { ApiError } from "../src/lib/api/client";
 import { PracticeInputError } from "../src/lib/practice-error";
+import { assertCoachingInput } from "../src/lib/coaching-usage";
 import {
   analysisAdmissionMissing,
   analysisRequestWasRejected,
@@ -65,6 +66,8 @@ function submission(
     capabilitiesFailure?: Error;
     onAdmitted?: (admission: SentenceAnalysisAdmission) => void;
     prepare?: Promise<void>;
+    scriptText?: string;
+    durationMs?: number;
   } = {},
 ) {
   const counts = {
@@ -92,7 +95,11 @@ function submission(
     checkExistingAnalysis: () => {
       throw new Error("Unexpected status read before admission");
     },
-    recorder: { blob: sourceBlob, durationMs: 7000 },
+    recorder: { blob: sourceBlob, durationMs: options.durationMs ?? 7000 },
+    displayedContent: {
+      scriptText: options.scriptText ?? "연습할 문장입니다.",
+    },
+    assertCoachingInput,
     localOnly: false,
     onAnalysisAdmitted: options.onAdmitted,
     setRequestError: (value: string | null) => {
@@ -199,6 +206,21 @@ function submission(
     },
   };
 }
+
+test("coaching input limits reject before uploading and retain the captured recording", async () => {
+  for (const options of [
+    { scriptText: "가".repeat(301) },
+    { durationMs: 90_001 },
+  ]) {
+    const run = submission(options);
+    await run.run();
+    assert.equal(run.counts.uploads, 0);
+    assert.equal(run.counts.submissions, 0);
+    assert.ok(run.recording);
+    assert.equal(run.canCheck, false);
+    assert.match(run.error!, /300자|90초/);
+  }
+});
 
 test("sentence analysis advances only after the API acknowledges admission and does not wait for its result", async () => {
   const admissions: SentenceAnalysisAdmission[] = [];
