@@ -59,6 +59,16 @@ export function describePracticeError(
     };
   }
   if (reason instanceof ApiError) {
+    if (
+      reason.status === 503 &&
+      reason.code === "ANALYSIS_INTEGRATION_UNAVAILABLE"
+    ) {
+      return {
+        kind: "unavailable",
+        title: "분석 서버가 준비되지 않았어요",
+        hint: "분석 요청이 접수되지 않았어요. 잠시 후 다시 시도해 주세요.",
+      };
+    }
     if (reason.code.startsWith("UPLOAD_")) {
       return {
         kind: "upload",

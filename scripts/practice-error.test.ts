@@ -58,4 +58,10 @@ test("quality, preparation, unsupported, auth and network errors remain distinct
     "server",
   );
   assert.equal(describePracticeError(null, "denied").kind, "recording");
+  assert.equal(
+    describePracticeError(
+      new ApiError("closed", 503, "ANALYSIS_INTEGRATION_UNAVAILABLE"),
+    ).kind,
+    "unavailable",
+  );
 });
