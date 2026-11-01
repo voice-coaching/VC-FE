@@ -4,7 +4,10 @@ import test from "node:test";
 import ts from "typescript";
 import { ApiError } from "../src/lib/api/client";
 import { PracticeInputError } from "../src/lib/practice-error";
-import { analysisAdmissionMissing } from "../src/lib/canonical-recovery";
+import {
+  analysisAdmissionMissing,
+  analysisRequestWasRejected,
+} from "../src/lib/canonical-recovery";
 import type { TrainingSession } from "../src/lib/api/types";
 
 const source = readFileSync("src/components/practice-session.tsx", "utf8");
@@ -28,6 +31,7 @@ function submission(
   options: {
     selectFailure?: boolean;
     admissionFailure?: number;
+    admissionCode?: string;
     consentFailure?: boolean;
     prepare?: Promise<void>;
   } = {},
@@ -68,6 +72,7 @@ function submission(
     getAuthSessionVersion: () => 1,
     PracticeInputError,
     ApiError,
+    analysisRequestWasRejected,
     getAnalysisCapabilities: async () => ({
       minimumDurationMs: 1000,
       maximumDurationMs: 60000,
@@ -105,7 +110,11 @@ function submission(
         analyze: async () => {
           counts.submissions++;
           if (options.admissionFailure)
-            throw new ApiError("not accepted", options.admissionFailure);
+            throw new ApiError(
+              "not accepted",
+              options.admissionFailure,
+              options.admissionCode,
+            );
           return { analysisId: 20 };
         },
       },
@@ -177,6 +186,20 @@ test("lost admission acknowledgment retains the recording and offers a read befo
   await attempt.run();
   assert.equal(attempt.pending.current, true);
   assert.equal(attempt.canCheck, true);
+});
+
+test("a definite unavailable admission can retry the retained upload without polling or uploading again", async () => {
+  const attempt = submission({
+    admissionFailure: 503,
+    admissionCode: "ANALYSIS_INTEGRATION_UNAVAILABLE",
+  });
+  await attempt.run();
+  assert.equal(attempt.pending.current, false);
+  assert.equal(attempt.canCheck, false);
+  await attempt.run();
+  assert.equal(attempt.counts.uploads, 1);
+  assert.equal(attempt.counts.registrations, 1);
+  assert.equal(attempt.counts.submissions, 2);
 });
 
 test("failed consent preparation never marks an analysis as submitted", async () => {

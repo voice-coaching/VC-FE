@@ -53,6 +53,7 @@ import {
 import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
 import {
   analysisAdmissionMissing,
+  analysisRequestWasRejected,
   canRecheckSubmittedAnalysis,
 } from "@/lib/canonical-recovery";
 import {
@@ -963,11 +964,7 @@ function PracticeSessionBody({
       );
       await loadResult(activeSessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
-      if (
-        awaitingAdmission &&
-        reason instanceof ApiError &&
-        [400, 401, 403, 404, 413, 415, 422].includes(reason.status)
-      ) {
+      if (awaitingAdmission && analysisRequestWasRejected(reason)) {
         analysisPendingRef.current = false;
         setCanCheckAnalysis(false);
       }

@@ -2,6 +2,16 @@ import { ApiError } from "./api/client";
 import { CanonicalResultUnavailable } from "./canonical-presentation";
 import type { Id, TrainingSession } from "./api/types";
 
+/** Known backend admission errors occur before acceptance or roll back the request. */
+export function analysisRequestWasRejected(reason: unknown) {
+  return (
+    reason instanceof ApiError &&
+    ([400, 401, 403, 404, 413, 415, 422].includes(reason.status) ||
+      (reason.status === 503 &&
+        reason.code === "ANALYSIS_INTEGRATION_UNAVAILABLE"))
+  );
+}
+
 /** A server-confirmed pre-analysis session may resubmit the retained recording. */
 export function analysisAdmissionMissing(
   session: TrainingSession,
