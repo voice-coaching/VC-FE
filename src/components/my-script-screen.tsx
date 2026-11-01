@@ -40,7 +40,7 @@ import { CUSTOM_SCRIPT_LIMIT } from "@/lib/custom-draft";
 export function MyScriptScreen() {
   const router = useRouter();
   const [scriptTitle, setScriptTitle] = useState("");
-  const [topic, setTopic] = useState("발표");
+  const [topic, setTopic] = useState("미분류");
   const [topicData, setTopicData] = useState<ScriptTopics>({
     topics: [...DEFAULT_SCRIPT_TOPICS],
     assignments: {},
@@ -77,7 +77,7 @@ export function MyScriptScreen() {
   const sentences = splitSentences(text);
   const characterCount = Array.from(text).length;
   const tooLong = characterCount > CUSTOM_SCRIPT_LIMIT;
-  const hasDraft = !!(text.length || scriptTitle.length || topic !== "발표");
+  const hasDraft = !!(text.length || scriptTitle.length || topic !== "미분류");
   const editing = stage === "input" || stage === "confirm";
 
   useEffect(() => {
@@ -141,6 +141,9 @@ export function MyScriptScreen() {
       })),
     );
     setServerTopics(result.topics);
+    setTopic((current) =>
+      result.topics.some((item) => item.name === current) ? current : "미분류",
+    );
     setTopicData({
       topics: [...result.topics.map((t) => t.name), "미분류"],
       assignments: result.assignments,
@@ -191,7 +194,7 @@ export function MyScriptScreen() {
     <ScriptConfirmDialog
       open={deleteIds !== null}
       title={`문장 ${deleteIds?.length ?? 0}개를 삭제할까요?`}
-      description="연습 기록도 함께 삭제되며 되돌릴 수 없어요"
+      description="보관함에서 삭제해요. 기존 연습 기록은 유지돼요."
       busy={saving}
       error={saveError}
       onClose={() => {

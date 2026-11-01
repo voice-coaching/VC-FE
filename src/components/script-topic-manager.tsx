@@ -220,7 +220,7 @@ export function ScriptTopicManager({
       <ScriptConfirmDialog
         open={panel === "delete"}
         title={`${selected?.name ?? ""} 주제를 삭제할까요?`}
-        description={`주제 안 문장 ${counts[selected?.name ?? ""] ?? 0}개와 연습 기록도 함께 삭제돼요`}
+        description={`주제와 보관함의 문장 ${counts[selected?.name ?? ""] ?? 0}개를 삭제해요. 기존 연습 기록은 유지돼요.`}
         busy={busy}
         error={error}
         onClose={() => setPanel(null)}
