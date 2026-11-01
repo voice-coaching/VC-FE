@@ -7,6 +7,7 @@ type ResumeState = {
   attempts: VoiceRecording[];
   selectedRecordingId: Id | null;
   completed: boolean;
+  scriptText?: string;
 };
 
 /** A linked session does not imply that a recording or an analysis exists. */
@@ -39,6 +40,10 @@ export async function loadPracticeResume(
     };
 
   const selected = attempts.find((item) => item.selected);
+  const sentenceSource =
+    session.content?.sentenceIndex != null
+      ? { scriptText: session.content.scriptText }
+      : {};
   const selectedRecordingId =
     session.selectedRecordingId ??
     selected?.recordingId ??
@@ -54,6 +59,7 @@ export async function loadPracticeResume(
       attempts,
       selectedRecordingId,
       completed: false,
+      ...sentenceSource,
     };
 
   if (selectedRecordingId == null)
@@ -68,5 +74,6 @@ export async function loadPracticeResume(
     attempts,
     selectedRecordingId,
     completed: session.status === "COMPLETED",
+    ...sentenceSource,
   };
 }

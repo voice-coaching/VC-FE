@@ -5,6 +5,8 @@ import { ApiError } from "../src/lib/api/client";
 import {
   CANONICAL_PROFILE,
   CANONICAL_VIEW_SCHEMA,
+  AUDIOVISUAL_PROFILE,
+  AUDIOVISUAL_VIEW_SCHEMA,
   type CanonicalAnalysisView,
 } from "../src/lib/canonical-analysis";
 
@@ -92,6 +94,41 @@ function server(current: CanonicalAnalysisView) {
   };
   return { api: createRemoteApi("https://qa.example.test"), mutations };
 }
+
+test("unified V6 audio results remain readable and completable without video evidence", async () => {
+  const current = view();
+  const v6 = {
+    ...current,
+    schemaVersion: AUDIOVISUAL_VIEW_SCHEMA,
+    analysisProfile: AUDIOVISUAL_PROFILE,
+    canonicalAnalysis: {
+      ...current.canonicalAnalysis!,
+      visual: {
+        status: "NOT_PROVIDED",
+        score: null,
+        scoreKind: "NONE",
+        correctiveClaimsAllowed: false,
+        coverage: {
+          targetCount: 0,
+          visuallyEligibleCount: 0,
+          observedCount: 0,
+          scoredCount: 0,
+          coverage: null,
+        },
+        phoneAssessments: [],
+        omittedPhoneAssessmentCount: 0,
+        reasonCodes: ["VIDEO_NOT_PROVIDED"],
+        alignmentScope: "CANONICAL_MFA_DETECTOR_PHONES_V1",
+        unresolvedExpectedIndices: [],
+      },
+    },
+  } as CanonicalAnalysisView;
+  const { api, mutations } = server(v6);
+  const read = await api.analyses.get(88, 55);
+  assert.equal(read.canonical?.analysisProfile, AUDIOVISUAL_PROFILE);
+  await api.training.complete(77, 9, v6);
+  assert.equal(mutations.length, 1);
+});
 
 test("completion accepts the exact analysis attempt displayed to the user", async () => {
   const expected = view();

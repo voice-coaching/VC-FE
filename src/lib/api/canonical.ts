@@ -13,7 +13,8 @@ import {
 export const HANDOFF_RESULT_HEADER = "voice-coaching.runpod-analysis-result.v5";
 export const AUDIOVISUAL_RESULT_HEADER =
   "voice-coaching.runpod-analysis-result.v6";
-export const CANONICAL_RESULT_HEADER = HANDOFF_RESULT_HEADER;
+// New audio and video executions share V6; V5 remains a historical reader contract.
+export const CANONICAL_RESULT_HEADER = AUDIOVISUAL_RESULT_HEADER;
 export function canonicalDatabaseId(value: Id): number {
   if (typeof value === "string" && !/^[1-9][0-9]*$/.test(value))
     throw new ApiError(
@@ -74,9 +75,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
         cache: "no-store",
         endpointErrorsOnly: true,
         headers: {
-          "X-Analysis-Result-Schema": audiovisual
-            ? AUDIOVISUAL_RESULT_HEADER
-            : HANDOFF_RESULT_HEADER,
+          "X-Analysis-Result-Schema": CANONICAL_RESULT_HEADER,
         },
       },
     );
