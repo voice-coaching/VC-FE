@@ -17,3 +17,8 @@ Changed paths: `src/lib/direct-analysis.ts`, `src/components/direct-practice-ses
 TypeScript noEmit and formatting checks passed. No browser automation, regression tests, Vercel deployment or inference QA ran. RunPod must have approved Native artifacts and working HTTPS/CORS/SSE before enabling the build flag. Native DRAFT changes inherited in this worktree are not an approved production model release.
 
 The remaining course/exam/session routes cannot be switched merely by deleting the wrapper condition: their completion API requires a persisted integer analysis ID, selected recording and current session ownership. Direct jobs use independent UUIDs. Their result display must be separated from an asynchronous history-to-session projection before they can use the same public path without losing course progress or exam submission. This change does not claim those flows have migrated.
+
+
+## Sentence batches — 2026-11-01
+
+New independent practice now uses [sentence batch admission and collection](api/sentence-practice-batches.md). Each sentence finalizes a separate recorder file and is admitted immediately; results are withheld by the server until all n jobs terminate. Single-job helpers remain for legacy results and callers outside independent sentence practice. The UI does not silently submit a whole-script recording if the new API is unavailable.
