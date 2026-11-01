@@ -59,6 +59,7 @@ export function AnalysisView({
   corrections,
   practiceResult,
   practiceDecisionStatus,
+  sentenceMode = false,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -70,6 +71,7 @@ export function AnalysisView({
   corrections?: ReportCorrection[];
   practiceResult?: DirectResult["practiceResult"];
   practiceDecisionStatus?: string;
+  sentenceMode?: boolean;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const reviewItems =
@@ -591,6 +593,7 @@ export function AnalysisView({
               analysis={analysis}
               practiceResult={practiceResult}
               decisionStatus={practiceDecisionStatus}
+              sentenceMode={sentenceMode}
             />
           </section>
         )}
@@ -614,10 +617,12 @@ function PracticeResultSummary({
   analysis,
   practiceResult,
   decisionStatus,
+  sentenceMode,
 }: {
   analysis: AnalysisResult;
   practiceResult?: DirectResult["practiceResult"];
   decisionStatus?: string;
+  sentenceMode?: boolean;
 }) {
   const decision =
     practiceResult?.decisionStatus ??
@@ -639,7 +644,7 @@ function PracticeResultSummary({
           : !accepted
             ? "이번 입력은 평가를 완료하지 못했어요."
             : score != null
-              ? `전체 녹음 종합 점수 ${formatPoints(score)}점`
+              ? `${sentenceMode ? "이 문장 분석" : "전체 녹음 종합"} 점수 ${formatPoints(score)}점`
               : "이번 녹음에는 종합 점수가 제공되지 않았어요."}
       </p>
       {feedback && (
@@ -647,8 +652,9 @@ function PracticeResultSummary({
       )}
       {accepted && (
         <p className="text-[#8b95a1]">
-          전체 녹음을 기준으로 한 결과예요. 문장별 점수와 판정은 따로 제공하지
-          않아요.
+          {sentenceMode
+            ? "이 문장만 녹음한 음성을 기준으로 분석한 결과예요."
+            : "전체 녹음을 기준으로 한 결과예요. 문장별 점수와 판정은 따로 제공하지 않아요."}
         </p>
       )}
     </div>

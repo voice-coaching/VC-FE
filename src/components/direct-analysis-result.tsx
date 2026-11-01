@@ -11,16 +11,19 @@ export function DirectAnalysisResult({
   result,
   content,
   recordingUrl,
+  sentenceMode = false,
 }: {
   result: DirectResult;
   content: AnalysisViewContent;
   recordingUrl?: string;
+  sentenceMode?: boolean;
 }) {
   return (
     <AnalysisView
       analysis={directAnalysisPresentation(result)}
       practiceResult={result.practiceResult}
       practiceDecisionStatus={result.decision.status}
+      sentenceMode={sentenceMode}
       corrections={
         !result.failure && result.decision.status === "ACCEPT"
           ? result.coaching.items

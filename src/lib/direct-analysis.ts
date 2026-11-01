@@ -116,6 +116,7 @@ function endpoint(path: string) {
     throw new Error("분석 서버 주소가 설정되지 않았습니다.");
   return url.origin + url.pathname.replace(/\/$/, "") + path;
 }
+export { endpoint as directEndpoint };
 async function response(reply: Response) {
   if (!reply.ok) {
     const body: unknown = await reply.json().catch(() => null);
