@@ -280,7 +280,14 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           headers: idempotencyHeaders(idempotencyKey),
         }),
       getTitleExam: (examId) =>
-        request(`/api/users/me/title-exams/${id(examId)}`),
+        request(`/api/users/me/title-exams/${id(examId)}`, {
+          cache: "no-store",
+        }),
+      restartTitleExam: (examId, previousTrainingSessionId) =>
+        request(`/api/users/me/title-exams/${id(examId)}/restart`, {
+          method: "POST",
+          body: { previousTrainingSessionId },
+        }),
       submitTitleExam: (examId, analysisId) =>
         request(`/api/users/me/title-exams/${id(examId)}/submit`, {
           method: "POST",
@@ -411,7 +418,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       getAnalysisCapabilities: () => request("/api/analysis-capabilities"),
       create: (input) =>
         request("/api/training-sessions", { method: "POST", body: input }),
-      get: (sessionId) => request(`/api/training-sessions/${id(sessionId)}`),
+      get: (sessionId) =>
+        request(`/api/training-sessions/${id(sessionId)}`, {
+          cache: "no-store",
+        }),
       cancel: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}/cancel`, {
           method: "POST",
@@ -442,6 +452,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       async listRecordings(sessionId) {
         const data = await request<{ items: VoiceRecording[] }>(
           `/api/training-sessions/${id(sessionId)}/recordings`,
+          { cache: "no-store" },
         );
         return data.items;
       },

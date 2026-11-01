@@ -153,6 +153,8 @@ export function RecordingPracticeSession({
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [resultAudioUrl, setResultAudioUrl] = useState<string | undefined>();
+  const [resumedRecording, setResumedRecording] =
+    useState<VoiceRecording | null>(null);
   const [resumedScriptText, setResumedScriptText] = useState<string | null>(
     null,
   );
@@ -215,6 +217,13 @@ export function RecordingPracticeSession({
   const recorder = capturedRecording
     ? { ...localRecorder, ...capturedRecording, status: "recorded" as const }
     : localRecorder;
+  const reviewAudioUrl = recorder.previewUrl;
+  const reviewRecordingId = recorder.blob
+    ? undefined
+    : (resumedRecording?.recordingId ?? resumedRecording?.id);
+  const reviewDurationMs = recorder.blob
+    ? recorder.durationMs
+    : (resumedRecording?.durationMs ?? 0);
   const retryOwner = useRef(submissionRetry);
   const submissionErrorOwner = useRef(onSubmissionError);
   submissionErrorOwner.current = onSubmissionError;
@@ -395,7 +404,15 @@ export function RecordingPracticeSession({
         setRequestError(null);
         setCanCheckAnalysis(false);
         if (restored.phase === "idle") {
-          setPhase("idle");
+          const priorRecording =
+            restoreSession && restored.sessionId != null
+              ? (restored.attempts.find((item) => item.selected) ??
+                [...restored.attempts].sort(
+                  (a, b) => b.attemptNo - a.attemptNo,
+                )[0])
+              : undefined;
+          setResumedRecording(priorRecording ?? null);
+          setPhase(priorRecording ? "review" : "idle");
           return;
         }
         setPhase("analyzing");
@@ -873,7 +890,8 @@ export function RecordingPracticeSession({
       await checkExistingAnalysis();
       return;
     }
-    if (!recorder.blob) return;
+    const savedRecording = !recorder.blob ? resumedRecording : null;
+    if (!recorder.blob && !savedRecording) return;
     if (localOnly) {
       setRequestError(
         "내 문장은 서버 콘텐츠 ID가 없어 AI 분석을 요청할 수 없습니다.",
@@ -893,86 +911,100 @@ export function RecordingPracticeSession({
       const capabilities = await getAnalysisCapabilities();
       assertOwner();
       checkingAvailability = false;
-      if (recorder.durationMs < capabilities.minimumDurationMs) {
-        throw new PracticeInputError(
-          "input",
-          `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 녹음해 주세요.`,
-        );
-      }
-      if (recorder.durationMs > capabilities.maximumDurationMs) {
-        throw new PracticeInputError(
-          "input",
-          `녹음은 ${Math.floor(capabilities.maximumDurationMs / 1_000)}초 이내여야 합니다.`,
-        );
-      }
-      const prepared = await prepareAudioForAnalysis(
-        recorder.blob,
-        capabilities.acceptedAudioMimeTypes,
-      ).catch((reason: unknown) => {
-        throw new PracticeInputError(
-          "preparation",
-          reason instanceof Error
-            ? reason.message
-            : "오디오 변환에 실패했습니다.",
-        );
-      });
-      if (prepared.blob.size > capabilities.maximumAudioUploadBytes) {
-        throw new PracticeInputError(
-          "input",
-          "녹음 파일이 서버의 업로드 제한을 초과했습니다.",
-        );
-      }
-      assertOwner();
-      const activeSessionId = await ensureSession();
-      assertOwner();
-      setPhase("uploading");
-      const previousUpload = uploadedRecordingRef.current;
-      let recordingId =
-        previousUpload?.source === recorder.blob &&
-        String(previousUpload.sessionId) === String(activeSessionId) &&
-        previousUpload.epoch === getAuthSessionVersion()
-          ? previousUpload.recordingId
-          : null;
-      if (recordingId == null) {
-        const uploadInput = {
-          fileName: `recording-${Date.now()}.${prepared.extension}`,
-          mimeType: prepared.mimeType,
-          fileSizeBytes: prepared.blob.size,
-        };
-        const uploadInfo = await uploadRecordingWithFreshUrl({
-          issueUploadUrl: () => {
-            assertOwner();
-            return api.training.getUploadUrl(activeSessionId, uploadInput);
-          },
-          upload: (currentUpload) => {
-            assertOwner();
-            return api.training.uploadRecording(
-              currentUpload,
-              prepared.blob,
-              setUploadProgress,
-            );
-          },
-          onRetry: () => setUploadProgress(0),
+      let activeSessionId: Id;
+      let recordingId: Id | null;
+      if (savedRecording && sessionIdRef.current != null) {
+        // Resume an already registered recording only after the user explicitly
+        // requests analysis. Do not download/re-upload or auto-submit on entry.
+        activeSessionId = sessionIdRef.current;
+        recordingId = savedRecording.recordingId ?? savedRecording.id ?? null;
+        if (recordingId == null)
+          throw new Error("이전 녹음 ID를 확인하지 못했습니다.");
+      } else {
+        if (!recorder.blob)
+          throw new Error("분석할 녹음을 확인하지 못했습니다.");
+        if (recorder.durationMs < capabilities.minimumDurationMs) {
+          throw new PracticeInputError(
+            "input",
+            `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 녹음해 주세요.`,
+          );
+        }
+        if (recorder.durationMs > capabilities.maximumDurationMs) {
+          throw new PracticeInputError(
+            "input",
+            `녹음은 ${Math.floor(capabilities.maximumDurationMs / 1_000)}초 이내여야 합니다.`,
+          );
+        }
+        const prepared = await prepareAudioForAnalysis(
+          recorder.blob,
+          capabilities.acceptedAudioMimeTypes,
+        ).catch((reason: unknown) => {
+          throw new PracticeInputError(
+            "preparation",
+            reason instanceof Error
+              ? reason.message
+              : "오디오 변환에 실패했습니다.",
+          );
         });
+        if (prepared.blob.size > capabilities.maximumAudioUploadBytes) {
+          throw new PracticeInputError(
+            "input",
+            "녹음 파일이 서버의 업로드 제한을 초과했습니다.",
+          );
+        }
         assertOwner();
-        const recording = await api.training.registerRecording(
-          activeSessionId,
-          {
-            objectKey: uploadInfo.objectKey,
+        activeSessionId = await ensureSession();
+        assertOwner();
+        setPhase("uploading");
+        const previousUpload = uploadedRecordingRef.current;
+        recordingId =
+          previousUpload?.source === recorder.blob &&
+          String(previousUpload.sessionId) === String(activeSessionId) &&
+          previousUpload.epoch === getAuthSessionVersion()
+            ? previousUpload.recordingId
+            : null;
+        if (recordingId == null) {
+          const uploadInput = {
+            fileName: `recording-${Date.now()}.${prepared.extension}`,
             mimeType: prepared.mimeType,
             fileSizeBytes: prepared.blob.size,
-            durationMs: recorder.durationMs,
-          },
-        );
-        assertOwner();
-        recordingId = recording.recordingId ?? recording.id ?? null;
-        if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
-        uploadedRecordingRef.current = {
-          source: recorder.blob,
-          sessionId: activeSessionId,
-          recordingId,
-          epoch: getAuthSessionVersion(),
-        };
+          };
+          const uploadInfo = await uploadRecordingWithFreshUrl({
+            issueUploadUrl: () => {
+              assertOwner();
+              return api.training.getUploadUrl(activeSessionId, uploadInput);
+            },
+            upload: (currentUpload) => {
+              assertOwner();
+              return api.training.uploadRecording(
+                currentUpload,
+                prepared.blob,
+                setUploadProgress,
+              );
+            },
+            onRetry: () => setUploadProgress(0),
+          });
+          assertOwner();
+          const recording = await api.training.registerRecording(
+            activeSessionId,
+            {
+              objectKey: uploadInfo.objectKey,
+              mimeType: prepared.mimeType,
+              fileSizeBytes: prepared.blob.size,
+              durationMs: recorder.durationMs,
+            },
+          );
+          assertOwner();
+          recordingId = recording.recordingId ?? recording.id ?? null;
+          if (recordingId == null)
+            throw new Error("녹음 ID가 응답에 없습니다.");
+          uploadedRecordingRef.current = {
+            source: recorder.blob,
+            sessionId: activeSessionId,
+            recordingId,
+            epoch: getAuthSessionVersion(),
+          };
+        }
       }
       const qualified = await waitForRecordingQuality(
         activeSessionId,
@@ -1470,17 +1502,22 @@ export function RecordingPracticeSession({
               }}
             />
           )}
-          {phase === "review" && recorder.previewUrl && (
+          {phase === "review" && (reviewAudioUrl || resumedRecording) && (
             <>
               <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-5 pb-6">
                 <h2 className="text-[20px] leading-7 font-bold text-[#191f28]">
                   녹음을 확인해 주세요
                 </h2>
                 <p className="mt-2 text-[14px] leading-5 font-medium text-[#6b7584]">
-                  문장마다 들어 보고 분석을 요청해 주세요
+                  {reviewRecordingId != null
+                    ? "이전 녹음을 들어 보고 분석을 요청해 주세요"
+                    : "문장마다 들어 보고 분석을 요청해 주세요"}
                 </p>
                 <div className="mt-5 rounded-[20px] bg-white px-2 pt-2 pb-1.5 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
-                  {sentences.map((sentence, index) => (
+                  {(resumedRecording && !recorder.blob
+                    ? [displayedContent.scriptText]
+                    : sentences
+                  ).map((sentence, index) => (
                     <div
                       key={`${index}-${sentence}`}
                       className="flex items-center gap-2 rounded-xl py-3 pr-2 pl-3"
@@ -1490,12 +1527,19 @@ export function RecordingPracticeSession({
                       </p>
                       <div className="w-28 shrink-0">
                         <ReferencePlayer
-                          source={recorder.previewUrl ?? undefined}
-                          title={`${index + 1}문장 듣기`}
+                          source={reviewAudioUrl ?? undefined}
+                          recordingId={reviewRecordingId}
+                          title={
+                            reviewRecordingId != null
+                              ? "이전 녹음 듣기"
+                              : `${index + 1}문장 듣기`
+                          }
                           startSeconds={sentenceBoundaries.current[index] ?? 0}
                           endSeconds={
-                            sentenceBoundaries.current[index + 1] ??
-                            recorder.durationMs / 1_000
+                            reviewRecordingId != null
+                              ? undefined
+                              : (sentenceBoundaries.current[index + 1] ??
+                                reviewDurationMs / 1_000)
                           }
                           buttonTone="neutral"
                         />
@@ -1506,9 +1550,10 @@ export function RecordingPracticeSession({
               </div>
               <div className="shrink-0 px-5 pb-3">
                 <ReferencePlayer
-                  source={recorder.previewUrl}
+                  source={reviewAudioUrl ?? undefined}
+                  recordingId={reviewRecordingId}
                   title="전체 듣기"
-                  durationSeconds={recorder.durationMs / 1_000}
+                  durationSeconds={reviewDurationMs / 1_000}
                   variant="recording"
                 />
               </div>
@@ -1522,6 +1567,8 @@ export function RecordingPracticeSession({
                   <button
                     type="button"
                     onClick={() => {
+                      setResumedRecording(null);
+                      setResultAudioUrl(undefined);
                       recorder.reset();
                       setActiveSentence(0);
                       setRequestError(null);

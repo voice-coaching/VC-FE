@@ -840,6 +840,10 @@ export interface ApiContract {
     getTitle(): Promise<UserTitleProgress>;
     createTitleExam(idempotencyKey?: string): Promise<UserTitleExam>;
     getTitleExam(examId: Id): Promise<UserTitleExam>;
+    restartTitleExam(
+      examId: Id,
+      previousTrainingSessionId: Id,
+    ): Promise<UserTitleExam>;
     submitTitleExam(examId: Id, analysisId: Id): Promise<UserTitleExamResult>;
     withdraw(): Promise<{ withdrawnAt: string }>;
   };
