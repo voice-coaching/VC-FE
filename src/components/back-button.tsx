@@ -9,7 +9,7 @@ export function BackButton({
   fallback,
   children,
   className,
-  label = "뒤로가기",
+  label = "뒤로 가기",
 }: {
   fallback: string;
   children: ReactNode;

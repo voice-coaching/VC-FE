@@ -208,12 +208,12 @@ export function CourseLesson({
         <div>
           <h2 className="text-[23px] font-bold">
             {example
-              ? "예시를 듣고 따라 해보세요"
+              ? "예시를 듣고 따라 해 보세요"
               : (stepDetail?.title ?? step.title)}
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {example
-              ? "문장 속 발음과 억양에 집중해서 들어보세요"
+              ? "문장 속 발음과 억양에 집중해서 들어 보세요"
               : (stepDetail?.subtitle ?? content?.description ?? description)}
           </p>
         </div>
@@ -255,7 +255,7 @@ export function CourseLesson({
                   연습 문제 {examples?.items.length ?? 0}개
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  한 문장을 골라 음성을 듣고 따라 읽어보세요.
+                  한 문장을 골라 음성을 듣고 따라 읽어 보세요.
                 </p>
               </div>
               <span className="shrink-0 text-xs font-semibold text-primary">
@@ -412,7 +412,7 @@ export function CourseLesson({
               <p className="text-sm leading-7">
                 {content?.description ??
                   description ??
-                  "예시를 듣고 문장을 따라 읽어보세요."}
+                  "예시를 듣고 문장을 따라 읽어 보세요."}
               </p>
             </section>
           </>
@@ -431,7 +431,7 @@ export function CourseLesson({
           }
           className="design-action"
         >
-          {example ? "선택한 문제 따라 읽기" : "예시 들어보기"}
+          {example ? "선택한 문제 따라 읽기" : "예시 들어 보기"}
         </button>
       </div>
     </div>

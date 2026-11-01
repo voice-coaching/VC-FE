@@ -541,7 +541,7 @@ export default function LipPractice() {
       if (!content) {
         content = await api.content.createCustom(
           {
-            title: `입모양 연습 ${selectedClip + 1}`,
+            title: `입 모양 연습 ${selectedClip + 1}`,
             scriptText: prompts[selectedClip],
             learningFocus: "PRONUNCIATION",
             retention: "SESSION_HISTORY",
@@ -807,7 +807,7 @@ export default function LipPractice() {
           ) : (
             <BackButton
               fallback="/home"
-              label="입모양 연습 닫기"
+              label="입 모양 연습 닫기"
               className="flex size-11 items-center justify-center rounded-full bg-white/85 shadow-sm backdrop-blur"
             >
               <X className="size-5" />
@@ -815,7 +815,7 @@ export default function LipPractice() {
           )}
           <p className="text-sm font-bold">
             {step === "tips" || step === "setup"
-              ? "입모양 따라 하기"
+              ? "입 모양 따라 하기"
               : step === "complete"
                 ? "촬영 완료"
                 : `${promptIndex + 1}/${prompts.length}`}
@@ -1042,7 +1042,7 @@ export default function LipPractice() {
                   content={{
                     id: `lip-${selectedClip}`,
                     contentType: "SENTENCE",
-                    title: `입모양 연습 ${selectedClip + 1}`,
+                    title: `입 모양 연습 ${selectedClip + 1}`,
                     scriptText: prompts[selectedClip],
                     referenceAudioAvailable: false,
                   }}

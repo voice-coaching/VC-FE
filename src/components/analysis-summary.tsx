@@ -61,7 +61,7 @@ export function AnalysisSummary({ text }: { text: string }) {
           onClick={() => setExpanded((value) => !value)}
           className={styles.toggle}
         >
-          {expanded ? "접기" : "더보기"}
+          {expanded ? "접기" : "더 보기"}
           <Image
             src="/figma/report-improved/chevron-white.svg"
             alt=""

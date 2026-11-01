@@ -423,7 +423,7 @@ export function MyScriptScreen() {
                 아직 내 문장이 없어요
               </h2>
               <p className="mt-2 text-[14px] leading-5 font-medium tracking-[0.2px] text-[#8b95a1]">
-                발표문이나 대본을 붙여넣고
+                발표문이나 대본을 붙여 넣고
                 <br />
                 나만의 연습 문장을 만들어요
               </p>
@@ -670,7 +670,7 @@ export function MyScriptScreen() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="더보기"
+                  aria-label="더 보기"
                   className="flex size-10 items-center justify-center"
                 >
                   <Image

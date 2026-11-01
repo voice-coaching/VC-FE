@@ -107,6 +107,6 @@ export const METHOD_OPTIONS = [
     value: "내 원고로 연습하기",
     title: "내 원고로 연습하기",
     summary: "내 원고",
-    description: "면접 답변, 발표 원고 붙여넣기",
+    description: "면접 답변, 발표 원고 붙여 넣기",
   },
 ] as const;

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "아나운서 음성을 따라 읽고 STT 결과와 음절별 발음 점수를 확인하세요.",
   openGraph: {
     title: "문장 연습 · 음절별 피드백 | SpeakAI",
-    description: "스크립트와 다른 부분을 AI가 정확히 짚어줍니다.",
+    description: "스크립트와 다른 부분을 AI가 정확히 짚어 줍니다.",
   },
 };
 

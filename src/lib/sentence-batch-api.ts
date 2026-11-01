@@ -96,7 +96,8 @@ async function requestSentenceBatch(
     const messages: Record<string, string> = {
       INVALID_PCM_WAV:
         "문장 녹음 형식이나 길이를 확인하지 못했어요. 0.5초 이상 다시 녹음해 주세요.",
-      INVALID_BATCH_SENTENCES: "한 연습은 1~50문장, 총 4000자까지 지원해요.",
+      INVALID_BATCH_SENTENCES:
+        "한 번의 연습은 1~50문장, 총 4,000자까지 지원해요.",
       BATCH_CANCELLED: "취소한 연습이에요. 새 연습을 시작해 주세요.",
       IDEMPOTENCY_CONFLICT:
         "이미 접수한 문장의 녹음과 달라요. 상태를 다시 확인해 주세요.",
