@@ -1,5 +1,18 @@
 import { ApiError } from "./api/client";
 import { CanonicalResultUnavailable } from "./canonical-presentation";
+import type { Id, TrainingSession } from "./api/types";
+
+/** A server-confirmed pre-analysis session may resubmit the retained recording. */
+export function analysisAdmissionMissing(
+  session: TrainingSession,
+  analysisId?: Id,
+) {
+  return (
+    analysisId == null &&
+    session.analysisAvailable === false &&
+    ["RECORDING", "UPLOADING"].includes(session.status)
+  );
+}
 
 /** The same read raced a status update; this does not authorize a new attempt. */
 export function isCanonicalReadConflict(error: unknown): boolean {

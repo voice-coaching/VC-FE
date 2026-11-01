@@ -2,7 +2,115 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
-import { encodeMonoWav } from "../src/lib/recording-audio";
+import {
+  encodeMonoWav,
+  prepareRecordingAudio,
+} from "../src/lib/recording-audio";
+
+function cueContext() {
+  const changes: Array<[string, number, number]> = [];
+  const parameter = (name: string) => ({
+    setValueAtTime: (value: number, time: number) =>
+      changes.push([name, value, time]),
+    linearRampToValueAtTime: (value: number, time: number) =>
+      changes.push([name, value, time]),
+  });
+  let disconnected = 0;
+  let oscillatorCount = 0;
+  const oscillator = {
+    type: "",
+    frequency: parameter("frequency"),
+    connect() {},
+    disconnect() {
+      disconnected++;
+    },
+    onended: null as (() => void) | null,
+    start(time: number) {
+      changes.push(["start", 0, time]);
+    },
+    stop(time: number) {
+      changes.push(["stop", 0, time]);
+    },
+  };
+  const context = Object.assign(new EventTarget(), {
+    state: "suspended",
+    currentTime: 12,
+    destination: {},
+    async resume() {
+      context.state = "running";
+    },
+    createOscillator() {
+      oscillatorCount++;
+      return oscillator;
+    },
+    createGain() {
+      return {
+        gain: parameter("gain"),
+        connect() {},
+        disconnect() {
+          disconnected++;
+        },
+      };
+    },
+  });
+  return {
+    context,
+    audio: context as unknown as AudioContext,
+    oscillator,
+    changes,
+    get disconnected() {
+      return disconnected;
+    },
+    get oscillatorCount() {
+      return oscillatorCount;
+    },
+  };
+}
+
+test("recording starts after an audible, short cue ends, excluding it from the captured audio", async () => {
+  const cue = cueContext();
+  let captureStarted = false;
+  const start = prepareRecordingAudio(cue.audio).then(() => {
+    captureStarted = true;
+  });
+  await Promise.resolve();
+  assert.equal(cue.context.state, "running");
+  assert.equal(captureStarted, false);
+  assert.ok(cue.changes.some(([kind, gain]) => kind === "gain" && gain > 0));
+  assert.ok(
+    cue.changes.some(
+      ([kind, frequency]) =>
+        kind === "frequency" && frequency >= 440 && frequency <= 2000,
+    ),
+  );
+  const stopTime = cue.changes.find(([kind]) => kind === "stop")![2];
+  assert.ok(stopTime > 12 && stopTime < 12.3);
+  cue.oscillator.onended!();
+  await start;
+  assert.equal(captureStarted, true);
+  assert.equal(cue.disconnected, 2);
+});
+
+test("closing the audio context during the cue aborts preparation and releases audio nodes", async () => {
+  const cue = cueContext();
+  const result = assert.rejects(prepareRecordingAudio(cue.audio), /알림음/);
+  await Promise.resolve();
+  cue.context.state = "closed";
+  cue.context.dispatchEvent(new Event("statechange"));
+  await result;
+  assert.equal(cue.disconnected, 2);
+  assert.equal(cue.oscillator.onended, null);
+});
+
+test("a blocked audio context does not pretend that the start cue played", async () => {
+  const cue = cueContext();
+  cue.context.resume = async () => {};
+  await assert.rejects(
+    prepareRecordingAudio(cue.audio),
+    /오디오를 시작하지 못했습니다/,
+  );
+  assert.equal(cue.oscillatorCount, 0);
+});
 
 function processor(sampleRate: number) {
   const messages: Array<{ type: string; samples?: Float32Array }> = [];

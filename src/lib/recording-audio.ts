@@ -43,11 +43,55 @@ export function encodeMonoWav(
   };
 }
 
-/** Resume audio silently; visual feedback indicates when capture is ready. */
+/** Finish the start cue before capture, so the beep is not part of the recording. */
 export async function prepareRecordingAudio(context: AudioContext) {
   await context.resume();
   if (context.state !== "running")
     throw new Error("오디오를 시작하지 못했습니다. 다시 시도해 주세요.");
+  await new Promise<void>((resolve, reject) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const started = context.currentTime;
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      context.removeEventListener("statechange", stateChanged);
+      oscillator.onended = null;
+      oscillator.disconnect();
+      gain.disconnect();
+      if (error) reject(error);
+      else resolve();
+    };
+    const stateChanged = () => {
+      if (context.state !== "running")
+        finish(
+          new Error(
+            "녹음 시작 알림음을 재생하지 못했습니다. 다시 시도해 주세요.",
+          ),
+        );
+    };
+    const timeout = setTimeout(
+      () =>
+        finish(
+          new Error("녹음 시작 알림음이 중단됐습니다. 다시 시도해 주세요."),
+        ),
+      1_000,
+    );
+    context.addEventListener("statechange", stateChanged);
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, started);
+    gain.gain.setValueAtTime(0, started);
+    gain.gain.linearRampToValueAtTime(0.18, started + 0.01);
+    gain.gain.setValueAtTime(0.18, started + 0.12);
+    gain.gain.linearRampToValueAtTime(0, started + 0.16);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.onended = () => finish();
+    oscillator.start(started);
+    oscillator.stop(started + 0.18);
+  });
 }
 
 export async function createPcmRecording(

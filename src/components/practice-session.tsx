@@ -51,7 +51,10 @@ import {
   AnalysisWaitTimeout,
 } from "@/lib/analysis-polling";
 import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
-import { canRecheckSubmittedAnalysis } from "@/lib/canonical-recovery";
+import {
+  analysisAdmissionMissing,
+  canRecheckSubmittedAnalysis,
+} from "@/lib/canonical-recovery";
 import {
   describePracticeError,
   PracticeInputError,
@@ -221,6 +224,13 @@ function PracticeSessionBody({
   const sessionIdRef = useRef<Id | null>(resumedSessionId);
   const authEpochRef = useRef(getAuthSessionVersion());
   const selectedRecordingRef = useRef<Id | null>(null);
+  const submissionBusyRef = useRef(false);
+  const uploadedRecordingRef = useRef<{
+    source: Blob;
+    sessionId: Id;
+    recordingId: Id;
+    epoch: number;
+  } | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
@@ -514,6 +524,8 @@ function PracticeSessionBody({
   }
 
   async function startRecording() {
+    // Unlock audio during the tap, before capability requests lose activation.
+    recorder.unlockAudio();
     sentenceBoundaries.current = [0];
     setActiveSentence(0);
     setRequestError(null);
@@ -582,6 +594,18 @@ function PracticeSessionBody({
     setCanCheckAnalysis(false);
     setPhase("analyzing");
     try {
+      if (waitingAnalysisRef.current == null) {
+        const current = await api.training.get(sessionId);
+        if (analysisAdmissionMissing(current)) {
+          analysisPendingRef.current = false;
+          setCanCheckAnalysis(false);
+          setPhase(recorder.blob ? "review" : "idle");
+          setRequestError(
+            "분석 요청이 접수되지 않았어요. 녹음은 유지되어 있으니 다시 분석해 주세요.",
+          );
+          return;
+        }
+      }
       const result = await waitForAnalysis(
         sessionId,
         waitingAnalysisRef.current,
@@ -807,6 +831,7 @@ function PracticeSessionBody({
   }
 
   async function analyze() {
+    if (submissionBusyRef.current) return;
     // Once submitted (including a lost acknowledgement), recover by reading.
     // Never issue another upload against an ANALYZING session.
     if (analysisPendingRef.current && sessionIdRef.current) {
@@ -820,9 +845,12 @@ function PracticeSessionBody({
       );
       return;
     }
+    submissionBusyRef.current = true;
+    let awaitingAdmission = false;
     setRequestError(null);
     setRequestFailure(null);
     setCanRetryAnalysis(false);
+    setCanCheckAnalysis(false);
     setUploadProgress(0);
     try {
       const capabilities = await getAnalysisCapabilities();
@@ -857,32 +885,54 @@ function PracticeSessionBody({
       }
       const activeSessionId = await ensureSession();
       setPhase("uploading");
-      const uploadInput = {
-        fileName: `recording-${Date.now()}.${prepared.extension}`,
-        mimeType: prepared.mimeType,
-        fileSizeBytes: prepared.blob.size,
-      };
-      const uploadInfo = await uploadRecordingWithFreshUrl({
-        issueUploadUrl: () =>
-          api.training.getUploadUrl(activeSessionId, uploadInput),
-        upload: (currentUpload) =>
-          api.training.uploadRecording(
-            currentUpload,
-            prepared.blob,
-            setUploadProgress,
-          ),
-        onRetry: () => setUploadProgress(0),
-      });
-      const recording = await api.training.registerRecording(activeSessionId, {
-        objectKey: uploadInfo.objectKey,
-        mimeType: prepared.mimeType,
-        fileSizeBytes: prepared.blob.size,
-        durationMs: recorder.durationMs,
-      });
-      const recordingId = recording.recordingId ?? recording.id;
-      if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
-      await waitForRecordingQuality(activeSessionId, recordingId);
-      await api.training.selectRecording(activeSessionId, recordingId);
+      const previousUpload = uploadedRecordingRef.current;
+      let recordingId =
+        previousUpload?.source === recorder.blob &&
+        String(previousUpload.sessionId) === String(activeSessionId) &&
+        previousUpload.epoch === getAuthSessionVersion()
+          ? previousUpload.recordingId
+          : null;
+      if (recordingId == null) {
+        const uploadInput = {
+          fileName: `recording-${Date.now()}.${prepared.extension}`,
+          mimeType: prepared.mimeType,
+          fileSizeBytes: prepared.blob.size,
+        };
+        const uploadInfo = await uploadRecordingWithFreshUrl({
+          issueUploadUrl: () =>
+            api.training.getUploadUrl(activeSessionId, uploadInput),
+          upload: (currentUpload) =>
+            api.training.uploadRecording(
+              currentUpload,
+              prepared.blob,
+              setUploadProgress,
+            ),
+          onRetry: () => setUploadProgress(0),
+        });
+        const recording = await api.training.registerRecording(
+          activeSessionId,
+          {
+            objectKey: uploadInfo.objectKey,
+            mimeType: prepared.mimeType,
+            fileSizeBytes: prepared.blob.size,
+            durationMs: recorder.durationMs,
+          },
+        );
+        recordingId = recording.recordingId ?? recording.id ?? null;
+        if (recordingId == null) throw new Error("녹음 ID가 응답에 없습니다.");
+        uploadedRecordingRef.current = {
+          source: recorder.blob,
+          sessionId: activeSessionId,
+          recordingId,
+          epoch: getAuthSessionVersion(),
+        };
+      }
+      const qualified = await waitForRecordingQuality(
+        activeSessionId,
+        recordingId,
+      );
+      if (!qualified.selected)
+        await api.training.selectRecording(activeSessionId, recordingId);
       selectedRecordingRef.current = recordingId;
       setRecordingAttempts((current) =>
         current.map((item) => ({
@@ -890,12 +940,13 @@ function PracticeSessionBody({
           selected: String(item.recordingId ?? item.id) === String(recordingId),
         })),
       );
+      const consent = await getConsentInput();
+      waitingAnalysisRef.current = undefined;
       analysisPendingRef.current = true;
+      awaitingAdmission = true;
       setCanCheckAnalysis(true);
-      const requested = await api.training.analyze(
-        activeSessionId,
-        await getConsentInput(),
-      );
+      const requested = await api.training.analyze(activeSessionId, consent);
+      awaitingAdmission = false;
       setPhase("analyzing");
       const deliveredResult = await waitForAnalysis(
         activeSessionId,
@@ -903,6 +954,14 @@ function PracticeSessionBody({
       );
       await loadResult(activeSessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
+      if (
+        awaitingAdmission &&
+        reason instanceof ApiError &&
+        [400, 401, 403, 404, 413, 415, 422].includes(reason.status)
+      ) {
+        analysisPendingRef.current = false;
+        setCanCheckAnalysis(false);
+      }
       setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
@@ -910,6 +969,8 @@ function PracticeSessionBody({
           : "음성 분석 요청에 실패했습니다.",
       );
       setPhase("error");
+    } finally {
+      submissionBusyRef.current = false;
     }
   }
 
@@ -977,6 +1038,7 @@ function PracticeSessionBody({
         setSegments([]);
       }
       recorder.reset();
+      uploadedRecordingRef.current = null;
       setActiveSentence(0);
       setRequestError(null);
       setRequestFailure(null);

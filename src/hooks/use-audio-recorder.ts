@@ -216,6 +216,16 @@ export function useAudioRecorder() {
 
   const getStream = useCallback(() => streamRef.current, []);
 
+  const unlockAudio = useCallback(() => {
+    if (typeof window === "undefined" || !window.AudioContext) return;
+    let context = contextRef.current;
+    if (!context || context.state === "closed") {
+      context = new AudioContext();
+      contextRef.current = context;
+    }
+    void context.resume().catch(() => undefined);
+  }, []);
+
   const start = useCallback(async () => {
     if (startingRef.current || pcmRef.current || recorderRef.current)
       return false;
@@ -242,7 +252,7 @@ export function useAudioRecorder() {
     setStatus("requesting");
     try {
       // Create/resume during the tap, before the asynchronous permission prompt.
-      const context = new AudioContext();
+      const context = contextRef.current ?? new AudioContext();
       contextRef.current = context;
       void context.resume().catch(() => undefined);
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -440,5 +450,6 @@ export function useAudioRecorder() {
     stop,
     reset,
     getStream,
+    unlockAudio,
   };
 }

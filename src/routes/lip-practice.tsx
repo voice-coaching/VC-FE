@@ -61,7 +61,10 @@ import {
   type LipPracticeStep,
 } from "@/lib/lip-practice";
 import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
-import { createPcmRecording } from "@/lib/recording-audio";
+import {
+  createPcmRecording,
+  prepareRecordingAudio,
+} from "@/lib/recording-audio";
 import { prepareAudioForAnalysis } from "@/hooks/use-audio-recorder";
 import { prepareDirectAudio } from "@/lib/direct-audio";
 import {
@@ -298,6 +301,8 @@ export default function LipPractice() {
         setStep("review");
       };
       recorderRef.current = recorder;
+      await prepareRecordingAudio(context);
+      if (!mounted.current) return;
       recordingStartedAtRef.current = Date.now();
       // Safari/iOS의 MP4는 timeslice로 조각내면 첫 조각만 재생되는 파일이
       // 만들어질 수 있으므로 stop 시점에 완성된 파일 하나를 받는다.
