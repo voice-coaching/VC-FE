@@ -20,6 +20,7 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { categoryLabel } from "@/lib/content-labels";
+import { contentCategoryCode } from "@/lib/content-category";
 import { newsHeadline, newsCategoryTags } from "@/lib/news-presentation";
 import { useCatalogFilters } from "@/hooks/use-catalog-filters";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
@@ -77,7 +78,7 @@ function catalogCacheResource(
   category: string,
   difficulty: Difficulty | "",
 ) {
-  return `content-${type === "NEWS" ? "NEWS-topics-v1" : type}-${category || "all"}-${difficulty || "all"}`;
+  return `content-${type === "NEWS" ? "NEWS-topics-v1" : type}-${contentCategoryCode(type, category) || "all"}-${difficulty || "all"}`;
 }
 
 function durationLabel(seconds: number) {
