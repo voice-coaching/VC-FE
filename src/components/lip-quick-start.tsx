@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { BackButton } from "./back-button";
-import { scriptLibrary } from "@/lib/script-library";
+import { scriptLibrary, SCRIPT_LIBRARY_AVAILABLE } from "@/lib/script-library";
 import { splitSentences } from "@/lib/sentences";
 import {
   LIP_PRACTICE_SETS,
@@ -30,7 +30,7 @@ export function LipQuickStart({
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (screen !== "library") return;
+    if (screen !== "library" || !SCRIPT_LIBRARY_AVAILABLE) return;
     let active = true;
     setLoading(true);
     setError("");
@@ -171,13 +171,17 @@ export function LipQuickStart({
             <div className={styles.cards}>
               {[
                 ...LIP_PRACTICE_SETS,
-                {
-                  id: "custom",
-                  title: "내 문장",
-                  description: "보관함에 저장한 내 원고로 연습해요",
-                  minutes: 0,
-                  sentences: [],
-                },
+                ...(SCRIPT_LIBRARY_AVAILABLE
+                  ? [
+                      {
+                        id: "custom",
+                        title: "내 문장",
+                        description: "보관함에 저장한 내 원고로 연습해요",
+                        minutes: 0,
+                        sentences: [],
+                      },
+                    ]
+                  : []),
               ].map((set, index) => (
                 <button
                   key={set.id}

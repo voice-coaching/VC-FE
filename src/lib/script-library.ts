@@ -1,7 +1,12 @@
-import { createHttpClient } from "./api/client";
-import type { PracticeContent } from "./api";
-const client = createHttpClient("/api/backend");
-const base = "/api/users/me/script-library";
+import { api, type PracticeContent } from "./api";
+
+// VC-BE currently exposes custom-content creation, but no library/topic CRUD.
+export const SCRIPT_LIBRARY_AVAILABLE = false;
+export const SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE =
+  "내 원고 보관함은 준비 중이에요. 입력한 원고로 바로 연습할 수 있어요.";
+async function unavailable(): Promise<never> {
+  throw new Error(SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE);
+}
 export type ScriptTopic = { id: number; name: string };
 export type ScriptLibrary = {
   items: PracticeContent[];
@@ -9,32 +14,27 @@ export type ScriptLibrary = {
   assignments: Record<string, string>;
 };
 export const scriptLibrary = {
-  list: () => client.request<ScriptLibrary>(base),
+  list: (): Promise<ScriptLibrary> => unavailable(),
   save: (
     id: string | number | null,
     input: { title: string; scriptText: string; topicId: number | null },
     key: string,
-  ) =>
-    client.request<PracticeContent>(id == null ? base : `${base}/${id}`, {
-      method: id == null ? "POST" : "PUT",
-      body: input,
-      headers: { "Idempotency-Key": key },
-    }),
-  remove: (ids: (string | number)[]) =>
-    client.request<void>(`${base}/delete`, {
-      method: "POST",
-      body: { ids: ids.map(Number) },
-    }),
-  createTopic: (name: string) =>
-    client.request<ScriptTopic>(`${base}/topics`, {
-      method: "POST",
-      body: { name },
-    }),
-  renameTopic: (id: number, name: string) =>
-    client.request<ScriptTopic>(`${base}/topics/${id}`, {
-      method: "PUT",
-      body: { name },
-    }),
-  removeTopic: (id: number) =>
-    client.request<void>(`${base}/topics/${id}`, { method: "DELETE" }),
+  ): Promise<PracticeContent> => {
+    if (id != null) return unavailable();
+    return api.content.createCustom(
+      {
+        title: input.title,
+        scriptText: input.scriptText,
+        learningFocus: "PRONUNCIATION",
+        retention: "SESSION_HISTORY",
+        locale: "ko-KR",
+      },
+      key,
+    );
+  },
+  remove: (_ids: (string | number)[]): Promise<void> => unavailable(),
+  createTopic: (_name: string): Promise<ScriptTopic> => unavailable(),
+  renameTopic: (_id: number, _name: string): Promise<ScriptTopic> =>
+    unavailable(),
+  removeTopic: (_id: number): Promise<void> => unavailable(),
 };
