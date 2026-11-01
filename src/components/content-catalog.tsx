@@ -1,7 +1,7 @@
 "use client";
 import { practiceDetailHref } from "@/lib/practice-entry";
 
-import newsStyles from "./news-carousel.module.css";
+import { PopularNewsCarousel } from "./popular-news-carousel";
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,12 +37,6 @@ import {
   catalogFacetsForPractice,
   catalogItemsForPractice,
 } from "@/lib/catalog-visibility";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  type CarouselApi,
-} from "@/components/ui/carousel";
 
 const DIFFICULTIES: Array<{ value: Difficulty | ""; label: string }> = [
   { value: "", label: "모든 난이도" },
@@ -162,9 +156,6 @@ export function ContentCatalog({
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [topItems, setTopItems] = useState<PracticeContentSummary[]>([]);
-  const [topLoading, setTopLoading] = useState(type === "NEWS");
-  const [topError, setTopError] = useState(false);
   const generation = useRef(0);
   const newsSnapshot = useRef<{
     userId: string | null;
@@ -183,40 +174,6 @@ export function ContentCatalog({
   const scope = `${userId}:${catalogCacheResource(type, category, difficulty)}`;
   const [loadedScope, setLoadedScope] = useState(scope);
   const scrollRef = useHistoryScroll(scope, !loading && loadedScope === scope);
-
-  useEffect(() => {
-    if (type !== "NEWS") return;
-    let active = true;
-    const resource = "news-top-all";
-    const cached = readUserClientCache<PracticeContentSummary[]>(
-      userId,
-      resource,
-    );
-    setTopItems(cached ?? []);
-    setTopLoading(!cached);
-    setTopError(false);
-    api.content
-      .list({
-        type: "NEWS",
-
-        page: 0,
-        size: 5,
-      })
-      .then((result) => {
-        if (!active) return;
-        setTopItems(result.items);
-        writeUserClientCache(userId, resource, result.items);
-      })
-      .catch(() => {
-        if (active && !cached) setTopError(true);
-      })
-      .finally(() => {
-        if (active) setTopLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [type, userId, retry]);
 
   useEffect(() => {
     let active = true;
@@ -482,19 +439,7 @@ export function ContentCatalog({
       <CatalogHeader title={title} />
       <p className="sr-only">{description}</p>
 
-      {type === "NEWS" ? (
-        <NewsIntro loading={topLoading} items={topItems} returnTo={returnTo} />
-      ) : null}
-
-      {type === "NEWS" && topError ? (
-        <button
-          type="button"
-          className="mx-5 min-h-11 text-sm text-primary"
-          onClick={() => setRetry((value) => value + 1)}
-        >
-          TOP 뉴스를 불러오지 못했어요. 다시 시도
-        </button>
-      ) : null}
+      {type === "NEWS" ? <PopularNewsCarousel returnTo={returnTo} /> : null}
 
       {type === "NEWS" ? (
         <NewsFilterBar
@@ -675,125 +620,6 @@ function CatalogHeader({ title }: { title: string }) {
         {title === "따라 읽기" ? "아나운서 따라 읽기" : title}
       </h1>
     </header>
-  );
-}
-
-function NewsIntro({
-  loading,
-  items,
-  returnTo,
-}: {
-  loading: boolean;
-  items: PracticeContentSummary[];
-  returnTo: string;
-}) {
-  const [carousel, setCarousel] = useState<CarouselApi>();
-  const [selected, setSelected] = useState(0);
-  useEffect(() => {
-    if (!carousel) return;
-    const sync = () => setSelected(carousel.selectedScrollSnap());
-    sync();
-    carousel.on("select", sync);
-    carousel.on("reInit", sync);
-    return () => {
-      carousel.off("select", sync);
-      carousel.off("reInit", sync);
-    };
-  }, [carousel]);
-  return (
-    <>
-      <section className="pt-4 pb-3" aria-label="인기 뉴스">
-        <div className="px-5">
-          <h2 className="text-[17px] leading-6 font-bold">
-            {new Date().getMonth() + 1}월 {Math.ceil(new Date().getDate() / 7)}
-            주차{" "}
-            <span className="text-primary">
-              TOP {loading ? 5 : Math.min(5, items.length)}
-            </span>
-          </h2>
-          <p className="mt-1 text-xs leading-4 font-medium text-[#8b95a1]">
-            이번 주 가장 많이 연습한 뉴스예요
-          </p>
-        </div>
-        <Carousel
-          setApi={setCarousel}
-          className="mt-3.5 pl-5"
-          opts={{ align: "start", containScroll: false, slidesToScroll: 1 }}
-          aria-label="TOP 뉴스"
-        >
-          <CarouselContent className="-ml-3">
-            {loading && (
-              <CarouselItem className="basis-[312px] pl-3">
-                <NewsTopSkeleton />
-              </CarouselItem>
-            )}
-            {items.slice(0, 5).map((item, index) => (
-              <CarouselItem
-                key={String(item.id)}
-                className="basis-[312px] pl-3"
-              >
-                <Link
-                  href={practiceHref(item.id, returnTo)}
-                  data-active={selected === index}
-                  className={`${newsStyles.card} relative flex h-[184px] flex-col justify-between overflow-hidden rounded-[20px] p-5`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute top-[88px] right-5 text-[100px] leading-none font-bold tracking-[-2.82px] ${newsStyles.rank}`}
-                  >
-                    {index + 1}
-                  </span>
-                  <div className="relative">
-                    <div className="flex flex-wrap gap-1.5 text-[11px] leading-[14px] font-bold">
-                      <span
-                        className={`rounded-full px-2 py-[3px] ${newsStyles.chip} ${difficultyStyle[item.difficulty]}`}
-                      >
-                        {difficultyLabel[item.difficulty]}
-                      </span>
-                      {Object.values(newsCategoryTags(item))
-                        .filter((tag): tag is string => Boolean(tag))
-                        .map((tag) => (
-                          <span
-                            key={tag}
-                            className={`rounded-full px-2 py-[3px] ${newsStyles.chip} bg-[#f2f4f6] text-[#4e5968]`}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                    </div>
-                    <strong className="mt-2 line-clamp-3 block text-[18px] leading-[22px] break-keep">
-                      {newsHeadline(item.title)}
-                    </strong>
-                  </div>
-                  <span
-                    className={`relative text-xs leading-4 font-medium ${newsStyles.meta}`}
-                  >
-                    {newsMetadata(item).join("  |  ")}
-                  </span>
-                </Link>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
-        {!loading && items.length > 1 && (
-          <div
-            className="mt-3.5 flex h-1.5 items-center justify-center gap-1"
-            aria-label="인기 뉴스 페이지"
-          >
-            {items.slice(0, 5).map((item, index) => (
-              <button
-                key={String(item.id)}
-                type="button"
-                aria-label={`인기 뉴스 ${index + 1}번 보기`}
-                aria-current={selected === index ? "true" : undefined}
-                onClick={() => carousel?.scrollTo(index)}
-                className={`${newsStyles.dot} relative h-1.5 rounded-full before:absolute before:-inset-y-3 before:inset-x-0 ${selected === index ? "w-4 bg-primary" : "w-1.5 bg-[#d1d6db]"}`}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-    </>
   );
 }
 
@@ -1124,23 +950,6 @@ function CatalogItem({
         </span>
       </span>
     </Link>
-  );
-}
-
-function NewsTopSkeleton() {
-  return (
-    <div
-      aria-hidden="true"
-      className="h-[184px] w-[300px] rounded-[20px] bg-white p-5"
-    >
-      <div className="flex gap-1.5">
-        <SkeletonBlock className="h-5 w-10" />
-        <SkeletonBlock className="h-5 w-12" />
-      </div>
-      <SkeletonBlock className="mt-3 h-5 w-[180px]" />
-      <SkeletonBlock className="mt-2 h-5 w-[120px]" />
-      <SkeletonBlock className="mt-10 h-3.5 w-20" />
-    </div>
   );
 }
 

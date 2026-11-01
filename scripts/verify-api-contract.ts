@@ -32,6 +32,7 @@ const expected = [
   "GET /api/recommendations?type=SENTENCE&limit=5",
   "GET /api/users/me/training-sessions/recent",
   "GET /api/practice-contents?type=SENTENCE&page=0&size=20",
+  "GET /api/practice-contents/popular?type=NEWS&limit=10",
   "POST /api/practice-contents/custom",
   "GET /api/practice-contents/facets?type=NEWS",
   "GET /api/practice-contents/1/adjacent?type=NEWS&category=ECONOMY&difficulty=BEGINNER&focus=PRONUNCIATION",
@@ -273,6 +274,7 @@ await api.home.get();
 await api.home.getRecommendations({ type: "SENTENCE", limit: 5 });
 await api.home.getRecentTraining();
 await api.content.list({ type: "SENTENCE", page: 0, size: 20 });
+await api.content.getPopularNews(10);
 await api.content.createCustom(
   {
     title: "내 문장",
