@@ -438,6 +438,7 @@ export interface TrainingSession {
     scriptText: string;
     practiceExampleId: string | null;
     practiceExampleRevision: number | null;
+    sentenceIndex?: number | null;
   };
   selectedRecordingId?: Id | null;
   recordingCount?: number;
@@ -920,6 +921,8 @@ export interface ApiContract {
       contentId: Id;
       courseStepId?: Id | null;
       titleExamId?: Id | null;
+      sentenceIndex?: number;
+      sentenceText?: string;
       learningFocus: LearningFocus;
     }): Promise<TrainingSession>;
     get(sessionId: Id): Promise<TrainingSession>;

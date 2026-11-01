@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError, createHttpClient } from "./client";
-import { HANDOFF_PROFILE } from "../canonical-analysis";
-import { HANDOFF_RESULT_HEADER, AUDIOVISUAL_RESULT_HEADER } from "./canonical";
+import { AUDIOVISUAL_PROFILE } from "../canonical-analysis";
+import { CANONICAL_RESULT_HEADER } from "./canonical";
 
 export type AnalysisScope =
   "STANDALONE_AUDIO" | "COURSE" | "TITLE_EXAM" | "VIDEO";
@@ -11,7 +11,7 @@ const scope = z.object({
 });
 const capabilities = z.object({
   capabilityVersion: z.literal("voice-coaching.analysis-capabilities.v1"),
-  analysisProfile: z.literal(HANDOFF_PROFILE),
+  analysisProfile: z.literal(AUDIOVISUAL_PROFILE),
   resultSchemas: z.array(z.string()),
   admissionEnabled: z.boolean(),
   scopes: z.object({
@@ -60,9 +60,7 @@ export async function requireAnalysisScope(
     );
   if (
     !value.admissionEnabled ||
-    !value.resultSchemas.includes(
-      requested === "VIDEO" ? AUDIOVISUAL_RESULT_HEADER : HANDOFF_RESULT_HEADER,
-    )
+    !value.resultSchemas.includes(CANONICAL_RESULT_HEADER)
   )
     throw new ApiError(
       messages.STANDALONE_AUDIO,
