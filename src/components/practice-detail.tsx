@@ -25,7 +25,6 @@ export function PracticeDetail({
   const [script, setScript] = useState(false);
   const router = useRouter();
   const search = useSearchParams();
-  const [navigating, setNavigating] = useState(false);
   const [navigationError, setNavigationError] = useState<string | null>(null);
   const previousId = search.get("previousId");
   const userId = getAuthenticatedUserId();
@@ -71,14 +70,6 @@ export function PracticeDetail({
     };
   }, [adjacentResource, content.contentType, content.id, userId]);
 
-  function nextArticle() {
-    if (!adjacent?.next) return;
-    setNavigating(true);
-    setNavigationError(null);
-    router.push(
-      `/practice/${encodeURIComponent(String(adjacent.next.id))}?returnTo=%2Fnews&previousId=${encodeURIComponent(String(content.id))}`,
-    );
-  }
   const announcer = content.contentType === "ANNOUNCER";
   const news = content.contentType === "NEWS";
   const sentences = splitSentences(content.scriptText);
@@ -197,7 +188,7 @@ export function PracticeDetail({
             <div className="mb-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={(!adjacent?.previous && !previousId) || navigating}
+                disabled={!adjacent?.previous && !previousId}
                 onClick={() =>
                   router.push(
                     `/practice/${encodeURIComponent(String(adjacent?.previous?.id ?? previousId))}?returnTo=%2Fnews`,
@@ -210,14 +201,20 @@ export function PracticeDetail({
               </button>
               <button
                 type="button"
-                disabled={!adjacent?.next || navigating}
-                onClick={nextArticle}
+                disabled
+                aria-describedby="next-article-recording-required"
                 className="flex items-center justify-center gap-1 rounded-xl border border-border bg-white py-3 text-xs disabled:opacity-40"
               >
-                {navigating ? "불러오는 중…" : "다음 기사"}
+                다음 기사
                 <ChevronRight className="size-4" />
               </button>
             </div>
+            <p
+              id="next-article-recording-required"
+              className="mb-3 text-xs text-muted-foreground"
+            >
+              녹음을 완료한 뒤 결과 화면에서 다음 기사로 이동할 수 있어요.
+            </p>
             {navigationError && (
               <p role="alert" className="mb-3 text-xs text-destructive">
                 {navigationError}

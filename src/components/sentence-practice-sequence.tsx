@@ -14,6 +14,7 @@ import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "./report-save-dialog";
+import { NextPracticeContentButton } from "./next-practice-content-button";
 import { api, type AnalysisResult } from "@/lib/api";
 import { observeSentenceAnalysis } from "@/lib/sentence-analysis";
 import {
@@ -65,6 +66,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const [results, setResults] = useState<Record<number, SentenceResult>>({});
   const [error, setError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [nextHref, setNextHref] = useState<string | null>(null);
   const owners = useRef(new Map<number, AbortController>());
   const mounted = useRef(false),
     authEpoch = useRef(getAuthSessionVersion());
@@ -206,6 +208,13 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const allAdmitted = currentIndex === items.length;
   const allCompleted =
     allAdmitted && items.every((_, index) => results[index]?.result != null);
+  const canAdvance =
+    allCompleted &&
+    capture.allCaptured &&
+    !recording &&
+    !capture.saving &&
+    !capture.hasFailedSave &&
+    !capture.error;
   useEffect(() => {
     onTitleChange?.(waiting ? "문장별 분석 결과" : "문장 연습");
   }, [waiting, onTitleChange]);
@@ -418,11 +427,26 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       })}
       <button
         className="design-action"
-        disabled={!allCompleted}
-        onClick={() => setSaveOpen(true)}
+        disabled={!canAdvance}
+        onClick={() => {
+          setNextHref(null);
+          setSaveOpen(true);
+        }}
       >
         {allCompleted ? "완료하기" : "문장별 분석 확인 중…"}
       </button>
+      {!courseId &&
+        ["NEWS", "SENTENCE", "ANNOUNCER"].includes(content.contentType) && (
+          <NextPracticeContentButton
+            content={content}
+            recordingComplete={canAdvance}
+            onNext={(href) => {
+              if (!canAdvance) return;
+              setNextHref(href);
+              setSaveOpen(true);
+            }}
+          />
+        )}
       <button
         className="min-h-11 w-full text-sm text-muted-foreground"
         onClick={() => router.push("/mypage/history")}
@@ -431,8 +455,13 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       </button>
       <ReportSaveDialog
         open={saveOpen}
-        onOpenChange={setSaveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open);
+          if (!open) setNextHref(null);
+        }}
         onConfirm={async (saved) => {
+          if (!canAdvance)
+            throw new Error("모든 문장의 녹음을 완료한 뒤 이동해 주세요.");
           await Promise.all(
             admissions.map((admission) =>
               reportSaves.set("SESSION", admission.sessionId, saved),
@@ -455,13 +484,18 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
               await api.courses.complete(courseId);
           }
           invalidateLearningCaches();
+          if (!mounted.current || authEpoch.current !== getAuthSessionVersion())
+            throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
           await capture.cleanup();
+          if (!mounted.current || authEpoch.current !== getAuthSessionVersion())
+            throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
           removeUserClientCache(userId, resource);
           router.push(
-            safeInternalPath(
-              params.get("returnTo"),
-              courseId ? "/class" : "/home",
-            ),
+            nextHref ??
+              safeInternalPath(
+                params.get("returnTo"),
+                courseId ? "/class" : "/home",
+              ),
           );
         }}
       />
