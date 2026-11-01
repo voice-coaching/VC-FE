@@ -1,5 +1,10 @@
 import type { ApiEnvelope } from "./types";
 import { markAnonymousSession } from "../auth-session";
+import {
+  captureApiErrorDiagnostics,
+  parseDiagnosticResponse,
+  type ApiErrorDiagnostics,
+} from "./error-diagnostics";
 
 export class ApiError extends Error {
   constructor(
@@ -9,6 +14,7 @@ export class ApiError extends Error {
     public readonly details?: unknown,
     public readonly retryAfterMs?: number,
     public readonly upstreamStatus?: number,
+    public diagnostics?: ApiErrorDiagnostics,
   ) {
     super(message);
     this.name = "ApiError";
@@ -332,6 +338,10 @@ export function createHttpClient(
               "로그인 갱신에 실패했습니다.",
               error instanceof ApiError ? error.status : 401,
               "AUTH_REFRESH_FAILED",
+              undefined,
+              undefined,
+              undefined,
+              error instanceof ApiError ? error.diagnostics : undefined,
             );
           throw error;
         }
@@ -431,9 +441,13 @@ export function createHttpClient(
 
       const contentType = response.headers.get("content-type") ?? "";
       let payload: ApiEnvelope<T> | null = null;
+      let diagnosticResponse: unknown = null;
       if (contentType.includes("application/json")) {
         try {
-          payload = (await response.json()) as ApiEnvelope<T>;
+          const text = await response.text();
+          diagnosticResponse = text || null;
+          payload = JSON.parse(text) as ApiEnvelope<T>;
+          diagnosticResponse = payload;
         } catch (error) {
           if (controller.signal.aborted) throw error;
           if (response.ok)
@@ -441,8 +455,18 @@ export function createHttpClient(
               "서버 응답 형식이 올바르지 않습니다.",
               response.status,
               "RESPONSE_INVALID",
+              undefined,
+              undefined,
+              undefined,
+              captureApiErrorDiagnostics(
+                fetchOptions.method ?? "GET",
+                joinUrl(baseUrl, path),
+                diagnosticResponse,
+              ),
             );
         }
+      } else if (!response.ok) {
+        diagnosticResponse = await response.text();
       }
       assertCurrentSession(version);
 
@@ -463,6 +487,11 @@ export function createHttpClient(
           payload?.data,
           retryAfter(response.headers.get("retry-after")),
           response.ok ? undefined : response.status,
+          captureApiErrorDiagnostics(
+            fetchOptions.method ?? "GET",
+            joinUrl(baseUrl, path),
+            diagnosticResponse,
+          ),
         );
       }
 
@@ -485,7 +514,14 @@ export function createHttpClient(
         storeAccessToken(headerToken);
       return data;
     } catch (error) {
-      if (error instanceof ApiError) throw error;
+      if (error instanceof ApiError) {
+        error.diagnostics ??= captureApiErrorDiagnostics(
+          fetchOptions.method ?? "GET",
+          joinUrl(baseUrl, path),
+          null,
+        );
+        throw error;
+      }
       if (error instanceof DOMException && error.name === "AbortError") {
         if (signal?.aborted)
           throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
@@ -563,6 +599,14 @@ export function createHttpClient(
               uploadAuthorizationFailed
                 ? "UPLOAD_AUTHORIZATION_FAILED"
                 : "UPLOAD_FAILED",
+              undefined,
+              undefined,
+              undefined,
+              captureApiErrorDiagnostics(
+                "PUT",
+                url,
+                parseDiagnosticResponse(xhr.responseText),
+              ),
             ),
           );
         }

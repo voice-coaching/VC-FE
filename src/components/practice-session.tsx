@@ -1210,6 +1210,30 @@ function PracticeSessionBody({
             {requestError ?? recorder.error}
           </p>
           {recorder.status === "denied" && <MicrophonePermissionNotice />}
+          {titleExamId && requestFailure instanceof ApiError && (
+            <section
+              aria-label="승급 시험 오류 진단"
+              className="mt-6 rounded-xl border border-border bg-white p-4 text-left"
+            >
+              <h3 className="text-sm font-semibold">임시 오류 진단</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                아래 내용을 캡처해 주세요. 인증 정보는 제외됩니다.
+              </p>
+              <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-all text-xs leading-5 select-text">
+                {JSON.stringify(
+                  {
+                    request: requestFailure.diagnostics?.request ?? null,
+                    status: requestFailure.status,
+                    code: requestFailure.code,
+                    message: requestFailure.message,
+                    response: requestFailure.diagnostics?.response ?? null,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </section>
+          )}
         </div>
         <button
           className="design-action"
