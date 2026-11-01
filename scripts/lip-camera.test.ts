@@ -144,6 +144,7 @@ test("lip analysis submits captured audio through authenticated coaching admissi
     videoConsentAccepted: true,
     analysisOwnerRef: { current: null },
     submittedClipsRef: { current: new Set<Blob>() },
+    setSubmittedPrompts: noop,
     AbortController,
     DOMException,
     crypto: globalThis.crypto,

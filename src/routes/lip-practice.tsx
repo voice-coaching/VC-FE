@@ -134,7 +134,8 @@ export default function LipPractice() {
   const mediaBusy = useRef(false);
   const analysisBusyRef = useRef(false);
   const analysisOwnerRef = useRef<AbortController | null>(null);
-  const submittedClipsRef = useRef(new Set<Blob>());
+  const submittedClipsRef = useRef(new WeakSet<Blob>());
+  const [submittedPrompts, setSubmittedPrompts] = useState<number[]>([]);
   const analysisBusy =
     analysisPhase === "preparing" ||
     analysisPhase === "uploading" ||
@@ -157,7 +158,8 @@ export default function LipPractice() {
         setAnalyses({});
         setDirectResults({});
         directAttemptsRef.current.clear();
-        submittedClipsRef.current.clear();
+        submittedClipsRef.current = new WeakSet<Blob>();
+        setSubmittedPrompts([]);
         setAnalysisError(null);
         setAnalysisPhase("idle");
       }),
@@ -288,6 +290,9 @@ export default function LipPractice() {
         });
         contentByPromptRef.current.delete(promptIndex);
         directAttemptsRef.current.delete(promptIndex);
+        setSubmittedPrompts((current) =>
+          current.filter((index) => index !== promptIndex),
+        );
         setDirectResults((current) => {
           const next = { ...current };
           delete next[promptIndex];
@@ -582,6 +587,9 @@ export default function LipPractice() {
       await api.training.selectRecording(sessionId, recordingId);
       requireActive();
       submittedClipsRef.current.add(reportClip.audioBlob);
+      setSubmittedPrompts((current) =>
+        current.includes(selectedClip) ? current : [...current, selectedClip],
+      );
       awaitingAdmission = true;
       const requested = await canonicalApi.analyzeAudiovisual(
         sessionId,
@@ -665,8 +673,12 @@ export default function LipPractice() {
         awaitingAdmission &&
         analysisRequestWasRejected(reason) &&
         reportClip.audioBlob
-      )
+      ) {
         submittedClipsRef.current.delete(reportClip.audioBlob);
+        setSubmittedPrompts((current) =>
+          current.filter((index) => index !== selectedClip),
+        );
+      }
       const coaching = coachingLimitNotice(reason);
       setAnalysisError(
         coaching
@@ -993,7 +1005,7 @@ export default function LipPractice() {
                   </div>
                 </div>
                 {reportClip?.audioBlob &&
-                submittedClipsRef.current.has(reportClip.audioBlob) ? (
+                submittedPrompts.includes(selectedClip) ? (
                   <Link
                     href="/mypage/history"
                     className="mt-4 flex min-h-12 w-full items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
