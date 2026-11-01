@@ -3,10 +3,11 @@ import IntonationPage from "@/routes/class/intonation";
 
 export const metadata: Metadata = {
   title: "억양 학습하기 | SpeakAI",
-  description: "문장 끝 억양과 강조 억양을 아나운서 음성과 비교하며 훈련합니다.",
+  description:
+    "문장 끝 억양과 강조 억양을 아나운서 음성과 비교하며 훈련합니다.",
   openGraph: {
     title: "억양 학습하기 | SpeakAI",
-    description: "단조로운 말투를 리듬 있는 전달로 바꿔보세요.",
+    description: "단조로운 말투를 리듬 있는 전달로 바꿔 보세요.",
   },
 };
 

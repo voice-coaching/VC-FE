@@ -103,7 +103,7 @@ function Nav({
         <Link
           href={backTarget}
           replace
-          aria-label="뒤로가기"
+          aria-label="뒤로 가기"
           className={styles.back}
         >
           {icon}
@@ -111,7 +111,7 @@ function Nav({
       ) : (
         <BackButton
           fallback={fallback}
-          label={close ? "닫기" : "뒤로가기"}
+          label={close ? "닫기" : "뒤로 가기"}
           className={styles.back}
         >
           {icon}
@@ -245,9 +245,9 @@ export function PaymentViews(props: Props) {
                     <em>더 자신 있게 말하도록!</em>
                   </h2>
                   <p>
-                    내 답변을 녹음하고 피드백을 받아보세요.
+                    내 답변을 녹음하고 피드백을 받아 보세요.
                     <br />
-                    다시 말하며 아쉬웠던 발음을 다듬어보세요.
+                    다시 말하며 아쉬웠던 발음을 다듬어 보세요.
                   </p>
                 </section>
                 <div className={styles.planWrap}>
@@ -297,7 +297,7 @@ export function PaymentViews(props: Props) {
                   </thead>
                   <tbody>
                     {[
-                      ["이용등급", "무료", "유료"],
+                      ["이용 등급", "무료", "유료"],
                       ["이용권 기간", "—", "1개월"],
                       ["자동 갱신", "없음", "없음"],
                       ["결제 금액", "무료", "15,000원"],
@@ -345,7 +345,7 @@ export function PaymentViews(props: Props) {
                     }
                     onClick={props.onPurchase}
                   >
-                    {activePass ? "이용권 이용 중" : "15,000원으로 시작하기"}
+                    {activePass ? "이용권 사용 중" : "15,000원으로 시작하기"}
                   </button>
                   <p>
                     TEST 결제 · 자동 갱신 없음{" "}

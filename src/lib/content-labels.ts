@@ -1,5 +1,8 @@
 export const CATEGORY_LABELS: Record<string, string> = {
-  EXAMPLE_QUESTION: "예시문제",
+  EXAMPLE_QUESTION: "예시 문제",
+  TITLE_EXAM: "승급 시험",
+  예시문제: "예시 문제",
+  승급시험: "승급 시험",
   ECONOMY: "경제",
   SOCIETY: "사회",
   SOCIAL: "사회",

@@ -248,7 +248,7 @@ function OnboardingFlow() {
         {step === 1 && (
           <QuestionScreen
             title="무엇을 위해 연습하고 싶나요?"
-            subtitle="지금 가장 중요한 목적 하나를 골라주세요"
+            subtitle="지금 가장 중요한 목적 하나를 골라 주세요"
             direction={transitionDirection}
           >
             {PURPOSE_OPTIONS.map((option) => (
@@ -265,7 +265,7 @@ function OnboardingFlow() {
         {step === 2 && (
           <QuestionScreen
             title="어떤 점을 개선하고 싶나요?"
-            subtitle="가장 신경 쓰이는 항목을 최대 3개 골라주세요"
+            subtitle="가장 신경 쓰이는 항목을 최대 3개 골라 주세요"
             direction={transitionDirection}
           >
             {IMPROVEMENT_OPTIONS.map((option) => (
@@ -284,7 +284,7 @@ function OnboardingFlow() {
         {step === 3 && (
           <QuestionScreen
             title="일주일에 며칠 정도 연습할까요?"
-            subtitle="부담 없이 지킬 수 있는 횟수를 골라주세요"
+            subtitle="부담 없이 지킬 수 있는 횟수를 골라 주세요"
             direction={transitionDirection}
           >
             {SCHEDULE_OPTIONS.map((option) => (
@@ -301,7 +301,7 @@ function OnboardingFlow() {
         {step === 4 && (
           <QuestionScreen
             title="어떤 방식으로 연습하고 싶나요?"
-            subtitle="관심 있는 방식을 모두 골라주세요"
+            subtitle="관심 있는 방식을 모두 골라 주세요"
             direction={transitionDirection}
           >
             {METHOD_OPTIONS.map((option) => (

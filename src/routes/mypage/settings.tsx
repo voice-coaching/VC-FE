@@ -554,7 +554,7 @@ export default function AccountSettings() {
           ) : panel === "1:1 문의하기" ? (
             inquirySent ? (
               <div className="rounded-2xl bg-[#edf2ff] p-4 text-sm leading-6 text-primary">
-                문의가 접수되었습니다. 답변이 등록되면 알려드릴게요.
+                문의가 접수되었습니다. 답변이 등록되면 알려 드릴게요.
               </div>
             ) : (
               <form
@@ -600,7 +600,7 @@ export default function AccountSettings() {
                   type="email"
                   value={inquiryEmail}
                   onChange={(event) => setInquiryEmail(event.target.value)}
-                  placeholder="답변 받을 이메일 (선택)"
+                  placeholder="답변을 받을 이메일 (선택)"
                   className="h-11 w-full rounded-xl border border-[#e5e8eb] px-3 text-sm outline-none focus:border-primary"
                 />
                 {panelError ? (

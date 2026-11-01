@@ -5,7 +5,7 @@ export default function SentencesPage() {
     <ContentCatalog
       type="SENTENCE"
       title="문장 연습"
-      description="서버에 등록된 문장으로 발음과 억양을 연습해요."
+      description="문장을 하나씩 읽으며 발음과 억양을 연습해요."
     />
   );
 }
