@@ -53,10 +53,16 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const courseId = params.get("courseId");
   const courseStepId = params.get("courseStepId");
   const userId = getAuthenticatedUserId();
+  // Parent title/catalog refreshes can replace props with equivalent objects.
+  // Keep observer/capture lifetimes tied to actual sentence identities.
+  const itemIdentity = JSON.stringify(
+    sentencePracticeItems(content, courseExamples, courseExampleIndex ?? 0),
+  );
   const items = useMemo(
     () =>
       sentencePracticeItems(content, courseExamples, courseExampleIndex ?? 0),
-    [content, courseExamples, courseExampleIndex],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [itemIdentity],
   );
   const resource = `sentence-sequence-v1:${courseId ?? content.id}:${courseExamples?.revision ?? "content"}:${courseExampleIndex ?? 0}`;
   const [ready, setReady] = useState(!resumeRequested);
@@ -113,7 +119,12 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         ...current,
         [index]: { ...current[index], reading: true, error: undefined },
       }));
-      void observeSentenceAnalysis(admission, items[index], owner.signal)
+      void observeSentenceAnalysis(
+        admission, items[index], owner.signal, (result) => {
+          if (owner.signal.aborted) return;
+          setResults((current) => ({ ...current, [index]: { result, reading: true } }));
+        },
+      )
         .then((result) => {
           if (owner.signal.aborted) return;
           invalidateLearningCaches();
@@ -132,6 +143,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
           setResults((current) => ({
             ...current,
             [index]: {
+              ...current[index],
               reading: false,
               error:
                 reason instanceof Error
@@ -211,24 +223,18 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
 
   const currentIndex = admissions.length;
   const current = items[currentIndex];
-  const canAdvance =
-    allCompleted &&
-    capture.allCaptured &&
-    !recording &&
-    !capture.saving &&
-    !capture.hasFailedSave &&
-    !capture.error;
+  const allAdmitted = currentIndex === items.length;
+  const allResultsReady =
+    allAdmitted && items.every((_, index) => results[index]?.result != null);
+  const allCompleted = allResultsReady && items.every(
+    (_, index) => !results[index]?.reading && !results[index]?.error,
+  );
   useEffect(() => {
     onTitleChange?.(waiting ? "문장별 분석 결과" : "문장 연습");
   }, [waiting, onTitleChange]);
 
-  if (!ready || !capture.ready)
-    return (
-      <>
-        {guard.dialog}
-        <LoadingOverlay label="문장별 진행 상태를 확인하고 있어요" />
-      </>
-    );
+  if ((!ready || !capture.ready) && !recording && capture.recordedCount === 0)
+    return <LoadingOverlay label="문장별 진행 상태를 확인하고 있어요" />;
   if (error || items.length === 0)
     return (
       <div className="space-y-4 px-5 py-10">
@@ -269,7 +275,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         onAnalysisAdmitted={(admission) => accept(currentIndex, admission)}
       />
     ) : null;
-  if (!allCompleted || recording) {
+  if (!allResultsReady || recording) {
     const active = recording
       ? capture.recorder.index
       : Math.max(0, capture.nextIndex);
@@ -435,6 +441,16 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
                 분석 결과를 기다리고 있어요.
               </p>
             )}
+            {state?.result && (state.reading || state.error) && (
+              <div className="px-4 pt-3 text-sm text-muted-foreground">
+                <p role="status">{state.error ?? "피드백이 준비됐어요. 학습 이력 저장을 확인하고 있어요."}</p>
+                {state.error && (
+                  <button type="button" className="min-h-11 rounded-xl border px-4" onClick={() => observe(index, admission)}>
+                    기존 결과 저장 상태 다시 확인
+                  </button>
+                )}
+              </div>
+            )}
           </section>
         );
       })}
@@ -446,7 +462,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
           setSaveOpen(true);
         }}
       >
-        {allCompleted ? "완료하기" : "문장별 분석 확인 중…"}
+        {allCompleted ? "완료하기" : "학습 이력 저장 확인 중…"}
       </button>
       {!courseId &&
         ["NEWS", "SENTENCE", "ANNOUNCER"].includes(content.contentType) && (
