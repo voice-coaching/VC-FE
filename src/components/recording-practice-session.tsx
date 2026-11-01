@@ -232,12 +232,19 @@ export function RecordingPracticeSession({
     localRecorder.sentenceIndex,
     localRecorder.boundaries,
   ]);
-  const discardGuard = useRecordingDiscardGuard(
-    phase === "recording" ||
+  const shouldConfirmExit =
+    !background &&
+    phase !== "result" &&
+    !showCompletion &&
+    (sentences.length > 1 ||
+      phase === "recording" ||
       phase === "review" ||
-      recorder.status === "requesting",
-    !background,
-  );
+      phase === "uploading" ||
+      phase === "analyzing" ||
+      recorder.status === "requesting" ||
+      recorder.blob != null ||
+      recordingAttempts.length > 0);
+  const discardGuard = useRecordingDiscardGuard(shouldConfirmExit, !background);
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
@@ -1201,9 +1208,12 @@ export function RecordingPracticeSession({
 
   if (phase === "restoring")
     return (
-      <LoadingOverlay
-        label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
-      />
+      <>
+        {discardGuard.dialog}
+        <LoadingOverlay
+          label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
+        />
+      </>
     );
 
   if (phase === "error") {
@@ -1218,6 +1228,7 @@ export function RecordingPracticeSession({
       : quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
       <div className="flex min-h-full flex-col px-5 pb-8">
+        {discardGuard.dialog}
         <div className="my-auto py-10 text-center">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
             <CircleAlert className="size-9" />

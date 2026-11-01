@@ -36,12 +36,14 @@ export function SentenceBatchPracticeSession({
   // Uploads and inference never disable the microphone or drive its sentence cursor.
   const locked = batch.loading || recorder.status === "requesting";
   const active = recording ? recorder.index : Math.max(0, batch.nextIndex);
-  const guard = useRecordingDiscardGuard(
-    recording ||
+  const shouldConfirmExit =
+    !finished &&
+    (sentences.length > 1 ||
+      recorder.status === "requesting" ||
+      recording ||
       batch.savingRecordings ||
-      (!batch.localComplete && batch.hasAttempt),
-    true,
-  );
+      batch.hasAttempt);
+  const guard = useRecordingDiscardGuard(shouldConfirmExit, true);
   const message = recorder.error || (!recording ? batch.error : null);
   useEffect(() => {
     onTitleChange?.(
@@ -67,6 +69,7 @@ export function SentenceBatchPracticeSession({
   if (finished && batch.view?.results) {
     return (
       <div className="min-h-full bg-[#f2f4f6] pb-6">
+        {guard.dialog}
         <header className="px-5 py-5">
           <h2 className="text-xl font-bold">이번 연습 결과</h2>
           <p className="mt-2 text-sm text-[#6b7684]">
