@@ -178,7 +178,6 @@ export function MyPageHead({
   showMembership?: boolean;
 }) {
   const next = titleProgress?.next;
-  const nextLevel = Math.min(5, levelOf(titleProgress) + 1);
   return (
     <>
       {next ? (
@@ -190,7 +189,7 @@ export function MyPageHead({
           >
             <div className="min-w-0 flex-1">
               <h2 className="text-[15px] leading-[22px] font-bold">
-                {titleLabels[nextLevel - 1]} 승급 시험
+                승급 시험
               </h2>
               <p className="mt-[3px] text-xs leading-4 font-medium text-[#4e5968]">
                 {next.eligible
