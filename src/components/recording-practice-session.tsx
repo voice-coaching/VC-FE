@@ -435,14 +435,14 @@ export function RecordingPracticeSession({
   }
 
   async function startRecording() {
-    // Unlock audio during the tap, before capability requests lose activation.
+    // Local capture must retain the tap's activation and work independently of
+    // server analysis availability. Check remote support before sending audio.
     recorder.unlockAudio();
     sentenceBoundaries.current = [0];
     setActiveSentence(0);
     setRequestError(null);
     setRequestFailure(null);
     try {
-      if (!localOnly) await getAnalysisCapabilities();
       const started = await recorder.start();
       if (started) setPhase("recording");
       else setPhase("error");
@@ -758,6 +758,7 @@ export function RecordingPracticeSession({
     }
     submissionBusyRef.current = true;
     let awaitingAdmission = false;
+    let checkingAvailability = true;
     setRequestError(null);
     setRequestFailure(null);
     setCanRetryAnalysis(false);
@@ -765,6 +766,7 @@ export function RecordingPracticeSession({
     setUploadProgress(0);
     try {
       const capabilities = await getAnalysisCapabilities();
+      checkingAvailability = false;
       if (recorder.durationMs < capabilities.minimumDurationMs) {
         throw new PracticeInputError(
           "input",
@@ -875,7 +877,8 @@ export function RecordingPracticeSession({
           ? reason.message
           : "음성 분석 요청에 실패했습니다.",
       );
-      setPhase("error");
+      // Unsupported/unavailable analysis must leave local playback accessible.
+      setPhase(checkingAvailability ? "review" : "error");
     } finally {
       submissionBusyRef.current = false;
     }
