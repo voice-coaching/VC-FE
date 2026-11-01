@@ -17,7 +17,7 @@ export function SignupCompleteScreen() {
           <h1 className="text-[24px] leading-8 font-bold tracking-[-0.552px]">
             반가워요!
             <br />
-            회원가입이 완료됐어요
+            회원 가입이 완료됐어요
           </h1>
           <p className="mt-2 text-[14px] leading-5 tracking-[0.203px] text-[#4e5968]">
             이제 또박또박 말하는 연습을 시작해 보세요

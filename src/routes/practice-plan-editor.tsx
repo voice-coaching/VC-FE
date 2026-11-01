@@ -95,7 +95,7 @@ export function PracticePlanEditor({
           <h2 className="text-2xl leading-8 font-bold tracking-[-0.55px]">
             연습 계획을
             <br />
-            바꿔볼까요?
+            바꿔 볼까요?
           </h2>
           <div className="mt-[34px] divide-y divide-[#f2f4f6]">
             {planFields.map(([key, label]) => (

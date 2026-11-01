@@ -424,7 +424,7 @@ export function RecordingPracticeSession({
         setRequestError(
           reason instanceof Error
             ? reason.message
-            : "이어하던 학습을 불러오지 못했습니다.",
+            : "진행하던 학습을 불러오지 못했습니다.",
         );
         setPhase("error");
       }
@@ -1475,7 +1475,7 @@ export function RecordingPracticeSession({
                   녹음을 확인해 주세요
                 </h2>
                 <p className="mt-2 text-[14px] leading-5 font-medium text-[#6b7584]">
-                  문장마다 들어보고 분석을 요청해 주세요
+                  문장마다 들어 보고 분석을 요청해 주세요
                 </p>
                 <div className="mt-5 rounded-[20px] bg-white px-2 pt-2 pb-1.5 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
                   {sentences.map((sentence, index) => (

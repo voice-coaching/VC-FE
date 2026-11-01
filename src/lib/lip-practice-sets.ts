@@ -28,7 +28,7 @@ export const LIP_PRACTICE_SETS: LipPracticeSet[] = [
   {
     id: "final",
     title: "받침 집중",
-    description: "ㄹ, ㅁ, ㅇ 받침에서 입모양을 다듬어요",
+    description: "ㄹ, ㅁ, ㅇ 받침에서 입 모양을 다듬어요",
     minutes: 3,
     sentences: [
       "오늘 아침 맑은 하늘을 바라봅니다.",

@@ -74,7 +74,7 @@ export function LipQuickStart({
             <Image src={asset("back.svg")} width={24} height={24} alt="" />
           </button>
         )}
-        <h1>입모양 따라 하기</h1>
+        <h1>입 모양 따라 하기</h1>
         {screen === "prepare" ? (
           <button
             aria-label="연습 설정"
@@ -101,9 +101,9 @@ export function LipQuickStart({
                 영상 피드백
               </span>
               <div>
-                <h2>입모양을 보며 따라 말해요</h2>
+                <h2>입 모양을 보며 따라 말해요</h2>
                 <p>
-                  카메라로 입모양을 함께 보면서
+                  카메라로 입 모양을 함께 보면서
                   <br />
                   소리와 모양을 같이 교정해요
                 </p>
@@ -163,7 +163,7 @@ export function LipQuickStart({
             </h2>
             <p>
               {screen === "topics"
-                ? "카메라로 입모양을 보며 따라 말해요"
+                ? "카메라로 입 모양을 보며 따라 말해요"
                 : "보관함에 저장한 원고로 연습해요"}
             </p>
           </div>

@@ -86,7 +86,7 @@ export function useSentenceBatch(
       sentences.length > 50 ||
       sentences.join("").length > 4000
     )
-      throw new Error("한 연습은 1~50문장, 총 4000자까지 지원해요.");
+      throw new Error("한 번의 연습은 1~50문장, 총 4,000자까지 지원해요.");
     if (!saved.current) {
       const value = {
         batchId: crypto.randomUUID(),

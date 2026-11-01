@@ -244,7 +244,7 @@ export function EmailLoginScreen() {
             aria-label="계정 도움말"
             className="flex items-center justify-center gap-3 text-[15px] leading-[22px] font-medium tracking-[0.144px] text-[#4e5968]"
           >
-            <Link href="/signup">회원가입</Link>
+            <Link href="/signup">회원 가입</Link>
             <span className="h-3 w-px bg-[#e5e8eb]" aria-hidden="true" />
             <span>비밀번호 재설정</span>
           </nav>

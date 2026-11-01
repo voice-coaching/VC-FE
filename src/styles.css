@@ -164,6 +164,8 @@
     background-color: var(--app-chrome-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    word-break: keep-all;
+    overflow-wrap: anywhere;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
   }

@@ -146,7 +146,7 @@ export function SignupScreen() {
       <form
         onSubmit={handleSubmit}
         className="flex min-h-full flex-col bg-white"
-        aria-label="회원가입"
+        aria-label="회원 가입"
       >
         <div
           style={{ height: "max(44px, env(safe-area-inset-top, 0px))" }}
@@ -164,7 +164,7 @@ export function SignupScreen() {
             <NavigationIcon />
           </button>
           <h1 className="flex-1 text-center text-[18px] leading-[26px] font-bold tracking-[-0.0036px]">
-            회원가입
+            회원 가입
           </h1>
           <span className="size-6 shrink-0" aria-hidden="true" />
         </header>
@@ -314,7 +314,7 @@ export function SignupScreen() {
             disabled={!formValid}
             className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
           >
-            회원가입
+            회원 가입
           </button>
           <div className="h-6 shrink-0" aria-hidden="true" />
         </div>
