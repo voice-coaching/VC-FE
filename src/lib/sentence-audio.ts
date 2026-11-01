@@ -6,7 +6,7 @@ export async function createSentenceAudio(
   stream: MediaStream,
 ) {
   await context.audioWorklet.addModule(
-    "/audio/recording-processor.js?sentences=v1",
+    "/audio/recording-processor.js?sentences=v2",
   );
   const source = context.createMediaStreamSource(stream);
   const node = new AudioWorkletNode(context, "speakai-recorder");
@@ -49,6 +49,12 @@ export async function createSentenceAudio(
   return {
     start(): void {
       node.port.postMessage("start");
+    },
+    pause(): void {
+      node.port.postMessage("pause");
+    },
+    resume(): void {
+      node.port.postMessage("resume");
     },
     split(): Promise<Blob> {
       if (failed) return Promise.reject(new Error("문장 녹음이 중단됐어요."));

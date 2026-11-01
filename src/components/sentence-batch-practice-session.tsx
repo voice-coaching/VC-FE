@@ -9,6 +9,7 @@ import { useSentenceRecorder } from "@/hooks/use-sentence-recorder";
 import { useSentenceBatch } from "@/hooks/use-sentence-batch";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { SentenceReader } from "./sentence-reader";
+import { PracticeAnalysisLoading } from "./practice-analysis-loading";
 import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { DirectAnalysisResult } from "./direct-analysis-result";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
@@ -157,20 +158,18 @@ export function SentenceBatchPracticeSession({
   return (
     <div className="flex min-h-full flex-col bg-[#f2f4f6]">
       {guard.dialog}
-      <header className="px-5 pt-5 pb-4">
-        <h2 className="text-lg font-bold">
-          {batch.view?.status === "CANCELLED"
-            ? "취소한 연습"
-            : waiting
-              ? "문장별 피드백을 모으고 있어요"
+      {!waiting && (
+        <header className="px-5 pt-5 pb-4">
+          <h2 className="text-lg font-bold">
+            {batch.view?.status === "CANCELLED"
+              ? "취소한 연습"
               : `${active + 1} / ${sentences.length} 문장`}
-        </h2>
-        <p className="mt-2 text-sm text-[#6b7684]">
-          {waiting
-            ? "마지막 문장의 녹음이 끝났어요. 모든 문장 분석이 끝나면 결과를 한 번에 보여 드려요."
-            : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요."}
-        </p>
-      </header>
+          </h2>
+          <p className="mt-2 text-sm text-[#6b7684]">
+            다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요.
+          </p>
+        </header>
+      )}
       {!waiting && (
         <SentenceReader
           sentences={sentences}
@@ -180,11 +179,12 @@ export function SentenceBatchPracticeSession({
           className="mx-5 max-h-[45dvh]"
         />
       )}
-      <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
-        {waiting
-          ? `녹음을 모두 마쳤어요. ${sentences.length}개 문장의 피드백을 모으고 있어요.`
-          : `녹음 완료 ${batch.capturedCount} / ${sentences.length} 문장`}
-      </p>
+      {!waiting && (
+        <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
+          {`녹음 완료 ${batch.capturedCount} / ${sentences.length} 문장`}
+        </p>
+      )}
+      {waiting && <PracticeAnalysisLoading uploading={batch.uploading} />}
       {message && (
         <p
           role="alert"
@@ -198,6 +198,8 @@ export function SentenceBatchPracticeSession({
         batch.view?.status !== "CANCELLED" &&
         batch.nextIndex !== -1 && (
           <SentenceRecordingControls
+            paused={recorder.paused}
+            onTogglePause={recorder.togglePause}
             contentId={content.id}
             stream={recorder.getStream()}
             referenceAvailable={

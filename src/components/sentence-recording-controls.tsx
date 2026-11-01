@@ -1,6 +1,6 @@
 "use client";
 import { RecordingWaveform } from "./recording-waveform";
-import { ArrowRight, Mic } from "lucide-react";
+import { ArrowRight, Check, Mic, Pause, Play } from "lucide-react";
 import { GuidePlayer } from "./guide-player";
 import type { Id } from "@/lib/api";
 import styles from "./sentence-recording-controls.module.css";
@@ -17,6 +17,8 @@ export function SentenceRecordingControls({
   onComplete,
   recording,
   requesting,
+  paused,
+  onTogglePause,
   onStart,
 }: {
   contentId: Id;
@@ -29,6 +31,8 @@ export function SentenceRecordingControls({
   onComplete: () => void;
   recording: boolean;
   requesting: boolean;
+  paused: boolean;
+  onTogglePause: () => void;
   onStart: () => void;
 }) {
   return (
@@ -39,14 +43,18 @@ export function SentenceRecordingControls({
     >
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.meter} aria-hidden={!recording}>
-        <RecordingWaveform stream={stream} paused={!recording || busy} />
+        <RecordingWaveform stream={stream} paused={!recording || paused || busy} />
         <p
           role="timer"
           aria-label="녹음 시간"
           className="flex items-center justify-center gap-2 text-base font-bold text-[#191f28] tabular-nums"
         >
           <span className="size-2 rounded-full bg-[#e32239]" />
-          {busy && recording ? "녹음 마무리 중" : elapsed}
+          {busy && recording
+            ? "녹음 마무리 중"
+            : paused
+              ? `일시정지 ${elapsed}`
+              : elapsed}
         </p>
       </div>
       <div className={styles.buttons}>
@@ -60,30 +68,33 @@ export function SentenceRecordingControls({
         <button
           type="button"
           disabled={recording ? busy : requesting}
-          onClick={recording ? onComplete : onStart}
+          onClick={recording ? onTogglePause : onStart}
           aria-label={
-            recording
-              ? last
-                ? "전체 녹음 완료"
-                : "문장 녹음 완료"
-              : "녹음 시작"
+            recording ? (paused ? "녹음 재개" : "녹음 일시정지") : "녹음 시작"
           }
           aria-busy={requesting}
           className={styles.record}
         >
-          <Mic size={32} className={styles.mic} aria-hidden="true" />
-          <span className={styles.stop} aria-hidden="true" />
+          {recording ? (
+            paused ? (
+              <Play size={32} aria-hidden="true" />
+            ) : (
+              <Pause size={32} aria-hidden="true" />
+            )
+          ) : (
+            <Mic size={32} aria-hidden="true" />
+          )}
         </button>
         <button
           type="button"
-          disabled={!recording || busy || last}
+          disabled={!recording || busy}
           onClick={onComplete}
-          aria-hidden={!recording || last}
-          tabIndex={recording && !last ? 0 : -1}
-          className={`${styles.next} ${last ? styles.finishHidden : ""}`}
+          aria-hidden={!recording}
+          tabIndex={recording ? 0 : -1}
+          className={styles.next}
         >
           <span className="grid size-14 place-items-center rounded-full bg-gradient-to-b from-[#191f28] to-[#104286] text-white">
-            <ArrowRight size={24} />
+            {last ? <Check size={24} /> : <ArrowRight size={24} />}
           </span>
           {last ? "녹음 완료" : "다음 문장"}
         </button>
@@ -93,9 +104,11 @@ export function SentenceRecordingControls({
           ? "마이크를 준비하고 있어요"
           : !recording
             ? "준비되면 마이크를 눌러 시작해요"
-            : last
-              ? "다 읽으면 정지 버튼으로 녹음을 완료해 주세요"
-              : "다 읽으면 다음 문장으로 넘어가요"}
+            : paused
+              ? "가운데 버튼으로 녹음을 이어갈 수 있어요"
+              : last
+                ? "다 읽으면 오른쪽 녹음 완료 버튼을 눌러 주세요"
+                : "다 읽으면 다음 문장으로 넘어가요"}
       </p>
     </section>
   );

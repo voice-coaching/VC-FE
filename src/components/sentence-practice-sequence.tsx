@@ -9,6 +9,7 @@ import {
 import { AnalysisView } from "./analysis-view";
 import { LoadingOverlay } from "./loading-overlay";
 import { SentenceReader } from "./sentence-reader";
+import { PracticeAnalysisLoading } from "./practice-analysis-loading";
 import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
@@ -296,18 +297,16 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       <div className="flex min-h-full flex-col bg-[#f2f4f6]">
         {worker}
         {guard.dialog}
-        <header className="px-5 py-5">
-          <h2 className="text-lg font-bold">
-            {waiting
-              ? "문장별 피드백을 모으고 있어요"
-              : `${active + 1} / ${items.length} 문장`}
-          </h2>
-          <p className="mt-2 text-sm text-[#6b7684]">
-            {waiting
-              ? "녹음을 모두 마쳤어요. 모든 문장의 분석이 끝나면 결과를 한 번에 보여 드려요."
-              : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요."}
-          </p>
-        </header>
+        {!waiting && (
+          <header className="px-5 py-5">
+            <h2 className="text-lg font-bold">
+              {`${active + 1} / ${items.length} 문장`}
+            </h2>
+            <p className="mt-2 text-sm text-[#6b7684]">
+              다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요.
+            </p>
+          </header>
+        )}
         {!waiting && (
           <SentenceReader
             sentences={items.map((item) => item.text)}
@@ -317,11 +316,14 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
             className="mx-5 max-h-[45dvh]"
           />
         )}
-        <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
-          {waiting
-            ? `${Object.values(results).filter((value) => value.result).length}/${items.length} 문장 분석 완료`
-            : `녹음 완료 ${capture.recordedCount}/${items.length} 문장`}
-        </p>
+        {!waiting && (
+          <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
+            {`녹음 완료 ${capture.recordedCount}/${items.length} 문장`}
+          </p>
+        )}
+        {waiting && (
+          <PracticeAnalysisLoading stepProgress={allAdmitted ? 66 : 0} />
+        )}
         {(capture.recorder.error || (!recording && capture.error)) && (
           <p
             role="alert"
@@ -333,6 +335,8 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         {capture.recorder.status === "denied" && <MicrophonePermissionNotice />}
         {!waiting && (
           <SentenceRecordingControls
+            paused={capture.recorder.paused}
+            onTogglePause={capture.recorder.togglePause}
             contentId={items[active]?.contentId ?? content.id}
             stream={capture.recorder.getStream()}
             referenceAvailable={
