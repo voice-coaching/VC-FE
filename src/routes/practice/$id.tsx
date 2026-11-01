@@ -12,6 +12,7 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import { readUserClientCache, writeUserClientCache } from "@/lib/client-cache";
 import { safeInternalPath } from "@/lib/navigation";
+import { practiceStartsImmediately } from "@/lib/practice-entry";
 import {
   loadPracticeSelection,
   type LoadedPracticeSelection,
@@ -26,7 +27,7 @@ export default function Practice({ contentId }: { contentId: string }) {
   const stepId = searchParams.get("courseStepId");
   const revision = searchParams.get("exampleRevision");
   const sessionId = searchParams.get("sessionId");
-  const startImmediately = searchParams.get("start") === "1";
+  const startImmediately = practiceStartsImmediately(searchParams);
   const userId = getAuthenticatedUserId();
   const cacheResource = cacheResources.practiceSelection(
     contentId,
@@ -49,6 +50,10 @@ export default function Practice({ contentId }: { contentId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setStarted(startImmediately);
+  }, [contentId, exampleId, sessionId, startImmediately]);
+
+  useEffect(() => {
     let active = true;
     const cached = readUserClientCache<PracticeContent>(userId, cacheResource);
     setSelection(
@@ -57,7 +62,6 @@ export default function Practice({ contentId }: { contentId: string }) {
         : null,
     );
     setError(null);
-    setStarted(Boolean(exampleId) || startImmediately);
     loadPracticeSelection(api, contentId, {
       exampleId,
       courseId,
@@ -89,7 +93,6 @@ export default function Practice({ contentId }: { contentId: string }) {
     stepId,
     revision,
     sessionId,
-    startImmediately,
     userId,
     cacheResource,
   ]);

@@ -1,4 +1,5 @@
 "use client";
+import { practiceDetailHref } from "@/lib/practice-entry";
 
 import newsStyles from "./news-carousel.module.css";
 import { SkeletonBlock } from "@/components/skeleton-block";
@@ -86,8 +87,7 @@ function durationLabel(seconds: number) {
 }
 
 function practiceHref(id: PracticeContentSummary["id"], returnTo: string) {
-  const params = new URLSearchParams({ returnTo, start: "1" });
-  return `/practice/${id}?${params.toString()}`;
+  return practiceDetailHref(id, returnTo);
 }
 
 export function ContentCatalog({
