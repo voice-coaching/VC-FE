@@ -19,12 +19,14 @@ export function DirectAnalysisResult({
   return (
     <AnalysisView
       analysis={directAnalysisPresentation(result)}
+      practiceResult={result.practiceResult}
+      practiceDecisionStatus={result.decision.status}
       corrections={
         !result.failure && result.decision.status === "ACCEPT"
           ? result.coaching.items
           : []
       }
-      // The direct contract has no sentence scores or sentence judgments.
+      // Sentence grades are unavailable; the report uses the utterance result.
       segments={[]}
       content={content}
       recordingUrl={recordingUrl}
