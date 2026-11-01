@@ -16,6 +16,8 @@ export const cacheResources = {
   adjacentContent: (contentId: Id, type: ContentType) =>
     `practice-adjacent-${type}-${value(contentId)}`,
   courseCatalog: (type: CourseType) => `course-catalog-${type}`,
+  courseDetail: (courseId: Id) => `course-detail-${value(courseId)}`,
+  courseExamples: (courseId: Id) => `course-examples-${value(courseId)}`,
   courseLesson: (courseId: Id, stepId: Id) =>
     `course-lesson-${value(courseId)}-${value(stepId)}`,
   streakMonth: (from: string, to: string) => `streak-month-${from}-${to}`,

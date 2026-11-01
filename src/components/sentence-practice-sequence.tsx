@@ -13,7 +13,6 @@ import { api, type AnalysisResult } from "@/lib/api";
 import { observeSentenceAnalysis } from "@/lib/sentence-analysis";
 import {
   appendSentenceAdmission,
-  readSentenceAdmissions,
   sentencePracticeItems,
   type SentenceAnalysisAdmission,
 } from "@/lib/sentence-sequence";
@@ -28,6 +27,11 @@ import { reportSaves } from "@/lib/report-saves";
 import { courseResultProgress } from "@/lib/course-result-progress";
 import { safeInternalPath } from "@/lib/navigation";
 import { ApiError } from "@/lib/api/client";
+import {
+  admittedSequenceHref,
+  initialSentenceAdmissions,
+  sentenceResumeRequested,
+} from "@/lib/practice-entry";
 
 type SentenceResult = {
   result?: AnalysisResult;
@@ -39,6 +43,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const { content, courseExamples, courseExampleIndex, onTitleChange } = props;
   const router = useRouter();
   const params = useSearchParams();
+  const [resumeRequested] = useState(() => sentenceResumeRequested(params));
   const courseId = params.get("courseId");
   const courseStepId = params.get("courseStepId");
   const userId = getAuthenticatedUserId();
@@ -48,9 +53,10 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     [content, courseExamples, courseExampleIndex],
   );
   const resource = `sentence-sequence-v1:${courseId ?? content.id}:${courseExamples?.revision ?? "content"}:${courseExampleIndex ?? 0}`;
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(!resumeRequested);
   const [admissions, setAdmissions] = useState<SentenceAnalysisAdmission[]>([]);
   const admissionsRef = useRef<SentenceAnalysisAdmission[]>([]);
+  const initializedScope = useRef<string | null>(null);
   const [results, setResults] = useState<Record<number, SentenceResult>>({});
   const [error, setError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -100,12 +106,17 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   );
 
   useEffect(() => {
-    setReady(false);
+    if (resumeRequested) setReady(false);
     try {
-      const saved = readSentenceAdmissions(
-        readUserClientCache(userId, resource),
+      const saved = initialSentenceAdmissions(
+        resumeRequested,
+        resumeRequested ? readUserClientCache(userId, resource) : null,
         items.length,
+        initializedScope.current === `${userId}:${resource}`
+          ? admissionsRef.current
+          : undefined,
       );
+      initializedScope.current = `${userId}:${resource}`;
       admissionsRef.current = saved;
       setAdmissions(saved);
       setResults({});
@@ -125,7 +136,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       activeOwners.forEach((owner) => owner.abort());
       activeOwners.clear();
     };
-  }, [items.length, observe, resource, userId]);
+  }, [items.length, observe, resource, userId, resumeRequested]);
 
   const accept = useCallback(
     (index: number, admission: SentenceAnalysisAdmission) => {
@@ -138,6 +149,15 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       admissionsRef.current = next;
       // Persist just server identifiers. Audio and transcripts are not stored here.
       writeUserClientCache(userId, resource, next);
+      if (
+        next.length === 1 &&
+        !sentenceResumeRequested(new URLSearchParams(window.location.search))
+      )
+        window.history.replaceState(
+          null,
+          "",
+          admittedSequenceHref(window.location.href),
+        );
       setAdmissions(next);
       observe(index, admission);
     },

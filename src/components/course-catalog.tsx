@@ -7,6 +7,7 @@ import {
   Suspense,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent,
@@ -26,15 +27,21 @@ import {
 } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
-import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+import {
+  CLIENT_CACHE_LIVE_MAX_AGE_MS,
+  readUserClientCache,
+  updateUserClientCache,
+  writeUserClientCache,
+} from "@/lib/client-cache";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
 import { refreshCatalogWindow } from "@/lib/catalog-pages";
 import {
   classExamplesErrorMessage,
   classPracticeHref,
-  orderedCourseExamples,
 } from "@/lib/class-practice";
+import { courseIntroduction } from "@/lib/course-introduction";
+import { createCourseMaterialRequests } from "@/lib/course-materials";
 
 type CourseCatalogCache = {
   items: CourseSummary[];
@@ -131,7 +138,6 @@ function CourseCatalogView({
     "course",
     items.map((item) => String(item.id)),
   );
-  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [detailsByCourse, setDetailsByCourse] = useState<
     Record<string, CourseDetail>
   >(initialCache?.detailsByCourse ?? {});
@@ -141,6 +147,52 @@ function CourseCatalogView({
   const [detailRetry, setDetailRetry] = useState(0);
   const startBusy = useRef(false);
   const lifecycle = useRef(0);
+  const materials = useMemo(
+    () => createCourseMaterialRequests(api, `${userId}:${activeType}`),
+    [userId, activeType],
+  );
+
+  function cachedExamples(id: string) {
+    return (
+      readUserClientCache<PracticeExamples>(
+        userId,
+        cacheResources.courseExamples(id),
+        CLIENT_CACHE_LIVE_MAX_AGE_MS,
+      ) ?? undefined
+    );
+  }
+
+  function cachedDetail(id: string) {
+    return (
+      readUserClientCache<CourseDetail>(
+        userId,
+        cacheResources.courseDetail(id),
+        CLIENT_CACHE_LIVE_MAX_AGE_MS,
+      ) ?? undefined
+    );
+  }
+
+  function prefetchCourse(course: CourseSummary) {
+    const key = String(course.id);
+    if (!cachedDetail(key))
+      void materials
+        .detail(key)
+        .then((value) =>
+          writeUserClientCache(userId, cacheResources.courseDetail(key), value),
+        )
+        .catch(() => undefined);
+    if (!cachedExamples(key))
+      void materials
+        .examples(key)
+        .then((value) =>
+          writeUserClientCache(
+            userId,
+            cacheResources.courseExamples(key),
+            value,
+          ),
+        )
+        .catch(() => undefined);
+  }
 
   useEffect(() => {
     lifecycle.current += 1;
@@ -337,35 +389,43 @@ function CourseCatalogView({
     try {
       const key = String(course.id);
       const savedProgress = progressByCourse[key];
-
-      if (savedProgress) {
-        try {
-          await api.courses.getProgress(course.id);
-        } catch (reason) {
-          if (reason instanceof ApiError && reason.status === 404) {
-            await api.courses.start(course.id);
-          } else {
-            throw reason;
-          }
-        }
-      } else {
-        try {
-          await api.courses.start(course.id);
-        } catch (reason) {
-          if (reason instanceof ApiError && reason.status === 409) {
+      // Enrollment and examples are independent; the intro detail never blocks start.
+      const progressRequest = (async () => {
+        if (savedProgress) {
+          try {
             await api.courses.getProgress(course.id);
-          } else {
-            throw reason;
+          } catch (reason) {
+            if (reason instanceof ApiError && reason.status === 404) {
+              await api.courses.start(course.id);
+            } else {
+              throw reason;
+            }
+          }
+        } else {
+          try {
+            await api.courses.start(course.id);
+          } catch (reason) {
+            if (reason instanceof ApiError && reason.status === 409) {
+              await api.courses.getProgress(course.id);
+            } else {
+              throw reason;
+            }
           }
         }
-      }
+      })();
+      const storedExamples = cachedExamples(key);
+      const examplesRequest = materials.examples(course.id, storedExamples);
+      const [, examples] = await Promise.all([
+        progressRequest,
+        examplesRequest,
+      ]);
       if (requestLifecycle !== lifecycle.current) return;
-
-      const examples = orderedCourseExamples(
-        examplesByCourse[key] ?? (await api.examples.listCourse(course.id)),
-        course.id,
-      );
-      if (requestLifecycle !== lifecycle.current) return;
+      if (!storedExamples)
+        writeUserClientCache(
+          userId,
+          cacheResources.courseExamples(key),
+          examples,
+        );
       const nextExamples = {
         ...examplesByCourse,
         [key]: examples,
@@ -396,54 +456,56 @@ function CourseCatalogView({
     if (!expandedId) return;
     let active = true;
     const key = expandedId;
-    const cachedDetail = detailsByCourse[key];
-    const cachedExamples = examplesByCourse[key];
-    if (cachedDetail && cachedExamples) {
-      setDetailLoadingId(null);
-      return;
-    }
-
-    setDetailLoadingId(key);
     setDetailError(null);
-    void Promise.all([
-      cachedDetail ? Promise.resolve(cachedDetail) : api.courses.get(key),
-      cachedExamples
-        ? Promise.resolve(cachedExamples)
-        : api.examples.listCourse(key),
-    ])
-      .then(([detail, exampleResponse]) => {
-        if (!active) return;
-        const examples = orderedCourseExamples(exampleResponse, key);
-        const nextExamples = {
-          ...examplesByCourse,
-          [key]: examples,
-        };
-        const nextDetails = { ...detailsByCourse, [key]: detail };
-        setExamplesByCourse(nextExamples);
-        setDetailsByCourse(nextDetails);
-        updateUserClientCache<CourseCatalogCache>(userId, cacheResource, {
-          examplesByCourse: nextExamples,
-          detailsByCourse: nextDetails,
+    const storedDetail =
+      readUserClientCache<CourseDetail>(
+        userId,
+        cacheResources.courseDetail(key),
+        CLIENT_CACHE_LIVE_MAX_AGE_MS,
+      ) ?? undefined;
+    const storedExamples =
+      readUserClientCache<PracticeExamples>(
+        userId,
+        cacheResources.courseExamples(key),
+        CLIENT_CACHE_LIVE_MAX_AGE_MS,
+      ) ?? undefined;
+    if (storedDetail)
+      setDetailsByCourse((current) => ({ ...current, [key]: storedDetail }));
+    else
+      void materials
+        .detail(key)
+        .then((detail) => {
+          writeUserClientCache(
+            userId,
+            cacheResources.courseDetail(key),
+            detail,
+          );
+          if (active)
+            setDetailsByCourse((current) => ({ ...current, [key]: detail }));
+        })
+        .catch(() => undefined);
+    if (storedExamples)
+      setExamplesByCourse((current) => ({ ...current, [key]: storedExamples }));
+    else
+      void materials
+        .examples(key)
+        .then((examples) => {
+          writeUserClientCache(
+            userId,
+            cacheResources.courseExamples(key),
+            examples,
+          );
+          if (!active) return;
+          setExamplesByCourse((current) => ({ ...current, [key]: examples }));
+        })
+        .catch((reason) => {
+          if (!active) return;
+          setDetailError(classExamplesErrorMessage(reason));
         });
-      })
-      .catch((reason) => {
-        if (!active) return;
-        setDetailError(classExamplesErrorMessage(reason));
-      })
-      .finally(() => {
-        if (active) setDetailLoadingId(null);
-      });
     return () => {
       active = false;
     };
-  }, [
-    expandedId,
-    detailsByCourse,
-    examplesByCourse,
-    cacheResource,
-    userId,
-    detailRetry,
-  ]);
+  }, [expandedId, materials, userId, detailRetry]);
 
   const selectedCourse = items.find((item) => String(item.id) === expandedId);
   const detail = expandedId ? detailsByCourse[expandedId] : undefined;
@@ -605,7 +667,7 @@ function CourseCatalogView({
                   ) : null}
                 </div>
                 <h2 className="mt-3 text-[22px] leading-8 font-bold tracking-[-0.02em]">
-                  {detail?.description || selectedCourse.title}
+                  {courseIntroduction(selectedCourse, detail)}
                 </h2>
                 <p className="mt-1 text-sm leading-5 text-[#6b7684]">
                   문장을 하나씩 녹음하고 평가를 확인하며 연습해요
@@ -615,7 +677,7 @@ function CourseCatalogView({
                     이 클래스를 마치면
                   </strong>
                   <p className="mt-1 text-[13px] leading-[18px] text-[#4e5968]">
-                    {detail?.description ?? "학습 내용을 불러오는 중이에요"}
+                    {courseIntroduction(selectedCourse, detail)}
                   </p>
                 </section>
                 <div className="mt-5 mb-3 flex justify-between">
@@ -623,25 +685,27 @@ function CourseCatalogView({
                   <span className="text-[13px] leading-[18px] text-[#8b95a1]">
                     {courseExamples
                       ? `총 ${courseExamples.items.length}문장`
-                      : "문장 불러오는 중"}
+                      : "문장별 연습"}
                   </span>
                 </div>
                 <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
-                  {["현재 문장 녹음", "AI 평가 확인", "다음 문장으로 이동"].map(
-                    (label, index) => (
-                      <li
-                        key={label}
-                        className="flex min-h-[57px] items-center gap-3"
-                      >
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-primary text-[13px] font-medium text-primary">
-                          {index + 1}
-                        </span>
-                        <span className="text-[15px] leading-[22px] font-medium text-[#333d4b]">
-                          {label}
-                        </span>
-                      </li>
-                    ),
-                  )}
+                  {[
+                    "현재 문장 녹음",
+                    "분석 접수 후 다음 문장",
+                    "마지막에 문장별 결과 확인",
+                  ].map((label, index) => (
+                    <li
+                      key={label}
+                      className="flex min-h-[57px] items-center gap-3"
+                    >
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-primary text-[13px] font-medium text-primary">
+                        {index + 1}
+                      </span>
+                      <span className="text-[15px] leading-[22px] font-medium text-[#333d4b]">
+                        {label}
+                      </span>
+                    </li>
+                  ))}
                 </ol>
               </>
             ) : loading || loadedType !== activeType ? (
@@ -659,6 +723,12 @@ function CourseCatalogView({
                       key={String(course.id)}
                       type="button"
                       onClick={() => setExpandedId(String(course.id))}
+                      onPointerEnter={() => prefetchCourse(course)}
+                      onFocus={() => prefetchCourse(course)}
+                      onPointerDown={(event) => {
+                        if (event.pointerType === "touch")
+                          prefetchCourse(course);
+                      }}
                       className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
                     >
                       <span
@@ -688,7 +758,7 @@ function CourseCatalogView({
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
-                          {detail?.description || "원리부터 차근차근 연습해요"}
+                          {courseIntroduction(course, detail)}
                         </p>
                         <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dfe3e7]">
                           <div
@@ -738,10 +808,7 @@ function CourseCatalogView({
           <div className="design-dock">
             <button
               type="button"
-              disabled={
-                startingId === String(selectedCourse.id) ||
-                detailLoadingId !== null
-              }
+              disabled={startingId === String(selectedCourse.id)}
               onClick={() => void start(selectedCourse)}
               className="design-action"
             >
