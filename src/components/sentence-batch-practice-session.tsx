@@ -171,12 +171,15 @@ export function SentenceBatchPracticeSession({
             : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요."}
         </p>
       </header>
-      <SentenceReader
-        sentences={sentences}
-        activeIndex={waiting ? undefined : active}
-        variant={recording ? "recording" : "reader"}
-        className="mx-5 max-h-[45dvh]"
-      />
+      {!waiting && (
+        <SentenceReader
+          sentences={sentences}
+          pageIndex={active}
+          activeIndex={recording ? active : undefined}
+          variant={recording ? "recording" : "reader"}
+          className="mx-5 max-h-[45dvh]"
+        />
+      )}
       <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
         {waiting
           ? `녹음을 모두 마쳤어요. ${sentences.length}개 문장의 피드백을 모으고 있어요.`

@@ -79,7 +79,13 @@ test("article preview cannot skip an unrecorded article even when the adjacent A
       ReferencePlayer: () => null,
     },
   );
-  const element = Preview({ content, onStart: () => {} });
+  let starts = 0;
+  const element = Preview({
+    content,
+    onStart: () => {
+      starts++;
+    },
+  });
   const next = buttons(element).find((button) =>
     renderToStaticMarkup(button).includes("다음 기사"),
   );
@@ -87,6 +93,16 @@ test("article preview cannot skip an unrecorded article even when the adjacent A
   assert.equal(next.props.disabled, true);
   assert.equal(next.props.onClick, undefined);
   assert.match(renderToStaticMarkup(element), /녹음을 완료한 뒤 결과 화면/);
+  const start = buttons(element).find((button) =>
+    renderToStaticMarkup(button).includes("연습 시작하기"),
+  );
+  assert.ok(start);
+  (start.props.onClick as () => void)();
+  assert.equal(
+    starts,
+    1,
+    "Start must enter the first sentence page immediately",
+  );
 });
 
 function navigation(
