@@ -2,13 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import { DirectPracticeSession } from "./direct-practice-session";
 import {
   RecordingPracticeSession,
   type PracticeSessionProps,
 } from "./recording-practice-session";
 import { TitleExamSession } from "./title-exam-session";
-import { directAnalysisEnabled } from "@/lib/direct-analysis";
+import { SentencePracticeSequence } from "./sentence-practice-sequence";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
 
 export function PracticeSession(props: PracticeSessionProps) {
@@ -33,19 +32,10 @@ export function PracticeSession(props: PracticeSessionProps) {
     return <TitleExamSession key={identity} {...props} examId={titleExamId} />;
   }
 
-  if (
-    directAnalysisEnabled &&
-    !params.get("courseId") &&
-    !params.get("sessionId") &&
-    !params.get("courseStepId")
-  ) {
-    return (
-      <DirectPracticeSession
-        key={identity}
-        content={props.content}
-        onTitleChange={props.onTitleChange}
-      />
-    );
+  // New practice runs submit each sentence through the authenticated API.
+  // Existing session URLs keep their original single-session recovery path.
+  if (!props.localOnly && !params.get("sessionId")) {
+    return <SentencePracticeSequence key={identity} {...props} />;
   }
 
   return <RecordingPracticeSession key={identity} {...props} />;

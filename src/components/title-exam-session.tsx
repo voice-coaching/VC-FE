@@ -80,9 +80,7 @@ export function TitleExamSession({
         restoreSession,
         onComplete: submitResult,
         learningFocus: "PRONUNCIATION",
-        // Exam/session/grading endpoints authorize the authenticated audio flow.
-        // The legacy canonical TITLE_EXAM scope is not used by this pipeline.
-        analysisScope: null,
+        analysisScope: "TITLE_EXAM",
         title: "승급 시험",
         resultTitle: "승급 시험 결과",
         restoringLabel: "승급 시험을 준비하고 있어요",

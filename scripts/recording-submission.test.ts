@@ -9,6 +9,7 @@ import {
   analysisRequestWasRejected,
 } from "../src/lib/canonical-recovery";
 import type { TrainingSession } from "../src/lib/api/types";
+import type { SentenceAnalysisAdmission } from "../src/lib/sentence-sequence";
 
 const source = readFileSync(
   "src/components/recording-practice-session.tsx",
@@ -23,16 +24,37 @@ const file = ts.createSourceFile(
 );
 let body = "";
 let startBody = "";
+let autoSubmitBody = "";
+let checkBody = "";
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && node.name?.text === "analyze")
     body = node.body!.getText(file).slice(1, -1);
   if (ts.isFunctionDeclaration(node) && node.name?.text === "startRecording")
     startBody = node.body!.getText(file).slice(1, -1);
+  if (
+    ts.isFunctionDeclaration(node) &&
+    node.name?.text === "checkExistingAnalysis"
+  )
+    checkBody = node.body!.getText(file).slice(1, -1);
+  if (
+    ts.isCallExpression(node) &&
+    node.expression.getText(file) === "useEffect"
+  ) {
+    const callback = node.arguments[0];
+    if (
+      callback &&
+      ts.isArrowFunction(callback) &&
+      callback.body.getText(file).includes("autoSubmittedBlobRef")
+    )
+      autoSubmitBody = callback.body.getText(file).slice(1, -1);
+  }
   ts.forEachChild(node, visit);
 }
 visit(file);
 assert.ok(body);
 assert.ok(startBody);
+assert.ok(autoSubmitBody);
+assert.ok(checkBody);
 
 function submission(
   options: {
@@ -41,6 +63,7 @@ function submission(
     admissionCode?: string;
     consentFailure?: boolean;
     capabilitiesFailure?: Error;
+    onAdmitted?: (admission: SentenceAnalysisAdmission) => void;
     prepare?: Promise<void>;
   } = {},
 ) {
@@ -57,6 +80,7 @@ function submission(
   let canCheck = false;
   let phase = "review";
   let error: string | null = null;
+  let waits = 0;
   const noop = () => {};
   const deps = {
     submissionBusyRef: busy,
@@ -68,6 +92,7 @@ function submission(
     },
     recorder: { blob: sourceBlob, durationMs: 7000 },
     localOnly: false,
+    onAnalysisAdmitted: options.onAdmitted,
     setRequestError: (value: string | null) => {
       error = value;
     },
@@ -136,7 +161,10 @@ function submission(
         },
       },
     },
-    waitForAnalysis: async () => ({ id: 20 }),
+    waitForAnalysis: async () => {
+      waits += 1;
+      return { id: 20 };
+    },
     loadResult: async () => {
       counts.loaded++;
     },
@@ -161,11 +189,135 @@ function submission(
     get recording() {
       return deps.recorder.blob;
     },
+    get waits() {
+      return waits;
+    },
     get canCheck() {
       return canCheck;
     },
   };
 }
+
+test("sentence analysis advances only after the API acknowledges admission and does not wait for its result", async () => {
+  const admissions: SentenceAnalysisAdmission[] = [];
+  const attempt = submission({ onAdmitted: (value) => admissions.push(value) });
+  await attempt.run();
+  assert.deepEqual(admissions, [
+    { sessionId: 138, recordingId: 104, analysisId: 20 },
+  ]);
+  assert.equal(attempt.counts.submissions, 1);
+  assert.equal(attempt.waits, 0);
+  assert.equal(attempt.counts.loaded, 0);
+  assert.equal(attempt.pending.current, true);
+});
+
+test("a lost acknowledgement can advance after a status read without waiting for AI completion or resubmitting", async () => {
+  const admissions: SentenceAnalysisAdmission[] = [];
+  const noop = () => {};
+  const deps = {
+    sessionId: 138,
+    setRequestError: noop,
+    setRequestFailure: noop,
+    setCanCheckAnalysis: noop,
+    setPhase: noop,
+    waitingAnalysisRef: { current: undefined },
+    selectedRecordingRef: { current: 104 },
+    analysisPendingRef: { current: true },
+    analysisAdmissionMissing,
+    api: {
+      training: {
+        get: async () => ({ status: "ANALYZING", analysisAvailable: false }),
+      },
+    },
+    canonicalApi: {
+      status: async () => ({ analysisId: 20, status: "PROCESSING" }),
+    },
+    onAnalysisAdmitted: (value: SentenceAnalysisAdmission) =>
+      admissions.push(value),
+    ApiError,
+    waitForAnalysis: () => {
+      throw new Error(
+        "Should not wait for the result before the next sentence",
+      );
+    },
+  };
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    ...Object.keys(deps),
+    ts.transpile(`async function run() {${checkBody}}`, {
+      target: ts.ScriptTarget.ES2022,
+    }) + "\nreturn await run();",
+  );
+  await execute(...Object.values(deps));
+  assert.deepEqual(admissions, [
+    { sessionId: 138, recordingId: 104, analysisId: 20 },
+  ]);
+});
+
+test("a finalized sentence automatically submits exactly once and does not retry on error rerenders", () => {
+  let submitted = 0;
+  const recorder = { status: "recorded", blob: new Blob(["sentence one"]) };
+  const submittedBlob = { current: null as Blob | null };
+  const execute = new Function(
+    "autoSubmit",
+    "phase",
+    "recorder",
+    "autoSubmittedBlobRef",
+    "analyze",
+    ts.transpile(`function run() {${autoSubmitBody}}`, {
+      target: ts.ScriptTarget.ES2022,
+    }) + "\nreturn run();",
+  );
+  const run = (phase = "review") =>
+    execute(true, phase, recorder, submittedBlob, () => {
+      submitted += 1;
+    });
+  run("recording");
+  assert.equal(submitted, 0);
+  run();
+  run();
+  assert.equal(submitted, 1);
+  recorder.blob = new Blob(["sentence two"]);
+  recorder.status = "stopping";
+  run();
+  assert.equal(submitted, 1);
+  recorder.status = "recorded";
+  run();
+  assert.equal(submitted, 2);
+});
+
+test("a rejected sentence admission cannot advance the sequence", async () => {
+  let advanced = false;
+  const attempt = submission({
+    admissionFailure: 503,
+    admissionCode: "ANALYSIS_INTEGRATION_UNAVAILABLE",
+    onAdmitted: () => {
+      advanced = true;
+    },
+  });
+  await attempt.run();
+  assert.equal(advanced, false);
+  assert.equal(attempt.pending.current, false);
+  assert.ok(attempt.recording);
+});
+
+test("a concurrency limit rejection retains the sentence upload for admission retry", async () => {
+  let advanced = false;
+  const attempt = submission({
+    admissionFailure: 429,
+    admissionCode: "ANALYSIS_CONCURRENT_LIMIT_EXCEEDED",
+    onAdmitted: () => {
+      advanced = true;
+    },
+  });
+  await attempt.run();
+  assert.equal(advanced, false);
+  assert.equal(attempt.pending.current, false);
+  assert.equal(attempt.canCheck, false);
+  await attempt.run();
+  assert.equal(attempt.counts.uploads, 1);
+  assert.equal(attempt.counts.registrations, 1);
+});
 
 test("class microphone capture does not depend on remote analysis support or availability", async () => {
   const calls: string[] = [];

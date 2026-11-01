@@ -18,6 +18,31 @@ const recording: VoiceRecording = {
   analysisMediaType: "AUDIO_ONLY",
 };
 
+test("resuming a sentence-scoped session keeps its server-selected sentence instead of the whole article", async () => {
+  globalThis.fetch = async (url) =>
+    json(
+      String(url).endsWith("/recordings")
+        ? { items: [recording] }
+        : {
+            id: 77,
+            status: "ANALYZING",
+            content: {
+              id: 123,
+              scriptText: "Second sentence.",
+              sentenceIndex: 1,
+            },
+            selectedRecordingId: 55,
+          },
+    );
+  const state = await loadPracticeResume(
+    createRemoteApi("/api/backend"),
+    77,
+    123,
+  );
+  assert.equal(state.scriptText, "Second sentence.");
+  assert.equal(state.selectedRecordingId, 55);
+});
+
 function server(
   status: TrainingSession["status"],
   attempts: VoiceRecording[] = [],

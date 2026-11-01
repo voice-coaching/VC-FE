@@ -71,6 +71,7 @@ import {
   writeUserClientCache,
 } from "@/lib/client-cache";
 import { invalidateLearningCaches } from "@/lib/learning-cache";
+import type { SentenceAnalysisAdmission } from "@/lib/sentence-sequence";
 
 type Phase =
   | "idle"
@@ -124,7 +125,15 @@ export function RecordingPracticeSession({
   localOnly = false,
   experienceLabel,
   workflow,
-}: PracticeSessionProps & { workflow?: PracticeSessionWorkflow }) {
+  sentenceIndex,
+  onAnalysisAdmitted,
+  autoSubmit = false,
+}: PracticeSessionProps & {
+  workflow?: PracticeSessionWorkflow;
+  sentenceIndex?: number;
+  onAnalysisAdmitted?: (admission: SentenceAnalysisAdmission) => void;
+  autoSubmit?: boolean;
+}) {
   const router = useRouter();
   const [saveReportOpen, setSaveReportOpen] = useState(false);
   const searchParams = useSearchParams();
@@ -135,6 +144,13 @@ export function RecordingPracticeSession({
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
   const [resultAudioUrl, setResultAudioUrl] = useState<string | undefined>();
+  const [resumedScriptText, setResumedScriptText] = useState<string | null>(
+    null,
+  );
+  const displayedContent =
+    resumedScriptText == null
+      ? content
+      : { ...content, scriptText: resumedScriptText };
   const [phase, setPhase] = useState<Phase>(
     resumedSessionId ? "restoring" : "idle",
   );
@@ -172,6 +188,7 @@ export function RecordingPracticeSession({
   const authEpochRef = useRef(getAuthSessionVersion());
   const selectedRecordingRef = useRef<Id | null>(null);
   const submissionBusyRef = useRef(false);
+  const autoSubmittedBlobRef = useRef<Blob | null>(null);
   const uploadedRecordingRef = useRef<{
     source: Blob;
     sessionId: Id;
@@ -208,8 +225,10 @@ export function RecordingPracticeSession({
       : (currentCourseExample?.focus ?? content.learningFocus));
 
   const sentences = courseExamples
-    ? [content.scriptText]
-    : splitSentences(content.scriptText);
+    ? [displayedContent.scriptText]
+    : sentenceIndex != null
+      ? [displayedContent.scriptText]
+      : splitSentences(displayedContent.scriptText);
   useEffect(() => {
     if (!courseId) return;
     let active = true;
@@ -270,6 +289,22 @@ export function RecordingPracticeSession({
     }
   }, [phase, recorder.status, activeSentence, sentences.length]);
 
+  useEffect(() => {
+    if (
+      !autoSubmit ||
+      phase !== "review" ||
+      recorder.status !== "recorded" ||
+      !recorder.blob ||
+      autoSubmittedBlobRef.current === recorder.blob
+    )
+      return;
+    // One automatic attempt per captured sentence. A failure needs an explicit retry.
+    autoSubmittedBlobRef.current = recorder.blob;
+    void analyze();
+    // The captured blob owns this submission; status/progress renders must not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit, phase, recorder.status, recorder.blob]);
+
   useEffect(
     () => () => {
       analysisPollRef.current?.abort();
@@ -307,6 +342,7 @@ export function RecordingPracticeSession({
         resumePendingRef.current = false;
         sessionIdRef.current = restored.sessionId;
         setSessionId(restored.sessionId);
+        setResumedScriptText(restored.scriptText ?? null);
         completedRef.current = restored.completed;
         selectedRecordingRef.current = restored.selectedRecordingId;
         setRecordingAttempts(restored.attempts);
@@ -369,6 +405,10 @@ export function RecordingPracticeSession({
       courseStepId: resolvedCourseStepId || null,
       titleExamId: null,
       learningFocus: analysisLearningFocus,
+      ...(sentenceIndex != null && {
+        sentenceIndex,
+        sentenceText: content.scriptText,
+      }),
     });
     const createdId = session.sessionId ?? session.id;
     if (createdId == null) throw new Error("학습 세션 ID가 응답에 없습니다.");
@@ -517,6 +557,25 @@ export function RecordingPracticeSession({
           return;
         }
       }
+      if (onAnalysisAdmitted && selectedRecordingRef.current != null) {
+        // A status read confirms a lost acknowledgement without waiting for AI completion.
+        const status = await canonicalApi.status(sessionId);
+        if (
+          waitingAnalysisRef.current != null &&
+          String(waitingAnalysisRef.current) !== String(status.analysisId)
+        )
+          throw new ApiError(
+            "분석 시도가 변경되었습니다.",
+            409,
+            "CANONICAL_ATTEMPT_CHANGED",
+          );
+        onAnalysisAdmitted({
+          sessionId,
+          recordingId: selectedRecordingRef.current,
+          analysisId: status.analysisId,
+        });
+        return;
+      }
       const result = await waitForAnalysis(
         sessionId,
         waitingAnalysisRef.current,
@@ -590,6 +649,15 @@ export function RecordingPracticeSession({
     const authVersion = getAuthSessionVersion();
     const result = await readResult(analysisId, delivered);
     if (!mountedRef.current || authVersion !== getAuthSessionVersion()) return;
+    if (onAnalysisAdmitted && selectedRecordingRef.current != null) {
+      // A lost POST acknowledgement was recovered by reading the same analysis.
+      onAnalysisAdmitted({
+        sessionId: activeSessionId,
+        recordingId: selectedRecordingRef.current,
+        analysisId,
+      });
+      return;
+    }
     const segmentPage = { items: [] };
     setAnalysis(result);
     setSegments(segmentPage.items);
@@ -764,6 +832,7 @@ export function RecordingPracticeSession({
     setCanRetryAnalysis(false);
     setCanCheckAnalysis(false);
     setUploadProgress(0);
+    setPhase("uploading");
     try {
       const capabilities = await getAnalysisCapabilities();
       checkingAvailability = false;
@@ -861,6 +930,14 @@ export function RecordingPracticeSession({
       const requested = await api.training.analyze(activeSessionId, consent);
       awaitingAdmission = false;
       setPhase("analyzing");
+      if (onAnalysisAdmitted) {
+        onAnalysisAdmitted({
+          sessionId: activeSessionId,
+          recordingId,
+          analysisId: requested.analysisId,
+        });
+        return;
+      }
       const deliveredResult = await waitForAnalysis(
         activeSessionId,
         requested.analysisId,
@@ -1538,7 +1615,7 @@ export function RecordingPracticeSession({
             analysis={analysis}
             courseMode={Boolean(courseId)}
             segments={segments}
-            content={content}
+            content={displayedContent}
             recordingUrl={recorder.previewUrl ?? resultAudioUrl}
           />
           {requestError && (

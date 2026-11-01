@@ -7,6 +7,8 @@ export function analysisRequestWasRejected(reason: unknown) {
   return (
     reason instanceof ApiError &&
     ([400, 401, 403, 404, 413, 415, 422].includes(reason.status) ||
+      (reason.status === 429 &&
+        reason.code === "ANALYSIS_CONCURRENT_LIMIT_EXCEEDED") ||
       (reason.status === 503 &&
         reason.code === "ANALYSIS_INTEGRATION_UNAVAILABLE"))
   );
