@@ -19,6 +19,8 @@ export function useSentenceRecorder(
   const [status, setStatus] = useState<Status>("idle");
   const [index, setIndex] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const pausedAt = useRef<number | null>(null);
   const [splitting, setSplitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const callback = useRef(onSegment);
@@ -41,6 +43,8 @@ export function useSentenceRecorder(
     if (clock.current) clearInterval(clock.current);
     clock.current = null;
     running.current = false;
+    pausedAt.current = null;
+    setPaused(false);
     audio.current?.dispose();
     audio.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
@@ -77,6 +81,9 @@ export function useSentenceRecorder(
         currentIndex.current = next;
         setIndex(next);
         started.current = Date.now();
+        pausedAt.current = null;
+        setPaused(false);
+        audio.current?.resume();
         setElapsedMs(0);
       }
     } catch (reason) {
@@ -93,6 +100,22 @@ export function useSentenceRecorder(
       }
     }
   }, [release]);
+  const togglePause = useCallback(() => {
+    if (!running.current || transition.current || !audio.current) return;
+    const now = Date.now();
+    if (pausedAt.current == null) {
+      audio.current.pause();
+      pausedAt.current = now;
+      setElapsedMs(now - started.current);
+      setPaused(true);
+    } else {
+      // Paused time contributes neither PCM samples nor the sentence time limit.
+      started.current += now - pausedAt.current;
+      pausedAt.current = null;
+      audio.current.resume();
+      setPaused(false);
+    }
+  }, []);
   const start = useCallback(
     async (initialIndex: number) => {
       if (starting.current || running.current) return false;
@@ -133,6 +156,7 @@ export function useSentenceRecorder(
         running.current = true;
         setStatus("recording");
         clock.current = setInterval(() => {
+          if (pausedAt.current != null) return;
           const elapsed = Date.now() - started.current;
           setElapsedMs(elapsed);
           if (elapsed >= 60000) void advance();
@@ -169,6 +193,8 @@ export function useSentenceRecorder(
     index,
     elapsedMs,
     splitting,
+    paused,
+    togglePause,
     error,
     start,
     advance,

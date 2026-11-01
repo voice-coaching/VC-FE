@@ -11,6 +11,7 @@ import type {
   SentenceAnalysisAdmission,
   SentencePracticeItem,
 } from "./sentence-sequence";
+import type { AnalysisResult } from "./api";
 import { assertSentenceSession } from "./sentence-sequence";
 
 /** An admitted sentence is read/completed independently of the currently recording sentence. */
@@ -18,6 +19,7 @@ export async function observeSentenceAnalysis(
   admission: SentenceAnalysisAdmission,
   item: SentencePracticeItem,
   signal: AbortSignal,
+  onResult?: (result: AnalysisResult) => void,
 ) {
   const epoch = getAuthSessionVersion();
   const active = () => !signal.aborted && epoch === getAuthSessionVersion();
@@ -31,6 +33,9 @@ export async function observeSentenceAnalysis(
     onProgress: () => {},
     onConnectionChange: () => {},
   });
+  if (!active()) throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
+  // Feedback visibility and persisted practice completion are separate contracts.
+  if (result.canonical?.canonicalAnalysis) onResult?.(result);
   if (result.canonical && persistencePending(result.canonical)) {
     const committed = await awaitCanonicalPersistence(
       result.canonical,

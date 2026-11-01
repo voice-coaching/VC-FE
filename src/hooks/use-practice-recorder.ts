@@ -64,6 +64,8 @@ export function usePracticeRecorder(sentenceCount: number) {
     status,
     sentenceIndex: capture.index,
     splitting: capture.splitting,
+    paused: capture.paused,
+    togglePause: capture.togglePause,
     boundaries,
     elapsedMs: capture.elapsedMs,
     getElapsedMs: () => capture.elapsedMs,
