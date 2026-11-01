@@ -6,7 +6,8 @@ import type { DirectResult } from "@/lib/direct-analysis";
 export function directAnalysisPresentation(
   result: DirectResult,
 ): AnalysisResult {
-  const feedback = result.coaching.feedback?.trim();
+  const accepted = !result.failure && result.decision.status === "ACCEPT";
+  const feedback = accepted ? result.coaching.feedback?.trim() : undefined;
   const itemFeedback = result.coaching.items
     .map(({ expression }) =>
       [
@@ -25,7 +26,7 @@ export function directAnalysisPresentation(
     outcome: null,
     transcript: null,
     sttConfidence: null,
-    overallScore: result.score.overallScore,
+    overallScore: accepted ? result.score.overallScore : null,
     pronunciationScore: null,
     intonationScore: null,
     speedWpm: null,
@@ -36,7 +37,7 @@ export function directAnalysisPresentation(
     weaknesses: [],
     summaryFeedback:
       feedback ||
-      itemFeedback ||
+      (accepted ? itemFeedback : "") ||
       (result.failure
         ? "분석 근거를 확정하지 못했습니다. 다시 녹음해 주세요."
         : result.decision.status !== "ACCEPT"
