@@ -22,7 +22,7 @@ const savedSchema = z.object({
 });
 type Saved = z.infer<typeof savedSchema>;
 
-/** Coordinate recording admission and result collection without waiting for each inference. */
+/** Local capture never depends on admission acknowledgements or inference completion. */
 export function useSentenceBatch(
   contentId: string | number,
   sentences: string[],
@@ -35,13 +35,19 @@ export function useSentenceBatch(
   const [uploading, setUploading] = useState(false);
   const [history, setHistory] = useState("PENDING");
   const [urls, setUrls] = useState<Record<number, string>>({});
-  const [pendingRecording, setPendingRecording] = useState<Blob | null>(null);
-  const [pollEpoch, setPollEpoch] = useState(0);
+  const [captured, setCaptured] = useState<number[]>([]);
   const [hasAttempt, setHasAttempt] = useState(false);
-  const [restoringRecording, setRestoringRecording] = useState(false);
+  const [pollEpoch, setPollEpoch] = useState(0);
+  const [retryIndex, setRetryIndex] = useState<number | null>(null);
+  const [savingCount, setSavingCount] = useState(0);
+  const writes = useRef(new Set<Promise<void>>());
   const saved = useRef<Saved | null>(null);
   const latestView = useRef<SentenceBatch | null>(null);
-  const gate = useRef(false);
+  const files = useRef(new Map<number, Blob>());
+  const pumpBusy = useRef(false),
+    resetting = useRef(false);
+  const running = useRef<Promise<void> | null>(null);
+  const pumpRef = useRef<() => void>(() => undefined);
   const controller = useRef(new AbortController());
   const recordingKey = useCallback(
     (batchId: string, index: number) => `${key}:${batchId}:${index}`,
@@ -53,78 +59,36 @@ export function useSentenceBatch(
         JSON.stringify(next.sentences.map((row) => row.scriptText)) !== scripts
       )
         throw new Error("SENTENCE_LIST_MISMATCH");
+      const previous = latestView.current;
       if (
-        next.status === "RECORDING" &&
-        (latestView.current?.batchId !== next.batchId ||
-          latestView.current.uploadedCount !== next.uploadedCount)
-      ) {
-        setRestoringRecording(true);
-      }
+        previous?.batchId === next.batchId &&
+        (previous.uploadedCount > next.uploadedCount ||
+          previous.completedCount > next.completedCount ||
+          (["RESULT_READY", "CANCELLED"].includes(previous.status) &&
+            previous.status !== next.status))
+      )
+        return;
       latestView.current = next;
       setView(next);
     },
     [scripts],
   );
-  const captureError = (reason: unknown) =>
+  function captureError(reason: unknown) {
     setError(
       reason instanceof Error
         ? reason.message
-        : "문장 분석 상태를 확인하지 못했어요.",
+        : "문장 전송 상태를 확인하지 못했어요.",
     );
-
-  useEffect(() => {
-    const current = new AbortController();
-    controller.current = current;
-    setLoading(true);
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) {
-        setLoading(false);
-        return () => current.abort();
-      }
-      const value = savedSchema.parse(JSON.parse(raw));
-      saved.current = value;
-      setHasAttempt(true);
-      if (JSON.stringify(value.sentences) !== scripts)
-        throw new Error(
-          "이전 원고의 연습이 남아 있어요. 새 연습을 시작해 주세요.",
-        );
-      void sha256(value.historyClaim)
-        .then((digest) =>
-          createSentenceBatch(
-            value.batchId,
-            value.sentences,
-            Number(contentId) || null,
-            digest,
-            current.signal,
-          ),
-        )
-        .then((next) => {
-          if (!current.signal.aborted) apply(next);
-        })
-        .catch((reason) => {
-          if (!current.signal.aborted) captureError(reason);
-        })
-        .finally(() => {
-          if (!current.signal.aborted) setLoading(false);
-        });
-    } catch (reason) {
-      captureError(reason);
-      setLoading(false);
-    }
-    return () => current.abort();
-  }, [key, scripts, contentId, apply]);
-
-  const ensure = async (): Promise<Saved> => {
+  }
+  function identity(): Saved {
     if (
       !sentences.length ||
       sentences.length > 50 ||
       sentences.join("").length > 4000
     )
-      throw new Error("한 연습은 1~50문장, 총 4000자까지 녹음할 수 있어요.");
-    let value = saved.current;
-    if (!value) {
-      value = {
+      throw new Error("한 연습은 1~50문장, 총 4000자까지 지원해요.");
+    if (!saved.current) {
+      const value = {
         batchId: crypto.randomUUID(),
         historyClaim: crypto.randomUUID() + crypto.randomUUID(),
         sentences,
@@ -133,116 +97,207 @@ export function useSentenceBatch(
       saved.current = value;
       setHasAttempt(true);
     }
-    if (JSON.stringify(value.sentences) !== scripts)
+    if (JSON.stringify(saved.current.sentences) !== scripts)
       throw new Error("이전 원고의 연습을 종료한 뒤 새로 시작해 주세요.");
-    const next = await createSentenceBatch(
+    return saved.current;
+  }
+  async function ensure(
+    value: Saved,
+    signal: AbortSignal,
+  ): Promise<SentenceBatch> {
+    return createSentenceBatch(
       value.batchId,
       value.sentences,
       Number(contentId) || null,
       await sha256(value.historyClaim),
-      controller.current.signal,
+      signal,
     );
-    apply(next);
-    return value;
-  };
+  }
+  function nextLocal(): number | null {
+    const index = sentences.findIndex(
+      (_, i) =>
+        !files.current.has(i) && !latestView.current?.sentences[i]?.jobId,
+    );
+    return index < 0 ? null : index;
+  }
+  function pump(): void {
+    if (
+      pumpBusy.current ||
+      resetting.current ||
+      controller.current.signal.aborted ||
+      !saved.current
+    )
+      return;
+    pumpBusy.current = true;
+    setUploading(true);
+    const signal = controller.current.signal;
+    const value = saved.current;
+    running.current = (async () => {
+      let currentIndex: number | null = null;
+      try {
+        const initial = await ensure(value, signal);
+        if (signal.aborted) return;
+        apply(initial);
+        for (;;) {
+          const entry = [...files.current.entries()]
+            .sort(([a], [b]) => a - b)
+            .find(([i]) => !latestView.current?.sentences[i]?.jobId);
+          if (!entry) break;
+          const [index, source] = entry;
+          currentIndex = index;
+          const blobKey = recordingKey(value.batchId, index);
+          // Save exact source bytes before conversion; later capture proceeds independently.
+          await sentenceRecordings.put(blobKey + ":raw", source);
+          if (signal.aborted) return;
+          let prepared = await sentenceRecordings.read(blobKey);
+          if (!prepared) {
+            prepared = (await prepareDirectAudio(source)).blob;
+            if (signal.aborted) return;
+            await sentenceRecordings.put(blobKey, prepared);
+          }
+          if (signal.aborted) return;
+          const next = await uploadBatchSentence(
+            value.batchId,
+            index,
+            prepared,
+            signal,
+          );
+          if (signal.aborted) return;
+          apply(next);
+          setRetryIndex(null);
+          setError(null);
+        }
+      } catch (reason) {
+        if (!signal.aborted) {
+          setRetryIndex(currentIndex);
+          captureError(reason);
+        }
+      } finally {
+        pumpBusy.current = false;
+        if (!signal.aborted) setUploading(false);
+        else if (
+          !resetting.current &&
+          !controller.current.signal.aborted &&
+          controller.current.signal !== signal
+        ) {
+          // A React lifecycle restart may have restored the queue before this
+          // previous request observed cancellation. Resume with the live signal.
+          queueMicrotask(() => pumpRef.current());
+        }
+      }
+    })();
+  }
+  pumpRef.current = pump;
 
-  async function initialize(): Promise<number | null> {
-    if (gate.current) return null;
-    gate.current = true;
-    setError(null);
+  useEffect(() => {
+    const current = new AbortController();
+    controller.current = current;
+    setLoading(true);
+    void (async () => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const value = savedSchema.parse(JSON.parse(raw));
+        saved.current = value;
+        setHasAttempt(true);
+        if (JSON.stringify(value.sentences) !== scripts)
+          throw new Error(
+            "이전 원고의 연습이 남아 있어요. 새 연습을 시작해 주세요.",
+          );
+        const restored = await Promise.all(
+          value.sentences.map(async (_, index) => {
+            const id = recordingKey(value.batchId, index);
+            const blob =
+              (await sentenceRecordings.read(id + ":raw")) ??
+              (await sentenceRecordings.read(id));
+            return blob ? ([index, blob] as const) : null;
+          }),
+        );
+        if (current.signal.aborted) return;
+        files.current = new Map(restored.filter((row) => row !== null));
+        setCaptured([...files.current.keys()]);
+        // Only local recovery controls the microphone. HTTP reconciliation is background work.
+        pumpRef.current();
+      } catch (reason) {
+        if (!current.signal.aborted) captureError(reason);
+      } finally {
+        if (!current.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => current.abort();
+  }, [key, scripts, recordingKey]);
+
+  function begin(): number | null {
+    if (loading || resetting.current) return null;
     try {
-      await ensure();
-      return latestView.current?.sentences.findIndex((row) => !row.jobId) ?? 0;
+      identity();
+      return nextLocal();
     } catch (reason) {
       captureError(reason);
       return null;
-    } finally {
-      gate.current = false;
     }
   }
-
-  async function send(index: number, source?: Blob): Promise<boolean> {
-    if (gate.current) return false;
-    gate.current = true;
-    setUploading(true);
+  function enqueue(index: number, blob: Blob): number | null {
+    identity();
+    files.current.set(index, blob);
+    setCaptured([...files.current.keys()]);
+    // Persist every captured file immediately, even while an earlier POST is still pending.
+    const value = saved.current!;
+    setSavingCount((count) => count + 1);
+    const write = sentenceRecordings
+      .put(recordingKey(value.batchId, index) + ":raw", blob)
+      .catch((reason) => {
+        if (!controller.current.signal.aborted) captureError(reason);
+      })
+      .finally(() => {
+        writes.current.delete(write);
+        setSavingCount((count) => count - 1);
+      });
+    writes.current.add(write);
+    pumpRef.current();
+    return nextLocal();
+  }
+  function refresh(): void {
     setError(null);
-    const current = controller.current;
+    setPollEpoch((value) => value + 1);
+    pumpRef.current();
+  }
+
+  async function allowRetake(index: number): Promise<boolean> {
+    if (pumpBusy.current || resetting.current) return false;
     try {
-      const value = await ensure();
-      // Resolve an acknowledgement lost after admission before touching the bytes.
-      const latest = await readSentenceBatch(value.batchId, current.signal);
-      if (latest.sentences[index]?.jobId) {
-        setPendingRecording(null);
-        apply(latest);
-        return true;
-      }
-      const blobKey = recordingKey(value.batchId, index);
-      let prepared = await sentenceRecordings.read(blobKey);
-      if (!prepared) {
-        if (!source) throw new Error("이 문장을 다시 녹음해 주세요.");
-        prepared = (await prepareDirectAudio(source)).blob;
-        await sentenceRecordings.put(blobKey, prepared);
-      }
-      const next = await uploadBatchSentence(
-        value.batchId,
-        index,
-        prepared,
-        current.signal,
-      );
-      if (current.signal.aborted) return false;
-      setPendingRecording(null);
+      const value = identity(),
+        next = await ensure(value, controller.current.signal);
       apply(next);
-      return true;
-    } catch (reason) {
-      if (!current.signal.aborted) captureError(reason);
-      return false;
-    } finally {
-      gate.current = false;
-      if (!current.signal.aborted) setUploading(false);
-    }
-  }
-
-  async function refresh(): Promise<void> {
-    if (!saved.current) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const value = await ensure();
-      apply(await readSentenceBatch(value.batchId, controller.current.signal));
-    } catch (reason) {
-      captureError(reason);
-    } finally {
-      setLoading(false);
-      setPollEpoch((current) => current + 1);
-    }
-  }
-
-  async function discardPending(index: number): Promise<boolean> {
-    if (gate.current) return false;
-    gate.current = true;
-    try {
-      const value = await ensure();
-      const latest = await readSentenceBatch(
-        value.batchId,
-        controller.current.signal,
-      );
-      apply(latest);
-      if (!latest.sentences[index]?.jobId)
-        await sentenceRecordings.remove(recordingKey(value.batchId, index));
-      setPendingRecording(null);
+      if (next.sentences[index]?.jobId) {
+        pumpRef.current();
+        return false;
+      }
+      const id = recordingKey(value.batchId, index);
+      await sentenceRecordings.remove(id);
+      await sentenceRecordings.remove(id + ":raw");
+      files.current.delete(index);
+      setCaptured([...files.current.keys()]);
+      setRetryIndex(null);
       setError(null);
       return true;
     } catch (reason) {
       captureError(reason);
       return false;
-    } finally {
-      gate.current = false;
     }
   }
-
-  const waiting = view?.status === "PROCESSING";
+  const localComplete =
+    sentences.length > 0 &&
+    sentences.every(
+      (_, i) => captured.includes(i) || Boolean(view?.sentences[i]?.jobId),
+    );
   useEffect(() => {
-    if (!waiting || !view) return;
+    if (
+      !localComplete ||
+      !view ||
+      ["RESULT_READY", "CANCELLED"].includes(view.status)
+    )
+      return;
     const current = new AbortController();
     void (async () => {
       try {
@@ -254,39 +309,21 @@ export function useSentenceBatch(
           );
           if (current.signal.aborted) return;
           apply(next);
-          if (next.status !== "PROCESSING") return;
+          if (["RESULT_READY", "CANCELLED"].includes(next.status)) return;
         }
       } catch (reason) {
         if (!current.signal.aborted) captureError(reason);
       }
     })();
     return () => current.abort();
-  }, [waiting, view?.batchId, apply, pollEpoch]);
-
-  useEffect(() => {
-    const index = view?.sentences.findIndex((row) => !row.jobId) ?? -1;
-    if (!view || index < 0) {
-      setPendingRecording(null);
-      setRestoringRecording(false);
-      return;
-    }
-    let disposed = false;
-    void sentenceRecordings
-      .read(recordingKey(view.batchId, index))
-      .then((blob) => {
-        if (!disposed) setPendingRecording(blob ?? null);
-      })
-      .catch(() => {
-        if (!disposed) setError("이 기기에 보관한 녹음을 읽지 못했어요.");
-      })
-      .finally(() => {
-        if (!disposed) setRestoringRecording(false);
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [view?.batchId, view?.uploadedCount, recordingKey]);
-
+  }, [
+    localComplete,
+    view?.batchId,
+    view?.status === "RESULT_READY",
+    view?.status === "CANCELLED",
+    pollEpoch,
+    apply,
+  ]);
   useEffect(() => {
     const current = new AbortController();
     const links = sentenceHistoryLinks(String(getAuthenticatedUserId()));
@@ -365,9 +402,13 @@ export function useSentenceBatch(
   }, [view?.status, view?.batchId, recordingKey]);
 
   async function reset(): Promise<boolean> {
-    if (gate.current) return false;
-    gate.current = true;
+    if (resetting.current) return false;
+    resetting.current = true;
+    controller.current.abort();
     try {
+      await running.current;
+      await Promise.allSettled([...writes.current]);
+      controller.current = new AbortController();
       const value = saved.current;
       if (value) {
         if (view?.status === "RESULT_READY")
@@ -377,35 +418,35 @@ export function useSentenceBatch(
               .map((row) => row.analysis.jobId) ?? [],
             value.historyClaim,
           );
-        await createSentenceBatch(
-          value.batchId,
-          value.sentences,
-          Number(contentId) || null,
-          await sha256(value.historyClaim),
-          controller.current.signal,
-        );
+        await ensure(value, controller.current.signal);
         await cancelSentenceBatch(value.batchId, controller.current.signal);
         await Promise.all(
-          value.sentences.map((_, index) =>
-            sentenceRecordings.remove(recordingKey(value.batchId, index)),
-          ),
+          value.sentences.map(async (_, index) => {
+            const id = recordingKey(value.batchId, index);
+            await sentenceRecordings.remove(id);
+            await sentenceRecordings.remove(id + ":raw");
+          }),
         );
       }
       localStorage.removeItem(key);
       saved.current = null;
       latestView.current = null;
+      files.current.clear();
       setHasAttempt(false);
       setView(null);
+      setCaptured([]);
+      setRetryIndex(null);
       setError(null);
       setHistory("PENDING");
       setUrls({});
-      setPendingRecording(null);
+      setUploading(false);
       return true;
     } catch (reason) {
       captureError(reason);
       return false;
     } finally {
-      gate.current = false;
+      resetting.current = false;
+      setUploading(false);
     }
   }
   return {
@@ -415,14 +456,20 @@ export function useSentenceBatch(
     uploading,
     history,
     urls,
-    pendingRecording,
     hasAttempt,
-    restoringRecording,
-    initialize,
-    send,
+    retryIndex,
+    localComplete,
+    savingRecordings: savingCount > 0,
+    capturedCount: sentences.filter(
+      (_, i) => captured.includes(i) || view?.sentences[i]?.jobId,
+    ).length,
+    nextIndex: sentences.findIndex(
+      (_, i) => !captured.includes(i) && !view?.sentences[i]?.jobId,
+    ),
+    begin,
+    enqueue,
     refresh,
     reset,
-    discardPending,
-    nextIndex: view?.sentences.findIndex((row) => !row.jobId) ?? 0,
+    allowRetake,
   };
 }

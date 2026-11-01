@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PracticeContent } from "@/lib/api";
 import { splitSentences } from "@/lib/sentences";
 import { reportSaves } from "@/lib/report-saves";
-import { useAudioRecorder } from "@/hooks/use-audio-recorder";
+import { useSentenceRecorder } from "@/hooks/use-sentence-recorder";
 import { useSentenceBatch } from "@/hooks/use-sentence-batch";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { SentenceReader } from "./sentence-reader";
@@ -14,7 +14,7 @@ import { DirectAnalysisResult } from "./direct-analysis-result";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { ReportSaveDialog } from "./report-save-dialog";
 
-/** Each stop finalizes one file; only the final stop enters the result waiting screen. */
+/** Keep sentence capture continuous; collect feedback only after local capture finishes. */
 export function SentenceBatchPracticeSession({
   content,
   onTitleChange,
@@ -24,70 +24,43 @@ export function SentenceBatchPracticeSession({
 }) {
   const router = useRouter();
   const sentences = splitSentences(content.scriptText);
-  const recorder = useAudioRecorder();
   const batch = useSentenceBatch(content.id, sentences);
-  const [recordingIndex, setRecordingIndex] = useState(0);
+  const recorder = useSentenceRecorder(batch.enqueue);
   const [saveOpen, setSaveOpen] = useState(false);
-  const submitted = useRef<Blob | null>(null);
-  const recording =
-    recorder.status === "recording" || recorder.status === "stopping";
-  const waiting = batch.view?.status === "PROCESSING";
-  const finished = batch.view?.status === "RESULT_READY";
-  const locked =
-    batch.loading ||
-    batch.uploading ||
-    batch.restoringRecording ||
-    recorder.status === "requesting";
-  const active =
-    recording || recorder.blob ? recordingIndex : Math.max(0, batch.nextIndex);
+  const recording = recorder.status === "recording";
+  const waiting = batch.localComplete && recorder.status !== "recording";
+  const finished =
+    batch.view?.status === "RESULT_READY" &&
+    !recording &&
+    recorder.status !== "requesting";
+  // Uploads and inference never disable the microphone or drive its sentence cursor.
+  const locked = batch.loading || recorder.status === "requesting";
+  const active = recording ? recorder.index : Math.max(0, batch.nextIndex);
   const guard = useRecordingDiscardGuard(
-    recording || Boolean(recorder.blob) || batch.view?.status === "RECORDING",
+    recording ||
+      batch.savingRecordings ||
+      (!batch.localComplete && batch.hasAttempt),
     true,
   );
-  const message = batch.error || recorder.error;
-
-  async function send(blob: Blob | undefined) {
-    if (
-      await batch.send(
-        recorder.blob ? recordingIndex : Math.max(0, batch.nextIndex),
-        blob,
-      )
-    )
-      recorder.reset();
-  }
-  useEffect(() => {
-    if (
-      recorder.status !== "recorded" ||
-      !recorder.blob ||
-      submitted.current === recorder.blob
-    )
-      return;
-    submitted.current = recorder.blob;
-    void send(recorder.blob);
-    // A finalized file is submitted once. Failed submissions require an explicit retry.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recorder.status, recorder.blob]);
+  const message = recorder.error || (!recording ? batch.error : null);
   useEffect(() => {
     onTitleChange?.(
       finished ? "문장별 피드백" : waiting ? "분석 중" : "문장 연습",
     );
   }, [finished, waiting, onTitleChange]);
-
-  async function start() {
+  function start() {
     if (locked || recording) return;
-    recorder.unlockAudio();
-    const index = await batch.initialize();
-    if (index == null || index < 0) return;
-    setRecordingIndex(index);
-    submitted.current = null;
-    await recorder.start();
+    const index = batch.begin();
+    if (index != null) void recorder.start(index);
   }
   async function restart() {
-    if (await batch.reset()) {
-      submitted.current = null;
-      recorder.reset();
-      setRecordingIndex(0);
-    }
+    recorder.reset();
+    await batch.reset();
+  }
+  async function retake() {
+    const index = batch.retryIndex;
+    if (index != null && (await batch.allowRetake(index)))
+      void recorder.start(index);
   }
   const elapsed = Math.floor(recorder.elapsedMs / 1000);
 
@@ -192,7 +165,7 @@ export function SentenceBatchPracticeSession({
         <p className="mt-2 text-sm text-[#6b7684]">
           {waiting
             ? "마지막 문장의 녹음이 끝났어요. 모든 문장 분석이 끝나면 결과를 한 번에 보여 드려요."
-            : "문장을 다 읽고 완료하면 녹음을 보내요. 분석을 기다리지 않고 다음 문장을 녹음할 수 있어요."}
+            : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요."}
         </p>
       </header>
       <SentenceReader
@@ -202,9 +175,9 @@ export function SentenceBatchPracticeSession({
         className="mx-5 max-h-[45dvh]"
       />
       <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
-        녹음 전송 {batch.view?.uploadedCount ?? 0} / {sentences.length} · 분석
-        완료 {batch.view?.completedCount ?? 0} / {sentences.length}
-        {batch.uploading && " · 이 문장 녹음을 보내고 있어요"}
+        {waiting
+          ? `녹음을 모두 마쳤어요. ${sentences.length}개 문장의 피드백을 모으고 있어요.`
+          : `녹음 완료 ${batch.capturedCount} / ${sentences.length} 문장`}
       </p>
       {message && (
         <p
@@ -217,9 +190,7 @@ export function SentenceBatchPracticeSession({
       {recorder.status === "denied" && <MicrophonePermissionNotice />}
       {!waiting &&
         batch.view?.status !== "CANCELLED" &&
-        batch.nextIndex !== -1 &&
-        !recorder.blob &&
-        !batch.pendingRecording && (
+        batch.nextIndex !== -1 && (
           <SentenceRecordingControls
             contentId={content.id}
             stream={recorder.getStream()}
@@ -230,52 +201,33 @@ export function SentenceBatchPracticeSession({
             elapsed={`${Math.floor(elapsed / 60)
               .toString()
               .padStart(2, "0")}:${(elapsed % 60).toString().padStart(2, "0")}`}
-            busy={locked || recorder.status !== "recording"}
+            busy={locked || recorder.splitting || !recording}
             last={active === sentences.length - 1}
             recording={recording}
             requesting={locked}
-            onStart={() => void start()}
-            onComplete={recorder.stop}
+            onStart={start}
+            onComplete={() => void recorder.advance()}
           />
         )}
       <div className="mt-auto space-y-3 px-5 py-5">
-        {(recorder.blob || batch.pendingRecording) && !batch.uploading && (
+        {waiting && batch.error && (
           <button
             type="button"
-            onClick={() => void send(recorder.blob ?? undefined)}
+            disabled={batch.uploading}
+            onClick={batch.refresh}
             className="h-12 w-full rounded-full bg-primary font-bold text-white"
           >
-            같은 문장 녹음 다시 보내기
+            전송·분석 상태 다시 확인
           </button>
         )}
-        {(recorder.blob || batch.pendingRecording) && !batch.uploading && (
+        {waiting && batch.retryIndex != null && (
           <button
             type="button"
-            onClick={() =>
-              void batch
-                .discardPending(
-                  recorder.blob ? recordingIndex : Math.max(0, batch.nextIndex),
-                )
-                .then((done) => {
-                  if (done) {
-                    submitted.current = null;
-                    recorder.reset();
-                  }
-                })
-            }
+            disabled={batch.uploading}
+            onClick={() => void retake()}
             className="h-12 w-full rounded-full border border-primary font-bold text-primary"
           >
-            접수 확인 후 이 문장 다시 녹음
-          </button>
-        )}
-        {message && !recording && (
-          <button
-            type="button"
-            disabled={locked}
-            onClick={() => void batch.refresh()}
-            className="h-12 w-full rounded-full border border-primary font-bold text-primary"
-          >
-            접수·분석 상태 다시 확인
+            {batch.retryIndex + 1}번째 문장 다시 녹음
           </button>
         )}
         {batch.hasAttempt && (
