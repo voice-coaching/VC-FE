@@ -75,3 +75,8 @@ FE는 지원 범위를 녹음/업로드 전에 확인하고, 위 필드가 빠�
 ## 문장별 녹음 묶음 계약
 
 [문장별 녹음·일괄 피드백 API](sentence-practice-batches.md)의 네 endpoint, 상태·실패·복구 계약을 따른다. 기존 단일 direct 결과와 내부 canonical 계약의 버전은 유지한다.
+
+
+## 활성 인증형 연습의 프론트 진행
+
+문장·뉴스·아나운서·내 문장·클래스는 [인증형 연속 녹음 흐름](authenticated-sentence-practice.md)을 사용한다. 기존 API 요청/응답·인증 계약을 변경하지 않고 캡처와 업로드/분석의 대기를 분리한다. 익명 Direct endpoint로 자동 전환하지 않는다.
