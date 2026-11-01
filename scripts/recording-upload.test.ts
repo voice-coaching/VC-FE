@@ -13,6 +13,7 @@ const originalXMLHttpRequest = globalThis.XMLHttpRequest;
 
 class FakeXMLHttpRequest {
   static nextStatus = 204;
+  static nextResponseText = "";
   static latest: FakeXMLHttpRequest | null = null;
 
   readonly headers = new Headers();
@@ -23,6 +24,7 @@ class FakeXMLHttpRequest {
   url = "";
   status = 0;
   timeout = 0;
+  responseText = "";
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
   ontimeout: (() => void) | null = null;
@@ -42,12 +44,14 @@ class FakeXMLHttpRequest {
 
   send() {
     this.status = FakeXMLHttpRequest.nextStatus;
+    this.responseText = FakeXMLHttpRequest.nextResponseText;
     this.onload?.();
   }
 }
 
-function installFakeXMLHttpRequest(status = 204) {
+function installFakeXMLHttpRequest(status = 204, responseText = "") {
   FakeXMLHttpRequest.nextStatus = status;
+  FakeXMLHttpRequest.nextResponseText = responseText;
   FakeXMLHttpRequest.latest = null;
   globalThis.XMLHttpRequest =
     FakeXMLHttpRequest as unknown as typeof XMLHttpRequest;
@@ -173,5 +177,27 @@ test("storage 401 is identified as an upload authorization failure", async () =>
       reason instanceof ApiError &&
       reason.status === 401 &&
       reason.code === "UPLOAD_AUTHORIZATION_FAILED",
+  );
+});
+
+test("direct upload diagnostics retain the response but exclude the signed query", async () => {
+  const response = { code: "AccessDenied", message: "Upload rejected" };
+  installFakeXMLHttpRequest(403, JSON.stringify(response));
+  await assert.rejects(
+    createRemoteApi("/api/backend").training.uploadRecording(
+      {
+        ...uploadInfo(1),
+        uploadUrl: "https://storage.example.test/1?X-Amz-Signature=secret",
+      },
+      new Blob(["voice"], { type: "audio/mp4" }),
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.deepEqual(error.diagnostics, {
+        request: { method: "PUT", path: "/1" },
+        response,
+      });
+      return true;
+    },
   );
 });
