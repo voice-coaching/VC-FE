@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import * as Dialog from "@radix-ui/react-dialog";
 import topicStyles from "./script-topic-picker.module.css";
@@ -29,12 +30,15 @@ import {
   scriptLibrary,
   type ScriptTopic,
   type ScriptLibrary,
+  SCRIPT_LIBRARY_AVAILABLE,
+  SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE,
 } from "@/lib/script-library";
 import { ScriptTopicManager } from "./script-topic-manager";
 import { ScriptConfirmDialog } from "./script-confirm-dialog";
 import { CUSTOM_SCRIPT_LIMIT } from "@/lib/custom-draft";
 
 export function MyScriptScreen() {
+  const router = useRouter();
   const [scriptTitle, setScriptTitle] = useState("");
   const [topic, setTopic] = useState("발표");
   const [topicData, setTopicData] = useState<ScriptTopics>({
@@ -56,7 +60,7 @@ export function MyScriptScreen() {
   const [exitOpen, setExitOpen] = useState(false);
   const [stage, setStage] = useState<
     "library" | "input" | "confirm" | "detail" | "practice" | "topics"
-  >("library");
+  >(SCRIPT_LIBRARY_AVAILABLE ? "library" : "input");
   const [scripts, setScripts] = useState<
     (PracticeContentSummary & { createdAt?: string | null })[]
   >([]);
@@ -94,10 +98,15 @@ export function MyScriptScreen() {
     setEditingId(null);
     setSaveError(null);
     request.current = null;
-    setStage(editingId && content ? "detail" : "library");
+    if (!SCRIPT_LIBRARY_AVAILABLE) router.push("/home");
+    else setStage(editingId && content ? "detail" : "library");
   }
 
   useEffect(() => {
+    if (!SCRIPT_LIBRARY_AVAILABLE) {
+      setLibraryLoading(false);
+      return;
+    }
     let active = true;
     async function loadLibrary() {
       setLibraryLoading(true);
@@ -219,6 +228,10 @@ export function MyScriptScreen() {
   }
 
   async function saveScript(practiceImmediately = false) {
+    if (!SCRIPT_LIBRARY_AVAILABLE && !practiceImmediately) {
+      setSaveError(SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE);
+      return;
+    }
     if (saveInFlight.current || !scriptTitle.trim() || !text.trim() || tooLong)
       return;
     saveInFlight.current = true;
@@ -796,12 +809,18 @@ export function MyScriptScreen() {
           if (saving) return;
           if (stage === "confirm") setStage("input");
           else if (hasDraft) setExitOpen(true);
+          else if (!SCRIPT_LIBRARY_AVAILABLE) router.push("/home");
           else setStage("library");
         }}
       />
 
       {stage === "input" ? (
         <main className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pt-2 pb-5">
+          {!SCRIPT_LIBRARY_AVAILABLE && (
+            <p className="rounded-xl bg-[#edf2ff] px-4 py-3 text-xs leading-5 text-primary">
+              {SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE}
+            </p>
+          )}
           <div>
             <label
               htmlFor="script-title"
@@ -818,13 +837,15 @@ export function MyScriptScreen() {
               className="w-full rounded-[12px] bg-white px-4 py-3.5 text-[15px] leading-[22px] text-[#191f28] outline-none placeholder:text-[#b0b8c1] focus:ring-2 focus:ring-[#2f6bff]"
             />
           </div>
-          <ScriptTopicPicker
-            value={topic}
-            topics={topicData.topics}
-            counts={topicCounts}
-            onChange={setTopic}
-            onCreate={createTopic}
-          />
+          {SCRIPT_LIBRARY_AVAILABLE && (
+            <ScriptTopicPicker
+              value={topic}
+              topics={topicData.topics}
+              counts={topicCounts}
+              onChange={setTopic}
+              onCreate={createTopic}
+            />
+          )}
           <div>
             <div className="mb-2 flex items-center justify-between gap-1">
               <label
@@ -899,16 +920,18 @@ export function MyScriptScreen() {
           </button>
         ) : (
           <div className="flex gap-2" aria-busy={saving}>
-            <button
-              type="button"
-              disabled={
-                !scriptTitle.trim() || !text.trim() || tooLong || saving
-              }
-              onClick={() => void saveScript()}
-              className="h-14 min-w-0 flex-[2] rounded-full border border-[#e5e8eb] bg-white text-[16px] leading-6 font-bold text-[#191f28] disabled:opacity-35"
-            >
-              {saving ? "저장 중…" : "저장하기"}
-            </button>
+            {SCRIPT_LIBRARY_AVAILABLE && (
+              <button
+                type="button"
+                disabled={
+                  !scriptTitle.trim() || !text.trim() || tooLong || saving
+                }
+                onClick={() => void saveScript()}
+                className="h-14 min-w-0 flex-[2] rounded-full border border-[#e5e8eb] bg-white text-[16px] leading-6 font-bold text-[#191f28] disabled:opacity-35"
+              >
+                {saving ? "저장 중…" : "저장하기"}
+              </button>
+            )}
             <button
               type="button"
               disabled={
