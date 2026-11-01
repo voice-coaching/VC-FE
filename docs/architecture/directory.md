@@ -29,9 +29,11 @@
 |---|---|
 | `src/components/direct-practice-session.tsx` | 기존 독립 연습 진입점 유지 |
 | `src/components/sentence-batch-practice-session.tsx` | 문장별 녹음·전송·전체 대기·결과 카드 UI |
-| `src/hooks/use-sentence-batch.ts` | 접수 orchestration, 계정별 복구, polling, 이력 연결 |
+| `src/hooks/use-sentence-batch.ts` | 로컬 파일 큐와 독립 백그라운드 전송·복구·polling·이력 연결 |
+| `src/hooks/use-sentence-recorder.ts` | 마이크를 유지하는 연속 캡처와 문장별 로컬 진행 |
+| `src/lib/sentence-audio.ts` | AudioWorklet PCM 스트림의 문장별 split/flush |
 | `src/lib/sentence-batch-api.ts` | 익명 AI HTTP client와 결과 schema·identity 검증 |
 | `src/lib/sentence-history-links.ts` | 계정별 미완료 이력 연결 claim 영속화·재시도 |
 | `src/lib/sentence-recordings.ts` | IndexedDB의 정확한 WAV bytes 보관·재시도 |
 
-UI → hook → HTTP/storage adapter 방향으로 연결한다. 원본 recorder lifecycle은 기존 useAudioRecorder를 사용하며, 문장 완료마다 실제 stop/flush한다. 상태·timeout·실패·저장 흐름은 [계약](../api/sentence-practice-batches.md)을 따른다.
+UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은 useSentenceRecorder가 마이크/AudioContext를 유지하며 split/flush하고, 녹음 cursor를 서버 접수 상태와 분리한다. 기존 useAudioRecorder의 단일 녹음 경로는 유지한다. 상태·timeout·실패·저장 흐름은 [계약](../api/sentence-practice-batches.md)을 따른다.

@@ -8,6 +8,12 @@ class RecordingProcessor extends AudioWorkletProcessor {
     this.offset = 0;
     this.samples = 0;
     this.port.onmessage = ({ data }) => {
+      if (data?.type === "split") {
+        // Keep capture and the microphone graph alive across sentence boundaries.
+        this.flush();
+        this.samples = 0;
+        this.port.postMessage({ type: "segment" });
+      }
       if (data === "start") this.recording = true;
       if (data === "stop") {
         this.recording = false;
