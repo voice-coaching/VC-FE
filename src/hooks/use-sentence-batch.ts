@@ -38,6 +38,7 @@ export function useSentenceBatch(
   const [pendingRecording, setPendingRecording] = useState<Blob | null>(null);
   const [pollEpoch, setPollEpoch] = useState(0);
   const [hasAttempt, setHasAttempt] = useState(false);
+  const [restoringRecording, setRestoringRecording] = useState(false);
   const saved = useRef<Saved | null>(null);
   const latestView = useRef<SentenceBatch | null>(null);
   const gate = useRef(false);
@@ -52,6 +53,13 @@ export function useSentenceBatch(
         JSON.stringify(next.sentences.map((row) => row.scriptText)) !== scripts
       )
         throw new Error("SENTENCE_LIST_MISMATCH");
+      if (
+        next.status === "RECORDING" &&
+        (latestView.current?.batchId !== next.batchId ||
+          latestView.current.uploadedCount !== next.uploadedCount)
+      ) {
+        setRestoringRecording(true);
+      }
       latestView.current = next;
       setView(next);
     },
@@ -259,6 +267,7 @@ export function useSentenceBatch(
     const index = view?.sentences.findIndex((row) => !row.jobId) ?? -1;
     if (!view || index < 0) {
       setPendingRecording(null);
+      setRestoringRecording(false);
       return;
     }
     let disposed = false;
@@ -269,6 +278,9 @@ export function useSentenceBatch(
       })
       .catch(() => {
         if (!disposed) setError("이 기기에 보관한 녹음을 읽지 못했어요.");
+      })
+      .finally(() => {
+        if (!disposed) setRestoringRecording(false);
       });
     return () => {
       disposed = true;
@@ -405,6 +417,7 @@ export function useSentenceBatch(
     urls,
     pendingRecording,
     hasAttempt,
+    restoringRecording,
     initialize,
     send,
     refresh,

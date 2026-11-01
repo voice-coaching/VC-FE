@@ -34,7 +34,10 @@ export function SentenceBatchPracticeSession({
   const waiting = batch.view?.status === "PROCESSING";
   const finished = batch.view?.status === "RESULT_READY";
   const locked =
-    batch.loading || batch.uploading || recorder.status === "requesting";
+    batch.loading ||
+    batch.uploading ||
+    batch.restoringRecording ||
+    recorder.status === "requesting";
   const active =
     recording || recorder.blob ? recordingIndex : Math.max(0, batch.nextIndex);
   const guard = useRecordingDiscardGuard(
@@ -180,9 +183,11 @@ export function SentenceBatchPracticeSession({
       {guard.dialog}
       <header className="px-5 pt-5 pb-4">
         <h2 className="text-lg font-bold">
-          {waiting
-            ? "문장별 피드백을 모으고 있어요"
-            : `${active + 1} / ${sentences.length} 문장`}
+          {batch.view?.status === "CANCELLED"
+            ? "취소한 연습"
+            : waiting
+              ? "문장별 피드백을 모으고 있어요"
+              : `${active + 1} / ${sentences.length} 문장`}
         </h2>
         <p className="mt-2 text-sm text-[#6b7684]">
           {waiting
