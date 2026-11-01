@@ -57,6 +57,16 @@ const Reader = component(
     useEffect: noop,
   },
 );
+const AnalysisLoader = component(
+  "src/components/practice-analysis-loading.tsx",
+  "PracticeAnalysisLoading",
+  {
+    React,
+    Image: (props: Record<string, unknown>) =>
+      React.createElement("img", props),
+    AnalysisLoadingMessage: () => React.createElement("span", null, "분석 중"),
+  },
+);
 function assertPage(
   props: Record<string, unknown>,
   index: number,
@@ -141,6 +151,7 @@ function sequence(
       }),
       useRecordingDiscardGuard: () => ({ dialog: null }),
       SentenceReader: Reader,
+      PracticeAnalysisLoading: AnalysisLoader,
       SentenceRecordingControls: () => null,
       MicrophonePermissionNotice: () => null,
     },
@@ -176,8 +187,12 @@ test("pronunciation and intonation class pages preserve their example order", ()
 });
 
 test("the final analysis wait does not re-display the first sentence as another practice page", () => {
-  const { reader } = sequence("NEWS", "done", true);
+  const { reader, tree } = sequence("NEWS", "done", true);
   assert.equal(reader, undefined);
+  const markup = renderToStaticMarkup(tree);
+  assert.ok(markup.includes("음성 품질 확인"));
+  assert.ok(markup.includes("발음과 억양 분석"));
+  assert.ok(!markup.includes(sentences[0]));
 });
 
 for (const path of [
