@@ -1,4 +1,5 @@
 "use client";
+import { notifyCoachingUsageChanged } from "@/lib/coaching-usage";
 
 import PortOne from "@portone/browser-sdk/v2";
 import { Capacitor } from "@capacitor/core";
@@ -137,7 +138,10 @@ export default function PaymentsPage() {
   const readFirstPage = useCallback(
     async (active: () => boolean) => {
       const freshAccount = await api.users.getMe();
-      if (active()) setAccount(freshAccount);
+      if (active()) {
+        setAccount(freshAccount);
+        notifyCoachingUsageChanged();
+      }
       const history = await runPaymentRequest(
         () => api.payments.listOrders({ page: 0, size: 20 }),
         { onRateLimit: rateLimitMessage },

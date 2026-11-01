@@ -70,6 +70,8 @@ import {
 } from "@/lib/client-cache";
 import { invalidateLearningCaches } from "@/lib/learning-cache";
 import type { SentenceAnalysisAdmission } from "@/lib/sentence-sequence";
+import { assertCoachingInput } from "@/lib/coaching-usage";
+import { CoachingUsageSummary } from "./coaching-usage-summary";
 
 type Phase =
   | "idle"
@@ -138,7 +140,7 @@ export function RecordingPracticeSession({
   capturedRecording?: { blob: Blob; durationMs: number; previewUrl?: string };
   background?: boolean;
   submissionRetry?: number;
-  onSubmissionError?: (message: string) => void;
+  onSubmissionError?: (message: string, reason?: unknown) => void;
 }) {
   const router = useRouter();
   const [saveReportOpen, setSaveReportOpen] = useState(false);
@@ -220,8 +222,8 @@ export function RecordingPracticeSession({
   submissionErrorOwner.current = onSubmissionError;
   useEffect(() => {
     if (background && requestError)
-      submissionErrorOwner.current?.(requestError);
-  }, [background, requestError]);
+      submissionErrorOwner.current?.(requestError, requestFailure);
+  }, [background, requestError, requestFailure]);
   useEffect(() => {
     if (!capturedRecording) {
       setActiveSentence(localRecorder.sentenceIndex);
@@ -245,6 +247,7 @@ export function RecordingPracticeSession({
       recorder.blob != null ||
       recordingAttempts.length > 0);
   const discardGuard = useRecordingDiscardGuard(shouldConfirmExit, !background);
+  const confirmDiscard = discardGuard.request;
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
@@ -890,6 +893,7 @@ export function RecordingPracticeSession({
     setUploadProgress(0);
     setPhase("uploading");
     try {
+      assertCoachingInput(displayedContent.scriptText, recorder.durationMs);
       const capabilities = await getAnalysisCapabilities();
       assertOwner();
       checkingAvailability = false;
@@ -1062,6 +1066,10 @@ export function RecordingPracticeSession({
       );
       await loadResult(sessionId, deliveredResult.id, deliveredResult);
     } catch (reason) {
+      if (analysisRequestWasRejected(reason)) {
+        analysisPendingRef.current = false;
+        setCanCheckAnalysis(false);
+      }
       setRequestFailure(reason);
       setRequestError(
         reason instanceof Error
@@ -1225,7 +1233,13 @@ export function RecordingPracticeSession({
         : null;
     const rerecord = canonicalFailure
       ? canonicalFailure.actions.canRerecord
-      : quality || errorView.kind === "input" || errorView.kind === "recording";
+      : quality ||
+        errorView.kind === "input" ||
+        errorView.kind === "audio" ||
+        errorView.kind === "recording";
+    const quotaBlocked =
+      errorView.kind === "quota" || errorView.kind === "period";
+    const scriptBlocked = errorView.kind === "script";
     return (
       <div className="flex min-h-full flex-col px-5 pb-8">
         {discardGuard.dialog}
@@ -1265,6 +1279,7 @@ export function RecordingPracticeSession({
           </p>
           {recorder.status === "denied" && <MicrophonePermissionNotice />}
           {workflow?.renderErrorDetails(requestFailure)}
+          {quotaBlocked && <CoachingUsageSummary compact />}
         </div>
         <button
           className="design-action"
@@ -1275,6 +1290,14 @@ export function RecordingPracticeSession({
             !rerecord
           }
           onClick={() => {
+            if (quotaBlocked || scriptBlocked) {
+              confirmDiscard("exit", () =>
+                router.push(
+                  quotaBlocked ? "/mypage/payments?view=manage" : "/sentences",
+                ),
+              );
+              return;
+            }
             if (resumeFailed) {
               setResumeRetry((value) => value + 1);
               return;
@@ -1298,15 +1321,19 @@ export function RecordingPracticeSession({
             void resetRecording();
           }}
         >
-          {resumeFailed
-            ? "학습 상태 다시 확인"
-            : canCheckAnalysis && sessionId
-              ? "분석 상태 다시 확인"
-              : canRetryAnalysis || canonicalFailure?.actions.canRetry
-                ? "분석 다시 시도"
-                : rerecord
-                  ? "다시 녹음하기"
-                  : "다시 시도하기"}
+          {quotaBlocked
+            ? "코칭 이용권 확인"
+            : scriptBlocked
+              ? "다른 문장 선택"
+              : resumeFailed
+                ? "학습 상태 다시 확인"
+                : canCheckAnalysis && sessionId
+                  ? "분석 상태 다시 확인"
+                  : canRetryAnalysis || canonicalFailure?.actions.canRetry
+                    ? "분석 다시 시도"
+                    : rerecord
+                      ? "다시 녹음하기"
+                      : "다시 시도하기"}
         </button>
         <button
           className="mt-4 py-3 text-sm text-muted-foreground"
@@ -1412,6 +1439,11 @@ export function RecordingPracticeSession({
           내 문장 체험 · 녹음은 이 기기에서만 재생됩니다. AI 분석은 서버에
           등록된 연습 콘텐츠에서 이용할 수 있습니다.
         </p>
+      )}
+      {!localOnly && phase === "idle" && (
+        <div className="px-5">
+          <CoachingUsageSummary compact />
+        </div>
       )}
       {(phase === "idle" || phase === "recording") && (
         <>

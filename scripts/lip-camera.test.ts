@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import {
+  assertCoachingInput,
+  coachingLimitNotice,
+} from "../src/lib/coaching-usage";
+import { analysisRequestWasRejected } from "../src/lib/canonical-recovery";
 
 const source = readFileSync("src/routes/lip-practice.tsx", "utf8");
 const file = ts.createSourceFile(
@@ -117,7 +122,7 @@ test("a single reviewed clip can open the result screen and submit audio immedia
   assert.equal(streamRef.current, null);
 });
 
-test("lip analysis submits captured audio to the same direct API as voice practice", async () => {
+test("lip analysis submits captured audio through authenticated coaching admission", async () => {
   let analysisBody = "";
   function visit(node: ts.Node) {
     if (
@@ -130,14 +135,15 @@ test("lip analysis submits captured audio to the same direct API as voice practi
   visit(file);
   const audio = new Blob(["wav"], { type: "audio/wav" });
   const video = new Blob(["video"], { type: "video/mp4" });
-  let submitted = false;
+  let submitted = 0;
   const noop = () => {};
   const dependencies = {
-    reportClip: { blob: video, audioBlob: audio },
+    reportClip: { blob: video, audioBlob: audio, durationMs: 7000 },
     analysisBusyRef: { current: false },
     mounted: { current: true },
     videoConsentAccepted: true,
     analysisOwnerRef: { current: null },
+    submittedClipsRef: { current: new Set<Blob>() },
     AbortController,
     DOMException,
     crypto: globalThis.crypto,
@@ -148,27 +154,63 @@ test("lip analysis submits captured audio to the same direct API as voice practi
     setUploadProgress: noop,
     setAnalysisProgress: noop,
     selectedClip: 0,
-    directAnalysisEnabled: true,
-    directAttemptsRef: {
-      current: new Map([[0, { id: "attempt", claim: "claim" }]]),
-    },
     prompts: ["연습 문장"],
-    prepareDirectAudio: async (source: Blob) => {
+    prepareAudioForAnalysis: async (source: Blob) => {
       assert.equal(source, audio);
-      return { blob: audio };
+      return { blob: audio, mimeType: "audio/wav", extension: "wav" };
     },
-    submitDirect: async (blob: Blob, script: string, contentId: unknown) => {
-      assert.equal(blob, audio);
-      assert.notEqual(blob, video);
-      assert.equal(script, "연습 문장");
-      assert.equal(contentId, null);
-      submitted = true;
-      throw new Error("Stopped after verifying submission");
+    contentByPromptRef: { current: new Map() },
+    api: {
+      content: { createCustom: async () => ({ id: 1 }) },
+      training: {
+        getAnalysisCapabilities: async () => ({
+          recordingUpload: "CONFIGURED",
+          analysisRequests: "CONFIGURED",
+          supportedLearningFocuses: ["PRONUNCIATION"],
+          consentPolicyRevision: "current-policy",
+          minimumDurationMs: 1000,
+          maximumDurationMs: 90000,
+          maximumAudioUploadBytes: 1000000,
+          acceptedAudioMimeTypes: ["audio/wav"],
+        }),
+        create: async () => ({ sessionId: 2 }),
+        getUploadUrl: async () => ({ objectKey: "audio.wav" }),
+        uploadRecording: async (_upload: unknown, blob: Blob) => {
+          assert.equal(blob, audio);
+          assert.notEqual(blob, video);
+        },
+        registerRecording: async () => ({ recordingId: 3 }),
+        listRecordings: async () => [{ recordingId: 3, qualityStatus: "PASS" }],
+        selectRecording: async () => {},
+      },
     },
-    requireAnalysisScope: () => {
-      throw new Error("Must not request video scope");
+    canonicalApi: {
+      analyzeAudiovisual: async (sessionId: number, consent: unknown) => {
+        assert.equal(sessionId, 2);
+        assert.deepEqual(consent, {
+          accepted: true,
+          policyRevision: "current-policy",
+        });
+        submitted++;
+        return { analysisId: 4 };
+      },
     },
+    waitForCanonicalResult: async () => {
+      throw new Error("Stopped after verifying admission");
+    },
+    uploadRecordingWithFreshUrl: async (input: {
+      issueUploadUrl: () => Promise<unknown>;
+      upload: (info: unknown) => Promise<void>;
+    }) => {
+      const info = await input.issueUploadUrl();
+      await input.upload(info);
+      return info;
+    },
+    requireAnalysisScope: async () => {},
     invalidatesCanonicalResult: () => false,
+    assertCoachingInput,
+    coachingLimitNotice,
+    analysisRequestWasRejected,
   };
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const executable =
@@ -176,8 +218,13 @@ test("lip analysis submits captured audio to the same direct API as voice practi
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
     }) + "\nreturn await run();";
-  await new AsyncFunction(...Object.keys(dependencies), executable)(
-    ...Object.values(dependencies),
+  const execute = new AsyncFunction(...Object.keys(dependencies), executable);
+  await execute(...Object.values(dependencies));
+  assert.equal(submitted, 1);
+  await execute(...Object.values(dependencies));
+  assert.equal(
+    submitted,
+    1,
+    "an existing admission must not create a second billed analysis",
   );
-  assert.equal(submitted, true);
 });

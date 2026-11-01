@@ -2,9 +2,8 @@ export const CUSTOM_DRAFT_KEY = "speakai:custom-draft:v1";
 export const CUSTOM_SCRIPT_LIMIT = 300;
 
 export function countScriptCharacters(text: string) {
-  return [
-    ...new Intl.Segmenter("ko", { granularity: "grapheme" }).segment(text),
-  ].length;
+  // Match VC-BE's String.codePointCount, including joiners and combining jamo.
+  return Array.from(text).length;
 }
 
 export function serializeDraft(text: string) {

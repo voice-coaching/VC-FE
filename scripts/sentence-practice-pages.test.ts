@@ -152,6 +152,7 @@ function sequence(
       useRecordingDiscardGuard: () => ({ dialog: null }),
       SentenceReader: Reader,
       PracticeAnalysisLoading: AnalysisLoader,
+      CoachingUsageSummary: () => null,
       SentenceRecordingControls: () => null,
       MicrophonePermissionNotice: () => null,
     },

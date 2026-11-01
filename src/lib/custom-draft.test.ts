@@ -22,10 +22,11 @@ test("empty, malformed, and incompatible drafts do not restore", () => {
   ])
     assert.equal(parseDraft(value), null);
 });
-test("300-character boundary counts visible characters, spaces, and newlines", () => {
+test("300-character boundary matches backend Unicode code points, spaces, and newlines", () => {
   assert.equal(countScriptCharacters("가".repeat(300)), 300);
   assert.equal(countScriptCharacters("가".repeat(300) + " "), 301);
   assert.equal(countScriptCharacters("가\n나"), 3);
-  assert.equal(countScriptCharacters("👨‍👩‍👧‍👦"), 1);
-  assert.equal(countScriptCharacters("가"), 1);
+  assert.equal(countScriptCharacters("👨‍👩‍👧‍👦"), 7);
+  assert.equal(countScriptCharacters("가"), 2);
+  assert.equal(countScriptCharacters("😀"), 1);
 });
