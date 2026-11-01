@@ -22,13 +22,17 @@ const file = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 let body = "";
+let startBody = "";
 function visit(node: ts.Node) {
   if (ts.isFunctionDeclaration(node) && node.name?.text === "analyze")
     body = node.body!.getText(file).slice(1, -1);
+  if (ts.isFunctionDeclaration(node) && node.name?.text === "startRecording")
+    startBody = node.body!.getText(file).slice(1, -1);
   ts.forEachChild(node, visit);
 }
 visit(file);
 assert.ok(body);
+assert.ok(startBody);
 
 function submission(
   options: {
@@ -36,6 +40,7 @@ function submission(
     admissionFailure?: number;
     admissionCode?: string;
     consentFailure?: boolean;
+    capabilitiesFailure?: Error;
     prepare?: Promise<void>;
   } = {},
 ) {
@@ -50,6 +55,8 @@ function submission(
   const pending = { current: false };
   const busy = { current: false };
   let canCheck = false;
+  let phase = "review";
+  let error: string | null = null;
   const noop = () => {};
   const deps = {
     submissionBusyRef: busy,
@@ -61,14 +68,18 @@ function submission(
     },
     recorder: { blob: sourceBlob, durationMs: 7000 },
     localOnly: false,
-    setRequestError: noop,
+    setRequestError: (value: string | null) => {
+      error = value;
+    },
     setRequestFailure: noop,
     setCanRetryAnalysis: noop,
     setCanCheckAnalysis: (value: boolean) => {
       canCheck = value;
     },
     setUploadProgress: noop,
-    setPhase: noop,
+    setPhase: (value: string) => {
+      phase = value;
+    },
     setRecordingAttempts: noop,
     selectedRecordingRef: { current: null },
     uploadedRecordingRef: { current: null },
@@ -76,12 +87,15 @@ function submission(
     PracticeInputError,
     ApiError,
     analysisRequestWasRejected,
-    getAnalysisCapabilities: async () => ({
-      minimumDurationMs: 1000,
-      maximumDurationMs: 60000,
-      acceptedAudioMimeTypes: ["audio/wav"],
-      maximumAudioUploadBytes: 1_000_000,
-    }),
+    getAnalysisCapabilities: async () => {
+      if (options.capabilitiesFailure) throw options.capabilitiesFailure;
+      return {
+        minimumDurationMs: 1000,
+        maximumDurationMs: 60000,
+        acceptedAudioMimeTypes: ["audio/wav"],
+        maximumAudioUploadBytes: 1_000_000,
+      };
+    },
     prepareAudioForAnalysis: async () => {
       await options.prepare;
       return { blob: sourceBlob, extension: "wav", mimeType: "audio/wav" };
@@ -138,10 +152,85 @@ function submission(
     counts,
     pending,
     busy,
+    get phase() {
+      return phase;
+    },
+    get error() {
+      return error;
+    },
+    get recording() {
+      return deps.recorder.blob;
+    },
     get canCheck() {
       return canCheck;
     },
   };
+}
+
+test("class microphone capture does not depend on remote analysis support or availability", async () => {
+  const calls: string[] = [];
+  let phase = "idle";
+  const deps = {
+    recorder: {
+      unlockAudio: () => calls.push("unlock"),
+      start: async () => {
+        calls.push("microphone");
+        return true;
+      },
+    },
+    sentenceBoundaries: { current: [3] },
+    setActiveSentence: () => {},
+    setRequestError: () => {},
+    setRequestFailure: () => {},
+    setPhase: (value: string) => {
+      phase = value;
+    },
+    localOnly: false,
+    getAnalysisCapabilities: async () => {
+      calls.push("server");
+      throw new ApiError(
+        "Class analysis unsupported",
+        409,
+        "COURSE_ANALYSIS_UNSUPPORTED",
+      );
+    },
+  };
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  const execute = new AsyncFunction(
+    ...Object.keys(deps),
+    ts.transpile(`async function run() {${startBody}}`, {
+      target: ts.ScriptTarget.ES2022,
+    }) + "\nreturn await run();",
+  );
+  const started = execute(...Object.values(deps));
+  assert.deepEqual(calls, ["unlock", "microphone"]);
+  await started;
+  assert.equal(phase, "recording");
+  assert.deepEqual(deps.sentenceBoundaries.current, [0]);
+});
+
+for (const failure of [
+  new ApiError(
+    "Class analysis unsupported",
+    409,
+    "COURSE_ANALYSIS_UNSUPPORTED",
+  ),
+  new PracticeInputError("unsupported", "Intonation analysis unsupported"),
+  new ApiError("Analysis offline", 503, "ANALYSIS_INTEGRATION_UNAVAILABLE"),
+]) {
+  test(`${failure.message} keeps the recording review playable and blocks upload`, async () => {
+    const attempt = submission({ capabilitiesFailure: failure });
+    const recording = attempt.recording;
+    await attempt.run();
+    assert.equal(attempt.phase, "review");
+    assert.equal(attempt.error, failure.message);
+    assert.equal(attempt.recording, recording);
+    assert.equal(attempt.counts.uploads, 0);
+    assert.equal(attempt.counts.registrations, 0);
+    assert.equal(attempt.counts.submissions, 0);
+    assert.equal(attempt.pending.current, false);
+    assert.equal(attempt.busy.current, false);
+  });
 }
 
 test("select failure keeps the uploaded recording and does not start status polling", async () => {
