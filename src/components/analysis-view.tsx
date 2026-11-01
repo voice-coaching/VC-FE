@@ -15,6 +15,7 @@ import {
 } from "@/components/report-correction";
 import { ReportScore } from "@/components/report-score";
 import styles from "./report-design.module.css";
+import type { DirectResult } from "@/lib/direct-analysis";
 import type {
   AnalysisResult,
   AnalysisSegment,
@@ -56,6 +57,9 @@ export function AnalysisView({
   recordingId,
   reportParameter = "report",
   corrections,
+  practiceResult,
+  practiceDecisionStatus,
+  sentenceMode = false,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -65,6 +69,9 @@ export function AnalysisView({
   courseMode?: boolean;
   reportParameter?: string;
   corrections?: ReportCorrection[];
+  practiceResult?: DirectResult["practiceResult"];
+  practiceDecisionStatus?: string;
+  sentenceMode?: boolean;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const reviewItems =
@@ -582,9 +589,12 @@ export function AnalysisView({
         ) : reviewItems.length ? null : (
           <section className="rounded-[20px] bg-white p-5">
             <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
-            <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
-              문장별 분석 데이터가 제공되지 않았어요.
-            </p>
+            <PracticeResultSummary
+              analysis={analysis}
+              practiceResult={practiceResult}
+              decisionStatus={practiceDecisionStatus}
+              sentenceMode={sentenceMode}
+            />
           </section>
         )}
 
@@ -599,6 +609,55 @@ export function AnalysisView({
       </div>
       {overlay}
     </>
+  );
+}
+
+/** Present only supplied utterance results; no score-to-grade thresholds. */
+function PracticeResultSummary({
+  analysis,
+  practiceResult,
+  decisionStatus,
+  sentenceMode,
+}: {
+  analysis: AnalysisResult;
+  practiceResult?: DirectResult["practiceResult"];
+  decisionStatus?: string;
+  sentenceMode?: boolean;
+}) {
+  const decision =
+    practiceResult?.decisionStatus ??
+    decisionStatus ??
+    analysis.canonical?.canonicalAnalysis?.decision.status;
+  const failed = analysis.status === "FAILED" || decision === "SYSTEM_FAILURE";
+  const accepted = !failed && (decision == null || decision === "ACCEPT");
+  const score = accepted
+    ? (practiceResult?.score.overallScore ?? analysis.overallScore)
+    : null;
+  const feedback = accepted
+    ? practiceResult?.feedback?.trim() || analysis.summaryFeedback?.trim()
+    : analysis.summaryFeedback?.trim();
+  return (
+    <div className="mt-3 space-y-2 text-[13px] leading-5">
+      <p className="font-medium text-[#4e5968]">
+        {failed
+          ? "분석 결과를 확정하지 못했어요."
+          : !accepted
+            ? "이번 입력은 평가를 완료하지 못했어요."
+            : score != null
+              ? `${sentenceMode ? "이 문장 분석" : "전체 녹음 종합"} 점수 ${formatPoints(score)}점`
+              : "이번 녹음에는 종합 점수가 제공되지 않았어요."}
+      </p>
+      {feedback && (
+        <p className="whitespace-pre-line text-[#6b7684]">{feedback}</p>
+      )}
+      {accepted && (
+        <p className="text-[#8b95a1]">
+          {sentenceMode
+            ? "이 문장만 녹음한 음성을 기준으로 분석한 결과예요."
+            : "전체 녹음을 기준으로 한 결과예요. 문장별 점수와 판정은 따로 제공하지 않아요."}
+        </p>
+      )}
+    </div>
   );
 }
 

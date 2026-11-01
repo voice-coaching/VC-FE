@@ -22,3 +22,13 @@
 |---|---|---|---|
 | GET | `/api/analysis-capabilities/canonical` | 사용자 로그인 | 분석 계약·접수 가능 상태·목적별 지원 범위 |
 | GET | `/api/v3/analyses/{analysisId}` | 사용자 로그인·소유 확인 | 현재 실행 결과와 저장·후속 작업 상태 |
+
+
+## 문장별 독립 연습
+
+| Method | Path | 인증 | 목적 |
+|---|---|---|---|
+| POST | `/direct/api/v1/practice-batches` | 없음 | 문장 목록을 연습 ID에 고정 |
+| POST | `/direct/api/v1/practice-batches/{batchId}/sentences/{sequenceNo}` | 없음 | 문장 WAV 한 개 접수·분석 시작 |
+| GET | `/direct/api/v1/practice-batches/{batchId}` | 없음 | 진행 또는 전 문장 피드백 일괄 조회 |
+| POST | `/direct/api/v1/practice-batches/{batchId}/cancellations` | 없음 | 미공개 연습과 접수 작업 취소 |
