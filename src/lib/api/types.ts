@@ -307,6 +307,21 @@ export interface PracticeContent extends PracticeContentSummary {
   createdAt: string | null;
 }
 
+export interface PopularNewsItem extends PracticeContentSummary {
+  rank: number;
+  usageCount: number;
+}
+
+export interface PopularNews {
+  type: "NEWS";
+  rankingBasis: "CATALOG_ORDER" | "COMPLETED_USERS";
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+  nextUpdateAt: string;
+  items: PopularNewsItem[];
+}
+
 export interface PracticeContentSentence {
   sequenceNo: number;
   text: string;
@@ -848,6 +863,7 @@ export interface ApiContract {
     getRecentTraining(): Promise<RecentTraining>;
   };
   content: {
+    getPopularNews(limit?: number): Promise<PopularNews>;
     list(filters?: {
       type?: ContentType;
       category?: string;

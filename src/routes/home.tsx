@@ -17,7 +17,7 @@ import {
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import styles from "./home.module.css";
-import { newsHeadline } from "@/lib/news-presentation";
+import { PopularNewsCarousel } from "@/components/popular-news-carousel";
 import {
   updateHomeHeader,
   type HeaderScrollState,
@@ -190,29 +190,6 @@ export default function Home() {
   const [coursesLoading, setCoursesLoading] = useState(true);
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(true);
-  const [newsLoading, setNewsLoading] = useState(true);
-  const [newsItems, setNewsItems] = useState<PracticeContentSummary[]>([]);
-  const [newsFailed, setNewsFailed] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    setNewsLoading(true);
-    setNewsFailed(false);
-    void api.content
-      .list({ type: "NEWS", page: 0, size: 5 })
-      .then((result) => {
-        if (active) setNewsItems(result.items.slice(0, 5));
-      })
-      .catch(() => {
-        if (active) setNewsFailed(true);
-      })
-      .finally(() => {
-        if (active) setNewsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [userId, reloadKey]);
 
   const [coursesUnavailable, setCoursesUnavailable] = useState(false);
 
@@ -621,11 +598,7 @@ export default function Home() {
                 </section>
               )}
 
-              <HomeNewsTicker
-                items={newsItems}
-                failed={newsFailed}
-                loading={newsLoading}
-              />
+              <PopularNewsCarousel compact returnTo="/home" />
 
               <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
@@ -759,143 +732,6 @@ export default function Home() {
         </main>
       </div>
     </AppShell>
-  );
-}
-
-function HomeNewsTicker({
-  items,
-  failed,
-  loading,
-}: {
-  items: PracticeContentSummary[];
-  failed: boolean;
-  loading: boolean;
-}) {
-  const [index, setIndex] = useState(0);
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const [transitioning, setTransitioning] = useState(false);
-  const [inView, setInView] = useState(false);
-  const [pageVisible, setPageVisible] = useState(true);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const tickerRef = useRef<HTMLAnchorElement>(null);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncMotion = () => setReduceMotion(media.matches);
-    const syncVisibility = () => setPageVisible(!document.hidden);
-    syncMotion();
-    syncVisibility();
-    media.addEventListener("change", syncMotion);
-    document.addEventListener("visibilitychange", syncVisibility);
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { threshold: 0.5 },
-    );
-    if (tickerRef.current) observer.observe(tickerRef.current);
-    return () => {
-      media.removeEventListener("change", syncMotion);
-      document.removeEventListener("visibilitychange", syncVisibility);
-      observer.disconnect();
-    };
-  }, []);
-
-  // Give each headline a full reading interval, including after interaction.
-  useEffect(() => {
-    if (
-      items.length < 2 ||
-      hovered ||
-      focused ||
-      transitioning ||
-      !inView ||
-      !pageVisible ||
-      reduceMotion
-    )
-      return;
-    const timer = window.setTimeout(() => {
-      setIndex((value) => (value + 1) % items.length);
-      setTransitioning(true);
-    }, 4200);
-    return () => window.clearTimeout(timer);
-  }, [
-    items.length,
-    index,
-    hovered,
-    focused,
-    transitioning,
-    inView,
-    pageVisible,
-    reduceMotion,
-  ]);
-
-  useEffect(() => {
-    if (!transitioning) return;
-    const timer = window.setTimeout(
-      () => setTransitioning(false),
-      reduceMotion ? 0 : 560,
-    );
-    return () => window.clearTimeout(timer);
-  }, [transitioning, reduceMotion]);
-
-  const item = items[index];
-  const previousIndex = (index - 1 + items.length) % items.length;
-  const previousItem = items[previousIndex];
-  return (
-    <Link
-      href={item ? `/practice/${item.id}?returnTo=%2Fhome` : "/news"}
-      aria-busy={loading}
-      aria-label={
-        item
-          ? `인기 뉴스 ${index + 1}위: ${newsHeadline(item.title)}`
-          : "뉴스 읽기 보기"
-      }
-      ref={tickerRef}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      className="mt-7 flex h-14 items-center gap-2.5 overflow-hidden rounded-[16px] bg-white py-4 pr-3 pl-[14px] shadow-[0_2px_8px_rgba(26,51,128,0.05)]"
-    >
-      <span className="shrink-0 rounded-[6px] bg-[#eaf0ff] px-2 py-[3px] text-[11px] leading-4 font-bold tracking-[-0.165px] text-primary">
-        인기 뉴스
-      </span>
-      <span className={styles.newsWindow} aria-hidden="true">
-        {transitioning && previousItem ? (
-          <span
-            className={`${styles.newsRow} ${styles.newsOutgoing}`}
-            key={`out-${previousItem.id}`}
-          >
-            <strong className={styles.newsRank}>{previousIndex + 1}</strong>
-            <span className={styles.newsTitle}>
-              {newsHeadline(previousItem.title)}
-            </span>
-          </span>
-        ) : null}
-        <span
-          className={`${styles.newsRow} ${transitioning ? styles.newsIncoming : ""}`}
-          key={item?.id ?? "empty"}
-        >
-          {item ? (
-            <strong className={styles.newsRank}>{index + 1}</strong>
-          ) : null}
-          <span className={styles.newsTitle}>
-            {(item ? newsHeadline(item.title) : null) ??
-              (failed
-                ? "뉴스 목록에서 다시 확인해 주세요"
-                : loading
-                  ? "뉴스를 불러오고 있어요"
-                  : "새로운 뉴스를 준비하고 있어요")}
-          </span>
-        </span>
-      </span>
-      <Image
-        src="/figma/home-before/chevron-news.svg"
-        alt=""
-        width={16}
-        height={16}
-        className="shrink-0"
-      />
-    </Link>
   );
 }
 

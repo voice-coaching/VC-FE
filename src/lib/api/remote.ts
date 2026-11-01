@@ -314,6 +314,10 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request("/api/users/me/training-sessions/recent"),
     },
     content: {
+      getPopularNews: (limit = 10) =>
+        request(
+          `/api/practice-contents/popular${query({ type: "NEWS", limit })}`,
+        ),
       list: (filters = {}) =>
         request<PageResult<PracticeContentSummary>>(
           `/api/practice-contents${query(filters)}`,
