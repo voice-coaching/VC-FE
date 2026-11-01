@@ -1,61 +1,74 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { scriptLibrary } from "../src/lib/script-library";
+import {
+  scriptLibrary,
+  SCRIPT_LIBRARY_AVAILABLE,
+} from "../src/lib/script-library";
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
+const base = "/api/backend/api/users/me/script-library";
 
-test("custom script practice uses the existing VC-BE creation endpoint and DTO", async () => {
-  let calls = 0;
+test("library creation and immutable edits send the DTO and retry key to VC-BE", async () => {
+  assert.equal(SCRIPT_LIBRARY_AVAILABLE, true);
+  const input = { title: "제목", scriptText: "연습할 문장입니다.", topicId: 3 };
+  const calls: string[] = [];
   globalThis.fetch = async (url, init) => {
-    calls++;
-    assert.equal(String(url), "/api/backend/api/practice-contents/custom");
-    assert.equal(init?.method, "POST");
+    calls.push(String(url));
     assert.equal(
       new Headers(init?.headers).get("Idempotency-Key"),
       "script-key",
     );
-    assert.deepEqual(JSON.parse(String(init?.body)), {
-      title: "제목",
-      scriptText: "연습할 문장입니다.",
-      learningFocus: "PRONUNCIATION",
-      retention: "SESSION_HISTORY",
-      locale: "ko-KR",
-    });
+    assert.deepEqual(JSON.parse(String(init?.body)), input);
+    assert.equal(init?.method, calls.length === 1 ? "POST" : "PUT");
     return Response.json({
       result: true,
-      data: { id: 91, scriptText: "연습할 문장입니다." },
+      data: { id: calls.length === 1 ? 91 : 92, ...input },
     });
   };
-  const content = await scriptLibrary.save(
-    null,
-    { title: "제목", scriptText: "연습할 문장입니다.", topicId: 3 },
-    "script-key",
-  );
-  assert.equal(content.id, 91);
-  assert.equal(calls, 1);
+  assert.equal((await scriptLibrary.save(null, input, "script-key")).id, 91);
+  assert.equal((await scriptLibrary.save(91, input, "script-key")).id, 92);
+  assert.deepEqual(calls, [base, `${base}/91`]);
 });
 
-test("unsupported library and topic actions never call nonexistent routes or pretend to succeed", async () => {
-  let calls = 0;
-  globalThis.fetch = async () => {
-    calls++;
-    throw new Error("Unexpected HTTP request");
+test("library, bulk deletion and topic CRUD use implemented authenticated routes", async () => {
+  const calls: unknown[] = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push([
+      String(url),
+      init?.method ?? "GET",
+      init?.body ? JSON.parse(String(init.body)) : null,
+    ]);
+    return Response.json({
+      result: true,
+      data: { items: [], topics: [], assignments: {} },
+    });
   };
-  for (const action of [
-    () => scriptLibrary.list(),
-    () =>
-      scriptLibrary.save(
-        91,
-        { title: "수정", scriptText: "다른 문장", topicId: null },
-        "key",
-      ),
-    () => scriptLibrary.remove([91]),
-    () => scriptLibrary.createTopic("발표"),
-    () => scriptLibrary.renameTopic(3, "면접"),
-    () => scriptLibrary.removeTopic(3),
-  ])
-    await assert.rejects(action(), /보관함은 준비 중/);
-  assert.equal(calls, 0);
+  await scriptLibrary.list();
+  await scriptLibrary.remove([91, "92"]);
+  await scriptLibrary.createTopic("발표");
+  await scriptLibrary.renameTopic(3, "면접");
+  await scriptLibrary.removeTopic(3);
+  assert.deepEqual(calls, [
+    [base, "GET", null],
+    [`${base}/delete`, "POST", { ids: [91, 92] }],
+    [`${base}/topics`, "POST", { name: "발표" }],
+    [`${base}/topics/3`, "PUT", { name: "면접" }],
+    [`${base}/topics/3`, "DELETE", null],
+  ]);
+});
+
+test("failed saves and deletions propagate the server error without reporting success", async () => {
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        result: false,
+        message: "이미 있는 주제예요.",
+        code: "TOPIC_NAME_CONFLICT",
+      },
+      { status: 409 },
+    );
+  await assert.rejects(scriptLibrary.createTopic("발표"), /이미 있는 주제/);
+  await assert.rejects(scriptLibrary.remove([91]), /이미 있는 주제/);
 });

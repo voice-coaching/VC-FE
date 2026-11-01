@@ -4,10 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 import { readLipConsent, writeLipConsent } from "../src/lib/lip-consent";
 
-const source = readFileSync(
-  "src/components/direct-practice-session.tsx",
-  "utf8",
-);
+const source = readFileSync("src/hooks/use-sentence-batch.ts", "utf8");
 const file = ts.createSourceFile(
   "session.tsx",
   source,
@@ -26,14 +23,20 @@ function visit(node: ts.Node) {
     const callback = node.arguments[0] as ts.ArrowFunction;
     restoreBody = callback.body.getText(file).slice(1, -1);
   }
-  if (ts.isFunctionDeclaration(node) && node.name?.text === "clearAttempt")
+  if (ts.isFunctionDeclaration(node) && node.name?.text === "reset")
     clearBody = node.body!.getText(file).slice(1, -1);
   ts.forEachChild(node, visit);
 }
 visit(file);
-function execute(body: string, dependencies: Record<string, unknown>) {
+assert.ok(restoreBody, "The active batch restoration effect must be tested");
+assert.ok(clearBody, "The active batch reset handler must be tested");
+function execute(
+  body: string,
+  dependencies: Record<string, unknown>,
+  asynchronous = false,
+) {
   const code =
-    ts.transpile(`function run() {${body}}`, {
+    ts.transpile(`${asynchronous ? "async " : ""}function run() {${body}}`, {
       target: ts.ScriptTarget.ES2022,
     }) + "\nreturn run();";
   return new Function(...Object.keys(dependencies), code)(
@@ -42,121 +45,165 @@ function execute(body: string, dependencies: Record<string, unknown>) {
 }
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-for (const withJob of [true, false]) {
+for (const contentId of [5, "5"]) {
   for (const status of [
     "RESULT_READY",
-    "FAILED",
     "CANCELLED",
-    "RUNNING",
-    "QUEUED",
+    "RECORDING",
+    "PROCESSING",
   ]) {
-    test(`reopening ${status} with job ID ${withJob} allows completed content to be practiced again`, async () => {
-      let removed = false;
-      let observed = false;
+    test(`batch restoration recovers ${status} for content ID ${typeof contentId} without creating another run`, async () => {
+      let admissions = 0;
       let hasAttempt = false;
-      let busy = false;
-      let linked = false;
-      const attempt = { current: null as unknown };
+      let loading = false;
+      let applied: unknown;
+      const saved = { current: null as unknown };
+      const sentences = ["첫 문장입니다.", "다음 문장입니다."];
+      const value = {
+        batchId: "existing-batch",
+        historyClaim: "existing-claim",
+        sentences,
+      };
       const cleanup = execute(restoreBody, {
         AbortController,
         controller: { current: null },
-        attempt,
+        saved,
+        savedSchema: { parse: (value: unknown) => value },
+        scripts: JSON.stringify(sentences),
+        contentId,
         key: "user:sentence",
         localStorage: {
-          getItem: () =>
-            JSON.stringify({
-              attemptId: "old-attempt",
-              historyClaim: "old-claim",
-              ...(withJob ? { jobId: "old-job" } : {}),
-            }),
-          removeItem: () => {
-            removed = true;
-          },
+          getItem: () => JSON.stringify(value),
+          removeItem: () =>
+            assert.fail("Restoration must retain the admitted batch"),
         },
         setHasAttempt: (value: boolean) => {
           hasAttempt = value;
         },
-        setBusy: (value: boolean) => {
-          busy = value;
+        setLoading: (value: boolean) => {
+          loading = value;
         },
-        readDirect: async () => ({ status, jobId: "old-job" }),
-        findDirect: async () => ({ status, jobId: "old-job" }),
-        linkDirectHistory: async (jobId: string, claim: string) => {
-          assert.equal(jobId, "old-job");
-          assert.equal(claim, "old-claim");
-          linked = true;
-          return { state: "SAVED" };
+        sha256: async (claim: string) => {
+          assert.equal(claim, value.historyClaim);
+          return "claim-digest";
         },
-        setHistory: () => {},
-        update: () => {},
-        save: () => {},
-        observe: async () => {
-          observed = true;
+        createSentenceBatch: async (
+          id: string,
+          text: string[],
+          content: number,
+          digest: string,
+        ) => {
+          admissions++;
+          assert.equal(id, value.batchId);
+          assert.deepEqual(text, sentences);
+          assert.equal(content, 5);
+          assert.equal(digest, "claim-digest");
+          return { status, batchId: id };
         },
-        setError: (error: string) => assert.fail(error),
+        apply: (value: unknown) => {
+          applied = value;
+        },
+        captureError: (error: unknown) => assert.fail(String(error)),
       });
       await tick();
-      const finished = ["RESULT_READY", "FAILED", "CANCELLED"].includes(status);
-      assert.equal(removed, finished);
-      assert.equal(hasAttempt, !finished);
-      assert.equal(observed, !finished);
-      assert.equal(linked, status === "RESULT_READY");
-      if (finished) {
-        assert.equal(attempt.current, null);
-        assert.equal(busy, false);
-      }
+      assert.equal(admissions, 1);
+      assert.equal(hasAttempt, true);
+      assert.equal(loading, false);
+      assert.deepEqual(saved.current, value);
+      assert.deepEqual(applied, { status, batchId: value.batchId });
       cleanup();
     });
   }
 }
 
-test("retry clears the previous attempt and recording so submission gets a new identity", () => {
-  let aborted = false;
-  let removed = false;
-  let reset = false;
-  const state: Record<string, unknown> = {};
-  const attempt = { current: { attemptId: "old" } as unknown };
-  const dependencies: Record<string, unknown> = {
-    controller: {
-      current: {
-        abort: () => {
-          aborted = true;
+for (const status of ["RESULT_READY", "PROCESSING", "CANCEL_FAILED"])
+  test(`batch reset ${status} preserves history claims and clears local bytes only after confirmed cancellation`, async () => {
+    const calls: string[] = [];
+    const state: Record<string, unknown> = {};
+    const original = {
+      batchId: "old-batch",
+      historyClaim: "claim",
+      sentences: ["첫 문장", "다음 문장"],
+    };
+    const saved = { current: original as unknown };
+    const latestView = { current: { status } as unknown };
+    const gate = { current: false };
+    const dependencies: Record<string, unknown> = {
+      controller: { current: new AbortController() },
+      saved,
+      latestView,
+      gate,
+      contentId: 5,
+      view: { status, results: [{ analysis: { jobId: "job", result: {} } }] },
+      getAuthenticatedUserId: () => "user",
+      sentenceHistoryLinks: () => ({
+        enqueue: (jobs: string[], claim: string) => {
+          assert.deepEqual(jobs, ["job"]);
+          assert.equal(claim, "claim");
+          calls.push("history");
+        },
+      }),
+      sha256: async () => "claim-digest",
+      createSentenceBatch: async (id: string) => {
+        assert.equal(id, original.batchId);
+        calls.push("recover");
+      },
+      cancelSentenceBatch: async () => {
+        calls.push("cancel");
+        if (status === "CANCEL_FAILED") throw new Error("offline");
+      },
+      sentenceRecordings: {
+        remove: async (key: string) => {
+          calls.push(`remove:${key}`);
         },
       },
-    },
-    attempt,
-    key: "user:sentence",
-    localStorage: {
-      removeItem: () => {
-        removed = true;
+      recordingKey: (batch: string, index: number) => `${batch}:${index}`,
+      key: "user:sentence",
+      localStorage: {
+        removeItem: () => {
+          calls.push("manifest");
+        },
       },
-    },
-    recorder: {
-      reset: () => {
-        reset = true;
+      captureError: (reason: Error) => {
+        assert.equal(reason.message, "offline");
+        calls.push("error");
       },
-    },
-  };
-  for (const name of [
-    "setHasAttempt",
-    "setView",
-    "setBusy",
-    "setError",
-    "setHistory",
-    "setActiveSentence",
-    "setSentenceBoundaries",
-  ]) {
-    dependencies[name] = (value: unknown) => {
-      state[name] = value;
     };
-  }
-  execute(clearBody, dependencies);
-  assert.equal(attempt.current, null);
-  assert.equal(state.setView, null);
-  assert.equal(state.setHasAttempt, false);
-  assert.equal(state.setHistory, "PENDING");
-  assert.ok(aborted && removed && reset);
-});
+    for (const name of [
+      "setHasAttempt",
+      "setView",
+      "setUrls",
+      "setPendingRecording",
+      "setError",
+      "setHistory",
+    ]) {
+      dependencies[name] = (value: unknown) => {
+        state[name] = value;
+      };
+    }
+    const succeeded = await execute(clearBody, dependencies, true);
+    assert.equal(gate.current, false);
+    if (status === "CANCEL_FAILED") {
+      assert.equal(succeeded, false);
+      assert.equal(saved.current, original);
+      assert.deepEqual(calls, ["recover", "cancel", "error"]);
+      return;
+    }
+    assert.equal(succeeded, true);
+    assert.equal(saved.current, null);
+    assert.equal(latestView.current, null);
+    assert.equal(state.setView, null);
+    assert.equal(state.setHasAttempt, false);
+    assert.equal(state.setHistory, "PENDING");
+    assert.deepEqual(calls, [
+      ...(status === "RESULT_READY" ? ["history"] : []),
+      "recover",
+      "cancel",
+      "remove:old-batch:0",
+      "remove:old-batch:1",
+      "manifest",
+    ]);
+  });
 
 test("lip consent survives a new visit, remains account-specific, and can be revoked", () => {
   const values = new Map<string, string>();
