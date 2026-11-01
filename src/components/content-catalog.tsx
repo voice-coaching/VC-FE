@@ -70,7 +70,7 @@ const SENTENCE_FILTER_PRESENTATION: Record<
   FINAL_CONSONANT: { symbol: "ㄹ", description: "끝소리를 또렷하게" },
   TENSE_CONSONANT: { symbol: "ㄲ", description: "힘주어 정확하게" },
   CONSONANT: { symbol: "ㄹ", description: "첫소리를 분명하게" },
-  VOWEL: { symbol: "ㅏ", description: "입모양을 정확하게" },
+  VOWEL: { symbol: "ㅏ", description: "입 모양을 정확하게" },
 };
 
 type CatalogCache = {
@@ -921,7 +921,7 @@ function SentenceFilters({
   return (
     <section className="px-5 pt-3">
       <h2 className="text-[17px] leading-6 font-bold">
-        연습할 소리를 골라보세요
+        연습할 소리를 골라 보세요
       </h2>
       {loading ? (
         <div
@@ -999,7 +999,7 @@ function AnnouncerHero({
     <section className="px-5 pt-3">
       <h2 className="text-[17px] leading-6 font-bold">오늘의 아나운서 멘트</h2>
       <p className="mt-1 text-xs leading-4 font-medium text-[#8b95a1]">
-        매일 한 문장씩 아나운서처럼 읽어봐요
+        매일 한 문장씩 아나운서처럼 읽어 봐요
       </p>
       <div className="relative mt-3 h-60 overflow-hidden rounded-[20px] bg-[linear-gradient(180deg,#2f6bff,#5b8cff)] p-5 text-white">
         <Image
@@ -1035,7 +1035,7 @@ function AnnouncerHero({
             width={14}
             height={14}
           />
-          먼저 들어보기
+          먼저 들어 보기
         </Link>
       </div>
     </section>

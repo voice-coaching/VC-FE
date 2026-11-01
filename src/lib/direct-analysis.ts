@@ -124,7 +124,7 @@ async function response(reply: Response) {
     const messages: Record<string, string> = {
       INVALID_PCM_WAV:
         "음성 파일을 16kHz 모노 WAV로 변환하지 못했습니다. 다시 녹음해 주세요.",
-      INVALID_SCRIPT: "연습문장이 비어 있거나 너무 깁니다.",
+      INVALID_SCRIPT: "연습 문장이 비어 있거나 너무 깁니다.",
       INVALID_CONTENT: "연습 콘텐츠를 다시 열어 주세요.",
       INVALID_ATTEMPT_ID: "분석 요청 정보를 다시 만들어 주세요.",
       INVALID_METADATA: "분석 요청 정보가 올바르지 않습니다.",

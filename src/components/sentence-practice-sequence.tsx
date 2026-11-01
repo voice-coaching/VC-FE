@@ -14,6 +14,7 @@ import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "./report-save-dialog";
+import { NextPracticeContentButton } from "./next-practice-content-button";
 import { api, type AnalysisResult } from "@/lib/api";
 import { observeSentenceAnalysis } from "@/lib/sentence-analysis";
 import {
@@ -71,6 +72,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const [results, setResults] = useState<Record<number, SentenceResult>>({});
   const [error, setError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [nextHref, setNextHref] = useState<string | null>(null);
   const owners = useRef(new Map<number, AbortController>());
   const mounted = useRef(false),
     authEpoch = useRef(getAuthSessionVersion());
@@ -90,12 +92,18 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   });
   const recording = capture.recorder.status === "recording";
   const waiting = capture.allCaptured && !recording;
-  const guard = useRecordingDiscardGuard(
-    recording ||
+  const allAdmitted = admissions.length === items.length;
+  const allCompleted =
+    allAdmitted && items.every((_, index) => results[index]?.result != null);
+  const shouldConfirmExit =
+    !allCompleted &&
+    (items.length > 1 ||
+      capture.recorder.status === "requesting" ||
+      recording ||
       capture.saving ||
-      (!capture.allCaptured && capture.recordedCount > 0),
-    true,
-  );
+      capture.recordedCount > 0 ||
+      admissions.length > 0);
+  const guard = useRecordingDiscardGuard(shouldConfirmExit, true);
   useEffect(() => {
     if (error) capture.recorder.reset();
   }, [error, capture.recorder.reset]);
@@ -230,6 +238,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   if (error || items.length === 0)
     return (
       <div className="space-y-4 px-5 py-10">
+        {guard.dialog}
         <p role="alert">{error ?? "연습할 문장을 찾지 못했습니다."}</p>
         <button
           className="design-action"
@@ -287,12 +296,15 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
               : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요."}
           </p>
         </header>
-        <SentenceReader
-          sentences={items.map((item) => item.text)}
-          activeIndex={recording ? active : undefined}
-          variant={recording ? "recording" : "reader"}
-          className="mx-5 max-h-[45dvh]"
-        />
+        {!waiting && (
+          <SentenceReader
+            sentences={items.map((item) => item.text)}
+            pageIndex={active}
+            activeIndex={recording ? active : undefined}
+            variant={recording ? "recording" : "reader"}
+            className="mx-5 max-h-[45dvh]"
+          />
+        )}
         <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
           {waiting
             ? `${Object.values(results).filter((value) => value.result).length}/${items.length} 문장 분석 완료`
@@ -381,6 +393,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
 
   return (
     <div className="space-y-4 px-5 py-5">
+      {guard.dialog}
       <h2 className="text-xl font-bold">문장별 분석 결과</h2>
       <p role="status" className="text-sm text-muted-foreground">
         {Object.values(results).filter((item) => item.result).length}/
@@ -443,11 +456,26 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       })}
       <button
         className="design-action"
-        disabled={!allCompleted}
-        onClick={() => setSaveOpen(true)}
+        disabled={!canAdvance}
+        onClick={() => {
+          setNextHref(null);
+          setSaveOpen(true);
+        }}
       >
         {allCompleted ? "완료하기" : "학습 이력 저장 확인 중…"}
       </button>
+      {!courseId &&
+        ["NEWS", "SENTENCE", "ANNOUNCER"].includes(content.contentType) && (
+          <NextPracticeContentButton
+            content={content}
+            recordingComplete={canAdvance}
+            onNext={(href) => {
+              if (!canAdvance) return;
+              setNextHref(href);
+              setSaveOpen(true);
+            }}
+          />
+        )}
       <button
         className="min-h-11 w-full text-sm text-muted-foreground"
         onClick={() => router.push("/mypage/history")}
@@ -456,8 +484,13 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       </button>
       <ReportSaveDialog
         open={saveOpen}
-        onOpenChange={setSaveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open);
+          if (!open) setNextHref(null);
+        }}
         onConfirm={async (saved) => {
+          if (!canAdvance)
+            throw new Error("모든 문장의 녹음을 완료한 뒤 이동해 주세요.");
           await Promise.all(
             admissions.map((admission) =>
               reportSaves.set("SESSION", admission.sessionId, saved),
@@ -480,13 +513,18 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
               await api.courses.complete(courseId);
           }
           invalidateLearningCaches();
+          if (!mounted.current || authEpoch.current !== getAuthSessionVersion())
+            throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
           await capture.cleanup();
+          if (!mounted.current || authEpoch.current !== getAuthSessionVersion())
+            throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
           removeUserClientCache(userId, resource);
           router.push(
-            safeInternalPath(
-              params.get("returnTo"),
-              courseId ? "/class" : "/home",
-            ),
+            nextHref ??
+              safeInternalPath(
+                params.get("returnTo"),
+                courseId ? "/class" : "/home",
+              ),
           );
         }}
       />

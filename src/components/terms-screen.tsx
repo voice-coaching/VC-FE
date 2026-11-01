@@ -123,7 +123,7 @@ export function TermsScreen({
       setError(
         reason instanceof Error
           ? reason.message
-          : "회원가입을 완료하지 못했어요. 다시 시도해 주세요.",
+          : "회원 가입을 완료하지 못했어요. 다시 시도해 주세요.",
       );
     } finally {
       setSubmitting(false);

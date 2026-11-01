@@ -94,7 +94,7 @@ export function ScriptTopicManager({
                 </p>
               </div>
               <button
-                aria-label={`${t.name} 주제 더보기`}
+                aria-label={`${t.name} 주제 더 보기`}
                 className="flex size-10 items-center justify-center text-[#b0b8c1]"
                 onClick={() => {
                   setSelected(t);

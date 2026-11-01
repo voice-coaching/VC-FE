@@ -45,7 +45,13 @@ export function MembershipCard({
       </div>
       <div className={styles.membershipValue}>
         <strong>
-          {account ? (paid ? "1개월" : test ? "테스트 이용등급" : "무료") : "—"}
+          {account
+            ? paid
+              ? "1개월"
+              : test
+                ? "테스트 이용 등급"
+                : "무료"
+            : "—"}
         </strong>
         {expires ? <span>{expires}까지</span> : null}
       </div>

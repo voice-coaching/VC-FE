@@ -146,6 +146,9 @@ export function RecordingPracticeSession({
   const resumedSessionId = localOnly ? null : searchParams.get("sessionId");
   const resumeType = searchParams.get("resumeType");
   const restoreSession = workflow?.restoreSession;
+  // Exam IDs own the current session link. A fresh exam URL has no sessionId,
+  // even after its first analysis, so resolve specialized workflows on every entry.
+  const needsSessionRestore = Boolean(resumedSessionId || restoreSession);
   const [courseDetail, setCourseDetail] = useState<CourseDetail | null>(null);
   const [courseFinished, setCourseFinished] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
@@ -158,11 +161,11 @@ export function RecordingPracticeSession({
       ? content
       : { ...content, scriptText: resumedScriptText };
   const [phase, setPhase] = useState<Phase>(
-    resumedSessionId ? "restoring" : capturedRecording ? "review" : "idle",
+    needsSessionRestore ? "restoring" : capturedRecording ? "review" : "idle",
   );
   const [resumeFailed, setResumeFailed] = useState(false);
   const [resumeRetry, setResumeRetry] = useState(0);
-  const resumePendingRef = useRef(Boolean(resumedSessionId));
+  const resumePendingRef = useRef(needsSessionRestore);
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
@@ -229,12 +232,19 @@ export function RecordingPracticeSession({
     localRecorder.sentenceIndex,
     localRecorder.boundaries,
   ]);
-  const discardGuard = useRecordingDiscardGuard(
-    phase === "recording" ||
+  const shouldConfirmExit =
+    !background &&
+    phase !== "result" &&
+    !showCompletion &&
+    (sentences.length > 1 ||
+      phase === "recording" ||
       phase === "review" ||
-      recorder.status === "requesting",
-    !background,
-  );
+      phase === "uploading" ||
+      phase === "analyzing" ||
+      recorder.status === "requesting" ||
+      recorder.blob != null ||
+      recordingAttempts.length > 0);
+  const discardGuard = useRecordingDiscardGuard(shouldConfirmExit, !background);
 
   const courseId = searchParams.get("courseId");
   const courseStepId = searchParams.get("courseStepId");
@@ -358,7 +368,7 @@ export function RecordingPracticeSession({
   );
 
   useEffect(() => {
-    if (!resumedSessionId) return;
+    if (!resumedSessionId && !restoreSession) return;
 
     let active = true;
     let resumeReadComplete = false;
@@ -370,7 +380,7 @@ export function RecordingPracticeSession({
       try {
         const restored = restoreSession
           ? await restoreSession(() => active)
-          : await loadPracticeResume(api, resumedSessionId, content.id);
+          : await loadPracticeResume(api, resumedSessionId!, content.id);
         if (!active) return;
         resumeReadComplete = true;
         resumePendingRef.current = false;
@@ -414,7 +424,7 @@ export function RecordingPracticeSession({
         setRequestError(
           reason instanceof Error
             ? reason.message
-            : "이어하던 학습을 불러오지 못했습니다.",
+            : "진행하던 학습을 불러오지 못했습니다.",
         );
         setPhase("error");
       }
@@ -1198,9 +1208,12 @@ export function RecordingPracticeSession({
 
   if (phase === "restoring")
     return (
-      <LoadingOverlay
-        label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
-      />
+      <>
+        {discardGuard.dialog}
+        <LoadingOverlay
+          label={workflow?.restoringLabel ?? "학습 상태를 확인하고 있어요"}
+        />
+      </>
     );
 
   if (phase === "error") {
@@ -1215,6 +1228,7 @@ export function RecordingPracticeSession({
       : quality || errorView.kind === "input" || errorView.kind === "recording";
     return (
       <div className="flex min-h-full flex-col px-5 pb-8">
+        {discardGuard.dialog}
         <div className="my-auto py-10 text-center">
           <span className="mx-auto flex size-20 items-center justify-center rounded-full bg-[#edf2ff] text-primary">
             <CircleAlert className="size-9" />
@@ -1401,30 +1415,22 @@ export function RecordingPracticeSession({
       )}
       {(phase === "idle" || phase === "recording") && (
         <>
-          <div
-            className={`flex shrink-0 items-center px-5 pt-3 pb-4 transition-opacity duration-300 motion-reduce:transition-none ${phase === "recording" ? "opacity-0" : "opacity-100"}`}
-          >
+          <div className="flex shrink-0 items-center px-5 pt-3 pb-4">
             <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-[12px] leading-4 font-medium text-[#1f55e0]">
               {contentTypeLabel}
             </span>
             <span className="ml-auto text-[13px] leading-[18px] text-[#8b95a1]">
-              {courseSentenceCount != null && courseExampleIndex != null ? (
+              {courseSentenceCount != null && courseExampleIndex != null && (
+                <span className="mr-2">
+                  예문 {courseExampleIndex + 1}/{courseSentenceCount}
+                </span>
+              )}
+              <strong className="font-bold text-[#2f6bff]">
+                {activeSentence + 1}
+              </strong>
+              /{sentences.length} 문장
+              {phase !== "recording" && (
                 <>
-                  <strong className="font-bold text-[#2f6bff]">
-                    {courseExampleIndex + 1}
-                  </strong>
-                  /{courseSentenceCount} 문장
-                </>
-              ) : phase === "recording" ? (
-                <>
-                  <strong className="font-bold text-[#2f6bff]">
-                    {activeSentence + 1}
-                  </strong>
-                  /{sentences.length} 문장
-                </>
-              ) : (
-                <>
-                  {sentences.length}문장
                   <span className="mx-2 inline-block h-2.5 w-px bg-[#dfe3e8]" />
                   약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
                 </>
@@ -1434,6 +1440,7 @@ export function RecordingPracticeSession({
           <SentenceReader
             variant={phase === "recording" ? "recording" : "reader"}
             sentences={sentences}
+            pageIndex={activeSentence}
             activeIndex={phase === "recording" ? activeSentence : undefined}
             className={`mx-5 max-h-[clamp(80px,calc(100dvh-380px),400px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]`}
           />
@@ -1449,7 +1456,9 @@ export function RecordingPracticeSession({
               onStart={() => void startRecording()}
               stream={recorder.getStream()}
               contentId={content.id}
-              referenceAvailable={content.referenceAudioAvailable}
+              referenceAvailable={
+                content.referenceAudioAvailable && sentences.length === 1
+              }
               scriptText={sentences[activeSentence] ?? content.scriptText}
               elapsed={formatElapsed(recorder.elapsedMs)}
               busy={recorder.status !== "recording" || recorder.splitting}
@@ -1466,7 +1475,7 @@ export function RecordingPracticeSession({
                   녹음을 확인해 주세요
                 </h2>
                 <p className="mt-2 text-[14px] leading-5 font-medium text-[#6b7584]">
-                  문장마다 들어보고 분석을 요청해 주세요
+                  문장마다 들어 보고 분석을 요청해 주세요
                 </p>
                 <div className="mt-5 rounded-[20px] bg-white px-2 pt-2 pb-1.5 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
                   {sentences.map((sentence, index) => (

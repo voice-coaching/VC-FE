@@ -33,7 +33,7 @@ export function ScriptTextInput({
         }}
         aria-invalid={invalid}
         aria-describedby="custom-script-count custom-script-help"
-        placeholder="여기에 원고를 붙여넣어 주세요"
+        placeholder="여기에 원고를 붙여 넣어 주세요"
         spellCheck={false}
       />
     </div>

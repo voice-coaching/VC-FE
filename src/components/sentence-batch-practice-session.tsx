@@ -36,12 +36,14 @@ export function SentenceBatchPracticeSession({
   // Uploads and inference never disable the microphone or drive its sentence cursor.
   const locked = batch.loading || recorder.status === "requesting";
   const active = recording ? recorder.index : Math.max(0, batch.nextIndex);
-  const guard = useRecordingDiscardGuard(
-    recording ||
+  const shouldConfirmExit =
+    !finished &&
+    (sentences.length > 1 ||
+      recorder.status === "requesting" ||
+      recording ||
       batch.savingRecordings ||
-      (!batch.localComplete && batch.hasAttempt),
-    true,
-  );
+      batch.hasAttempt);
+  const guard = useRecordingDiscardGuard(shouldConfirmExit, true);
   const message = recorder.error || (!recording ? batch.error : null);
   useEffect(() => {
     onTitleChange?.(
@@ -67,6 +69,7 @@ export function SentenceBatchPracticeSession({
   if (finished && batch.view?.results) {
     return (
       <div className="min-h-full bg-[#f2f4f6] pb-6">
+        {guard.dialog}
         <header className="px-5 py-5">
           <h2 className="text-xl font-bold">이번 연습 결과</h2>
           <p className="mt-2 text-sm text-[#6b7684]">
@@ -168,12 +171,15 @@ export function SentenceBatchPracticeSession({
             : "다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요."}
         </p>
       </header>
-      <SentenceReader
-        sentences={sentences}
-        activeIndex={waiting ? undefined : active}
-        variant={recording ? "recording" : "reader"}
-        className="mx-5 max-h-[45dvh]"
-      />
+      {!waiting && (
+        <SentenceReader
+          sentences={sentences}
+          pageIndex={active}
+          activeIndex={recording ? active : undefined}
+          variant={recording ? "recording" : "reader"}
+          className="mx-5 max-h-[45dvh]"
+        />
+      )}
       <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
         {waiting
           ? `녹음을 모두 마쳤어요. ${sentences.length}개 문장의 피드백을 모으고 있어요.`

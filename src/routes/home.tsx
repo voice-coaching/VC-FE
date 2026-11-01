@@ -104,7 +104,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
       <>
         발표 원고를
         <br />
-        붙여넣고 연습해요
+        붙여 넣고 연습해요
       </>
     ),
     icon: "/figma/home-before/practice-custom.svg",
@@ -650,14 +650,14 @@ export default function Home() {
                   <span className="min-w-0 flex-1 overflow-hidden">
                     <span className="flex items-center gap-1.5 whitespace-nowrap">
                       <strong className="text-[15px] leading-[22px]">
-                        입모양 보며 연습
+                        입 모양을 보며 연습
                       </strong>
                       <span className="shrink-0 rounded-full bg-white/85 px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684] max-[360px]:hidden">
                         카메라 사용
                       </span>
                     </span>
                     <span className="mt-[3px] block truncate text-[13px] leading-[18px] text-[#4e5968]">
-                      영상으로 입모양과 소리를 함께 교정해요
+                      영상으로 입 모양과 소리를 함께 교정해요
                     </span>
                   </span>
                   <Image
