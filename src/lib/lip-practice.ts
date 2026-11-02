@@ -1,3 +1,5 @@
+import { acceptsMediaMimeType } from "./media-mime";
+
 export const LIP_PRACTICE_PROMPTS = [
   "오늘 하루도 차분하게 시작해 봐요.",
   "정확한 발음은 천천히 말하는 것부터 시작해요.",
@@ -44,8 +46,7 @@ export function prepareVideoForAnalysis(
   acceptedMimeTypes: string[],
 ) {
   const sourceMimeType = normalizeVideoMimeType(source.type);
-  const accepted = acceptedMimeTypes.map(normalizeVideoMimeType);
-  if (!accepted.includes(sourceMimeType)) {
+  if (!acceptsMediaMimeType(sourceMimeType, acceptedMimeTypes)) {
     throw new Error(
       `이 기기의 영상 형식(${sourceMimeType})을 서버가 지원하지 않습니다.`,
     );

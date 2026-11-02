@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { acceptsMediaMimeType } from "@/lib/media-mime";
 import {
   createPcmRecording,
   prepareRecordingAudio,
@@ -94,12 +95,9 @@ export async function prepareAudioForAnalysis(
   source: Blob,
   acceptedMimeTypes: string[],
 ) {
-  const accepted = acceptedMimeTypes.map((value) =>
-    normalizeAudioMimeType(value),
-  );
   const sourceMimeType = normalizeAudioMimeType(source.type);
 
-  if (accepted.includes(sourceMimeType)) {
+  if (acceptsMediaMimeType(sourceMimeType, acceptedMimeTypes)) {
     const extensions: Record<string, string> = {
       "audio/mpeg": "mp3",
       "audio/wav": "wav",
@@ -111,7 +109,7 @@ export async function prepareAudioForAnalysis(
     return { blob: source, mimeType: sourceMimeType, extension };
   }
 
-  if (accepted.includes("audio/wav")) {
+  if (acceptsMediaMimeType("audio/wav", acceptedMimeTypes)) {
     const converted = await convertToMonoWav(source);
     return {
       blob: converted.blob,
