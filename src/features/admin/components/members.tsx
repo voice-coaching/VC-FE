@@ -38,7 +38,7 @@ export function MembersPage() {
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<Query>({});
   const [matches, setMatches] = useState<IdentifierMatch[] | null>(null);
-  const resolve = useAdminCommand();
+  const resolve = useAdminCommand([]);
   const members = useAdminQuery<AdminPage<Member>>("/users", {
     ...filters,
     page,
@@ -48,8 +48,15 @@ export function MembersPage() {
     <>
       <Heading
         title="회원 관리"
-        description="회원 상태와 이용등급, 관련 학습 기록을 확인하세요."
-      />
+        description="탈퇴하지 않은 회원의 상태와 이용등급, 관련 학습 기록을 확인하세요."
+      >
+        <Button
+          disabled={members.isFetching}
+          onClick={() => void members.refetch()}
+        >
+          새로고침
+        </Button>
+      </Heading>
       <Panel
         title="전체 회원"
         description="실제 관리자 권한과 시험 이용권은 서로 다른 값입니다."
@@ -75,7 +82,7 @@ export function MembersPage() {
           />
           <Select name="status" label="회원 상태">
             <option value="">전체 상태</option>
-            {["ACTIVE", "SUSPENDED", "WITHDRAWN"].map((status) => (
+            {["ACTIVE", "SUSPENDED"].map((status) => (
               <option key={status} value={status}>
                 {label(status)}
               </option>
@@ -112,29 +119,31 @@ export function MembersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {members.data.items.map((member) => (
-                    <tr key={member.id}>
-                      <td>
-                        <Link href={`/admin/users/${member.id}`}>
-                          {member.nickname}
-                        </Link>
-                        <small>
-                          #{member.id} · {member.maskedEmail ?? "이메일 없음"}
-                        </small>
-                      </td>
-                      <td>
-                        <Badge value={member.status} />
-                      </td>
-                      <td>{label(member.role)}</td>
-                      <td>
-                        <Badge value={member.membershipType} />
-                      </td>
-                      <td>{formatDate(member.createdAt)}</td>
-                      <td>
-                        <Link href={`/admin/users/${member.id}`}>상세 →</Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {members.data.items
+                    .filter((member) => member.status !== "WITHDRAWN")
+                    .map((member) => (
+                      <tr key={member.id}>
+                        <td>
+                          <Link href={`/admin/users/${member.id}`}>
+                            {member.nickname}
+                          </Link>
+                          <small>
+                            #{member.id} · {member.maskedEmail ?? "이메일 없음"}
+                          </small>
+                        </td>
+                        <td>
+                          <Badge value={member.status} />
+                        </td>
+                        <td>{label(member.role)}</td>
+                        <td>
+                          <Badge value={member.membershipType} />
+                        </td>
+                        <td>{formatDate(member.createdAt)}</td>
+                        <td>
+                          <Link href={`/admin/users/${member.id}`}>상세 →</Link>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -208,9 +217,12 @@ export function MemberDetail({ userId }: { userId: number }) {
   const records = useAdminQuery<AdminPage<MemberRecord>>(
     `/users/${userId}/records`,
     { resource, page, size: 20 },
-    !!overview.data,
+    Number.isSafeInteger(userId) && userId > 0,
   );
-  const user = overview.data?.user;
+  const user =
+    overview.data?.user.status === "WITHDRAWN"
+      ? undefined
+      : overview.data?.user;
   const usage = overview.data?.coachingUsage;
   const account = overview.data?.account;
   return (
@@ -221,7 +233,9 @@ export function MemberDetail({ userId }: { userId: number }) {
       >
         <Button
           disabled={overview.isFetching}
-          onClick={() => void overview.refetch()}
+          onClick={() =>
+            void Promise.all([overview.refetch(), records.refetch()])
+          }
         >
           최신 상태 조회
         </Button>

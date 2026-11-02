@@ -18,7 +18,7 @@
     "native:doctor": "cap doctor",
     "native:android": "cap open android",
     "native:ios": "cap sync ios && cap open ios",
-    "verify:admin": "node --import tsx --test src/features/admin/services.test.ts",
+    "verify:admin": "node --import tsx --test src/features/admin/services.test.ts src/features/admin/cache.test.ts",
     "verify:admin:browser": "node scripts/verify-admin-browser.mjs"
   },
   "dependencies": {

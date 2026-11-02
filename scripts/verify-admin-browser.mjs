@@ -207,6 +207,11 @@ let allow = true,
 const deletedMembers = new Set();
 let disposableContentId;
 const writes = [];
+const reads = [];
+let includeWithdrawn = false,
+  holdOverview = false,
+  releaseOverview,
+  overviewBlocked;
 const errors = [];
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1050 },
@@ -256,6 +261,7 @@ await context.route("**/api/backend/**", async (route) => {
     url = new URL(req.url());
   const path = url.pathname.replace("/api/backend/api/admin", "");
   const method = req.method();
+  if (method === "GET") reads.push({ path, query: url.search });
   const body = method === "GET" ? null : req.postDataJSON();
   const reply = (data) =>
     route.fulfill({
@@ -331,11 +337,28 @@ await context.route("**/api/backend/**", async (route) => {
   if (path === "/users")
     return reply(
       paged(
-        users.filter((user) => !deletedMembers.has(user.id)),
+        [
+          ...users.filter((user) => !deletedMembers.has(user.id)),
+          ...(includeWithdrawn
+            ? [
+                {
+                  ...users[0],
+                  id: 32,
+                  nickname: "탈퇴 확인 회원",
+                  status: "WITHDRAWN",
+                },
+              ]
+            : []),
+        ],
         url.searchParams,
       ),
     );
   if (/^\/users\/\d+\/overview$/.test(path)) {
+    if (holdOverview)
+      await new Promise((resolve) => {
+        releaseOverview = resolve;
+        overviewBlocked?.();
+      });
     const member = users.find((user) => user.id === Number(path.split("/")[2]));
     return reply({
       user: member,
@@ -393,7 +416,7 @@ await context.route("**/api/backend/**", async (route) => {
           data: null,
         }),
       });
-    assert.equal(body.confirmationUserId, member.id);
+    assert.equal(body.confirmationUserId, undefined);
     assert.equal(body.expectedUpdatedAt, now);
     assert.ok(body.reason.trim());
     const alreadyDeleted = deletedMembers.has(member.id);
@@ -682,6 +705,95 @@ try {
     await page.getByRole("button", { name: "연결된 회원 조회" }).click();
     await page.getByRole("link", { name: "회원 #30 보기" }).waitFor();
   });
+  await check(
+    "retired members remain hidden and the withdrawn filter is absent",
+    async () => {
+      await nav("회원 관리").click();
+      await page
+        .getByRole("link", { name: "연습 회원", exact: true })
+        .waitFor();
+      includeWithdrawn = true;
+      const refreshed = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname.endsWith("/api/admin/users") &&
+          r.status() === 200,
+      );
+      await page.getByRole("button", { name: "새로고침", exact: true }).click();
+      await refreshed;
+      assert.equal(
+        await page
+          .getByRole("link", { name: "탈퇴 확인 회원", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByLabel("회원 상태", { exact: true })
+          .locator('option[value="WITHDRAWN"]')
+          .count(),
+        0,
+      );
+      includeWithdrawn = false;
+    },
+  );
+  await check(
+    "readonly list navigation reuses data but still rechecks administrator access",
+    async () => {
+      await nav("학습 콘텐츠").click();
+      await page
+        .getByRole("link", { name: contents[0].title, exact: true })
+        .first()
+        .waitFor();
+      const before = reads.filter((r) => r.path === "/contents").length;
+      const beforeAccess = reads.filter((r) => r.path === "/me").length;
+      await nav("회원 관리").click();
+      await heading("회원 관리");
+      await page
+        .getByLabel("회원 번호 또는 평가 조회 번호", { exact: true })
+        .fill("532fe9f8-14e4-47ce-a011-7c9d5f6a2acd");
+      await page
+        .getByRole("button", { name: "연결된 회원 조회", exact: true })
+        .click();
+      await page
+        .getByRole("link", { name: "회원 #30 보기", exact: true })
+        .waitFor();
+      await nav("학습 콘텐츠").click();
+      await page
+        .getByRole("link", { name: contents[0].title, exact: true })
+        .first()
+        .waitFor();
+      assert.equal(reads.filter((r) => r.path === "/contents").length, before);
+      assert.ok(
+        reads.filter((r) => r.path === "/me").length >= beforeAccess + 2,
+      );
+    },
+  );
+  await check(
+    "member records do not wait for the twenty-resource overview",
+    async () => {
+      holdOverview = true;
+      const blocked = new Promise((resolve) => {
+        overviewBlocked = resolve;
+      });
+      const recorded = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname.endsWith("/users/30/records") &&
+          r.status() === 200,
+        { timeout: 15_000 },
+      );
+      try {
+        await page.goto(base + "/admin/users/30");
+        await Promise.all([blocked, recorded]);
+      } finally {
+        holdOverview = false;
+        releaseOverview?.();
+        overviewBlocked = undefined;
+      }
+      await heading("연습 회원님의 기록");
+      await nav("학습 콘텐츠").click();
+      await heading("학습 콘텐츠");
+    },
+  );
   await check("content draft creation and explicit publication", async () => {
     await nav("학습 콘텐츠").click();
     await page.getByRole("link", { name: "새 콘텐츠", exact: true }).click();
@@ -994,7 +1106,7 @@ try {
     },
   );
   await check(
-    "member deletion requires the exact number and preserves the screen on a conflict",
+    "member deletion requires only a reason and preserves the screen on a conflict",
     async () => {
       await page.goto(base + "/admin/users/30");
       await heading("연습 회원님의 기록");
@@ -1005,15 +1117,16 @@ try {
         .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("31");
-      await dialog
-        .getByLabel("작업 사유", { exact: true })
-        .fill("회원 요청 확인");
+      assert.equal(
+        await dialog.getByLabel("확인할 회원 번호", { exact: true }).count(),
+        0,
+      );
+      await dialog.getByLabel("작업 사유", { exact: true }).fill(" ");
       await dialog
         .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       await dialog
-        .getByText("확인할 회원 번호가 일치하지 않습니다.", { exact: true })
+        .getByText("작업 사유 입력이 필요합니다.", { exact: true })
         .waitFor();
       assert.equal(
         writes.filter((w) => w.method === "DELETE" && w.path === "/users/30")
@@ -1021,7 +1134,9 @@ try {
         before,
       );
       rejectMemberDeletion = true;
-      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("회원 요청 확인");
       await dialog
         .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
@@ -1048,7 +1163,6 @@ try {
         .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       const dialog = page.getByRole("dialog");
-      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
       await dialog
         .getByLabel("작업 사유", { exact: true })
         .fill("탈퇴 요청 확인");

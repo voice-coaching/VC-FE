@@ -155,7 +155,7 @@ export function NoticeDetail({ noticeId }: { noticeId?: number }) {
 }
 function NoticeEditor({ current }: { current?: Notice }) {
   const router = useRouter();
-  const command = useAdminCommand();
+  const command = useAdminCommand(["/notices", "/audit-logs"]);
   const [sections, setSections] = useState(
     current?.sections.map((section) => ({
       title: section.title,
@@ -379,7 +379,7 @@ export function InquiriesPage() {
 }
 export function InquiryDetail({ inquiryId }: { inquiryId: number }) {
   const inquiry = useAdminQuery<Inquiry>(`/inquiries/${inquiryId}`);
-  const command = useAdminCommand();
+  const command = useAdminCommand(["/inquiries", "/audit-logs"]);
   const current = inquiry.data;
   return (
     <>
@@ -458,6 +458,7 @@ export function InquiryDetail({ inquiryId }: { inquiryId: number }) {
             <div className="mt-5">
               {current.status === "RECEIVED" && (
                 <ConfirmAction
+                  invalidationPaths={["/inquiries", "/audit-logs"]}
                   title="문의를 처리 중으로 변경할까요?"
                   description="문의의 담당 처리를 시작합니다."
                   buttonLabel="처리 시작"
@@ -473,6 +474,7 @@ export function InquiryDetail({ inquiryId }: { inquiryId: number }) {
               )}{" "}
               {current.status === "ANSWERED" && (
                 <ConfirmAction
+                  invalidationPaths={["/inquiries", "/audit-logs"]}
                   title="이 문의를 종료할까요?"
                   description="종료한 문의는 다시 열거나 답변을 수정할 수 없습니다."
                   buttonLabel="문의 종료"

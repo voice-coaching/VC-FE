@@ -318,7 +318,7 @@ test("administrator record labels hide internal fields and format status, money,
   assert.equal(displayRecordValue("RECORDINGS", "durationMs", 2500), "2.5초");
 });
 
-test("member deletion checks the typed number and preserves exact account timestamp", async () => {
+test("member deletion needs only a reason and preserves the exact account timestamp", async () => {
   const timestamp = "2026-11-03T09:00:00.123456+09:00";
   globalThis.fetch = async (url, options) => {
     calls.push({ url: String(url), options: options ?? {} });
@@ -328,13 +328,12 @@ test("member deletion checks the typed number and preserves exact account timest
       alreadyDeleted: false,
     });
   };
-  await assert.rejects(deleteMember(30, timestamp, "31", "삭제 요청 확인"));
+  await assert.rejects(deleteMember(30, timestamp, " "));
   assert.equal(calls.length, 0);
-  await deleteMember(30, timestamp, "30", "삭제 요청 확인");
+  await deleteMember(30, timestamp, "삭제 요청 확인");
   assert.equal(calls[0].options.method, "DELETE");
   assert.ok(calls[0].url.endsWith("/users/30"));
   assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
-    confirmationUserId: 30,
     expectedUpdatedAt: timestamp,
     reason: "삭제 요청 확인",
   });
@@ -352,6 +351,6 @@ test("stale member deletion does not retry or report success", async () => {
       { status: 409 },
     );
   };
-  await assert.rejects(deleteMember(30, "2026-11-03T09:00:00Z", "30", "삭제"));
+  await assert.rejects(deleteMember(30, "2026-11-03T09:00:00Z", "삭제"));
   assert.equal(calls.length, 1);
 });

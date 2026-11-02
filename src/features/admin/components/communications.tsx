@@ -138,7 +138,7 @@ export function CampaignDetail({ campaignId }: { campaignId?: number }) {
 }
 function CampaignEditor() {
   const router = useRouter();
-  const command = useAdminCommand();
+  const command = useAdminCommand(["/notification-campaigns", "/audit-logs"]);
   const [audience, setAudience] = useState("ALL_ACTIVE");
   return (
     <div className={styles.grid}>
@@ -263,6 +263,7 @@ function CampaignReview({ campaign }: { campaign: Campaign }) {
               화면에서 회수하거나 편집할 수 없습니다.
             </Message>
             <ConfirmAction
+              invalidationPaths={["/notification-campaigns", "/audit-logs"]}
               title="이 알림을 발송할까요?"
               description={`${label(campaign.audience)}에게 앱 내 알림을 보냅니다. 현재 예상 ${campaign.audienceCount}명이며 발송 시점에 최종 확정됩니다.`}
               buttonLabel="검토 완료·발송하기"
@@ -384,7 +385,7 @@ export function PopupDetail({ popupId }: { popupId?: number }) {
 }
 function PopupEditor({ current }: { current?: Popup }) {
   const router = useRouter();
-  const command = useAdminCommand();
+  const command = useAdminCommand(["/popups", "/audit-logs"]);
   const [title, setTitle] = useState(current?.title ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   return (
