@@ -197,18 +197,19 @@ const actionsSchema = z
     canRetry: z.boolean(),
     canRerecord: z.boolean(),
     canComplete: z.boolean(),
-    canRegenerate: z.literal(false),
+    canRegenerate: z.boolean(),
     unavailableReasonCodes: z
       .object({
         retry: z.array(code),
         rerecord: z.array(code),
         complete: z.array(code),
-        regenerate: z.array(code).min(1),
+        regenerate: z.array(code),
       })
       .strict(),
   })
   .strict();
 
+// Ignore additive envelope fields such as rawResult; never expose them to UI.
 const audioProjectionSchema = z
   .object({
     schemaVersion: z.literal(HANDOFF_VIEW_SCHEMA),
@@ -225,10 +226,9 @@ const audioProjectionSchema = z
       .nullable(),
     actions: actionsSchema,
     persistenceStatus: z
-      .enum(["NONE", "SAVING", "SAVED", "RETRYING"])
+      .enum(["NONE", "SAVING", "SAVED", "RETRYING", "AVAILABLE"])
       .optional(),
-  })
-  .strict();
+  });
 
 const projectionSchema = z.union([
   audioProjectionSchema,
@@ -239,8 +239,7 @@ const projectionSchema = z.union([
       canonicalAnalysis: canonicalSchema
         .extend({ visual: lipVisualSchema })
         .nullable(),
-    })
-    .strict(),
+    }),
 ]);
 
 const expectationSchema = z
@@ -264,6 +263,49 @@ export type CanonicalViewExpectation = Pick<
   "analysisId"
 > &
   Partial<Omit<CanonicalViewIdentity, "analysisId">>;
+
+const unassignedProjectionSchema = z.object({
+  schemaVersion: z.enum([HANDOFF_VIEW_SCHEMA, AUDIOVISUAL_VIEW_SCHEMA]),
+  analysisProfile: z.enum([HANDOFF_PROFILE, AUDIOVISUAL_PROFILE]),
+  analysisId: databaseId,
+  recordingId: databaseId,
+  jobStatus: z.enum(["PENDING", "PROCESSING"]),
+  requestId: z.string().uuid().nullable(),
+  executionId: z.string().uuid().nullable(),
+  canonicalAnalysis: z.null(),
+});
+
+export function canonicalAttemptUnassigned(
+  input: unknown,
+  expected: CanonicalViewExpectation,
+): boolean {
+  if (
+    !expectationSchema.safeParse(expected).success ||
+    expected.requestId !== undefined ||
+    expected.executionId !== undefined
+  ) return false;
+  const parsed = unassignedProjectionSchema.safeParse(input);
+  if (!parsed.success) return false;
+  const view = parsed.data;
+  return (
+    view.analysisId === expected.analysisId &&
+    (expected.recordingId === undefined || view.recordingId === expected.recordingId) &&
+    ((view.schemaVersion === HANDOFF_VIEW_SCHEMA && view.analysisProfile === HANDOFF_PROFILE) ||
+      (view.schemaVersion === AUDIOVISUAL_VIEW_SCHEMA && view.analysisProfile === AUDIOVISUAL_PROFILE)) &&
+    (view.requestId === null || view.executionId === null)
+  );
+}
+
+/** A permission hint alone cannot turn pending or failed analysis into completion. */
+export function canonicalViewCompletable(view: CanonicalAnalysisView): boolean {
+  const canonical = view.canonicalAnalysis;
+  return (
+    view.actions.canComplete && view.jobStatus === "COMPLETED" &&
+    canonical?.decision.status === "ACCEPT" &&
+    canonical.representation === "INLINE" && canonical.feedbackDeliveryAllowed &&
+    view.persistenceStatus !== "SAVING" && view.persistenceStatus !== "RETRYING"
+  );
+}
 
 export class CanonicalProjectionError extends Error {
   readonly code = "INVALID_CANONICAL_PROJECTION";
@@ -308,14 +350,11 @@ export function readCanonicalAnalysisView(
       expected[field] === undefined || expected[field] === view[field],
     );
   }
-  const { canonicalAnalysis: canonical, actions, jobStatus } = view;
+  const { canonicalAnalysis: canonical, jobStatus } = view;
   if (
     view.persistenceStatus === "SAVING" ||
     view.persistenceStatus === "RETRYING"
   ) {
-    requireProjection(
-      !actions.canComplete && !actions.canRetry && !actions.canRerecord,
-    );
     requireProjection(jobStatus === "COMPLETED" || jobStatus === "FAILED");
   }
   const pending = jobStatus === "PENDING" || jobStatus === "PROCESSING";
@@ -323,27 +362,9 @@ export function readCanonicalAnalysisView(
     !pending || (canonical === null && view.serviceFailure === null),
   );
   requireProjection(jobStatus !== "COMPLETED" || canonical !== null);
-  requireProjection(
-    jobStatus === "FAILED"
-      ? view.serviceFailure !== null
-      : view.serviceFailure === null,
-  );
-  requireProjection(!actions.canRetry || jobStatus === "FAILED");
-  requireProjection(
-    !actions.canComplete ||
-      (jobStatus === "COMPLETED" &&
-        canonical?.decision.status === "ACCEPT" &&
-        canonical.representation === "INLINE" &&
-        canonical.feedbackDeliveryAllowed),
-  );
-  for (const [allowed, reasons] of [
-    [actions.canRetry, actions.unavailableReasonCodes.retry],
-    [actions.canRerecord, actions.unavailableReasonCodes.rerecord],
-    [actions.canComplete, actions.unavailableReasonCodes.complete],
-    [actions.canRegenerate, actions.unavailableReasonCodes.regenerate],
-  ] as const) {
-    requireProjection(allowed ? reasons.length === 0 : reasons.length > 0);
-  }
+  // Permissions and reason lists are server hints, not result-state proofs.
+  // Completion checks belong at the command boundary, not the read boundary.
+  requireProjection(jobStatus === "FAILED" || view.serviceFailure === null);
   if (!canonical) return view;
   const { decision, selection, coaching } = canonical;
   if (canonical.score.validity === "RUBRIC_COMPUTED") {

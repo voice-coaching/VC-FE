@@ -1,7 +1,10 @@
 import { api } from "./api";
 import { ApiError, getAuthSessionVersion } from "./api/client";
 import { waitForCanonicalResult } from "./canonical-result-wait";
-import { canonicalPresentation } from "./canonical-presentation";
+import {
+  canonicalPresentation,
+  CanonicalResultUnavailable,
+} from "./canonical-presentation";
 import {
   awaitCanonicalPersistence,
   completeCanonicalPractice,
@@ -36,6 +39,8 @@ export async function observeSentenceAnalysis(
   if (!active()) throw new ApiError("요청을 취소했습니다.", 499, "REQUEST_ABORTED");
   // Feedback visibility and persisted practice completion are separate contracts.
   if (result.canonical?.canonicalAnalysis) onResult?.(result);
+  if (result.canonical?.jobStatus === "FAILED")
+    throw new CanonicalResultUnavailable(result.canonical);
   if (result.canonical && persistencePending(result.canonical)) {
     const committed = await awaitCanonicalPersistence(
       result.canonical,
