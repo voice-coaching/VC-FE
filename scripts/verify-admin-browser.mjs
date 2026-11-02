@@ -194,7 +194,9 @@ const resources = [
 let allow = true,
   dispatches = 0,
   puts = 0,
-  rejectEdit = false;
+  rejectEdit = false,
+  rejectDelete = false;
+let disposableContentId;
 const writes = [];
 const errors = [];
 const context = await browser.newContext({
@@ -430,9 +432,37 @@ await context.route("**/api/backend/**", async (route) => {
     return reply(item);
   }
   if (/^\/contents\/\d+$/.test(path)) {
-    const item = contents.find((c) => c.id === Number(path.split("/")[2]));
-    if (method === "PATCH")
+    const index = contents.findIndex(
+      (c) => c.id === Number(path.split("/")[2]),
+    );
+    const item = contents[index];
+    if (!item)
+      return route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ result: false, message: "missing", data: null }),
+      });
+    if (method === "DELETE") {
+      if (rejectDelete)
+        return route.fulfill({
+          status: 409,
+          contentType: "application/json",
+          body: JSON.stringify({
+            result: false,
+            message: "changed",
+            code: "ADMIN_EDIT_CONFLICT",
+            data: null,
+          }),
+        });
+      assert.equal(body.version, item.version);
+      assert.ok(body.reason.trim());
+      contents.splice(index, 1);
+      return reply({ id: item.id, version: item.version + 1, deletedAt: now });
+    }
+    if (method === "PATCH") {
+      assert.equal(body.version, item.version);
       Object.assign(item, body.content, { version: item.version + 1 });
+    }
     return reply(item);
   }
   if (path === "/notices") {
@@ -593,10 +623,45 @@ try {
       .getByLabel("작업 사유", { exact: true })
       .fill("문장 검수 완료");
     await dialog.getByRole("button", { name: "공개하기", exact: true }).click();
-    await page
-      .getByText("공개 이력이 있는 원문은 보호됩니다.", { exact: false })
-      .waitFor();
+    await page.getByRole("button", { name: "숨기기", exact: true }).waitFor();
+    await heading("콘텐츠 편집");
+    disposableContentId = Number(
+      new URL(page.url()).pathname.split("/").at(-1),
+    );
   });
+  await check(
+    "published and hidden content remains editable in place",
+    async () => {
+      await page
+        .getByLabel("콘텐츠 제목", { exact: true })
+        .fill("공개 후 수정한 문장");
+      await page.getByLabel("작업 사유", { exact: true }).fill("공개 후 교정");
+      await page
+        .getByRole("button", { name: "변경사항 저장", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "공개 후 수정한 문장", exact: true })
+        .waitFor();
+      await page.getByRole("button", { name: "숨기기", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("작업 사유", { exact: true }).fill("숨김 검수");
+      await dialog.getByRole("button", { name: "숨기기", exact: true }).click();
+      await page
+        .getByRole("button", { name: "공개하기", exact: true })
+        .waitFor();
+      await page
+        .getByLabel("콘텐츠 제목", { exact: true })
+        .fill("숨김 후 수정한 문장");
+      await page.getByLabel("작업 사유", { exact: true }).fill("숨김 교정");
+      await page
+        .getByRole("button", { name: "변경사항 저장", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "숨김 후 수정한 문장", exact: true })
+        .waitFor();
+      assert.ok(page.url().endsWith(`/contents/${disposableContentId}`));
+    },
+  );
   await check(
     "editing conflict keeps the unsaved form and existing category",
     async () => {
@@ -621,7 +686,7 @@ try {
         .fill("동시 수정 검증");
       rejectEdit = true;
       await page
-        .getByRole("button", { name: "초안 저장", exact: true })
+        .getByRole("button", { name: "변경사항 저장", exact: true })
         .click();
       await page
         .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
@@ -650,6 +715,7 @@ try {
         .getByLabel("화자 표시명", { exact: true })
         .fill("테스트 아나운서");
       await page
+        .getByRole("form", { name: "기준 음성 등록" })
         .getByLabel("작업 사유", { exact: true })
         .fill("기준 음성 검수");
       await page
@@ -771,6 +837,80 @@ try {
         .click();
       await page.getByLabel("답변 내용", { exact: true }).waitFor();
       assert.equal(inquiries[0].status, "CLOSED");
+    },
+  );
+  await check(
+    "delete requires confirmation and a conflict preserves the unsaved editor",
+    async () => {
+      await page.goto(base + `/admin/contents/${disposableContentId}`);
+      await heading("콘텐츠 편집");
+      await page
+        .getByLabel("콘텐츠 제목", { exact: true })
+        .fill("아직 저장하지 않은 제목");
+      const before = writes.filter((w) => w.method === "DELETE").length;
+      await page.getByRole("button", { name: "삭제하기", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("중복 문장 정리");
+      assert.equal(writes.filter((w) => w.method === "DELETE").length, before);
+      rejectDelete = true;
+      await dialog
+        .getByRole("button", { name: "삭제하기", exact: true })
+        .click();
+      await dialog
+        .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
+          exact: false,
+        })
+        .waitFor();
+      assert.equal(
+        await page.getByLabel("콘텐츠 제목", { exact: true }).inputValue(),
+        "아직 저장하지 않은 제목",
+      );
+      assert.ok(page.url().endsWith(`/contents/${disposableContentId}`));
+      assert.equal(
+        writes.filter((w) => w.method === "DELETE").length,
+        before + 1,
+      );
+      await dialog
+        .getByRole("button", { name: "돌아가기", exact: true })
+        .click();
+      rejectDelete = false;
+    },
+  );
+  await check(
+    "confirmed deletion returns to a refreshed content list",
+    async () => {
+      await page.getByRole("button", { name: "삭제하기", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      assert.equal(
+        await dialog
+          .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
+            exact: false,
+          })
+          .count(),
+        0,
+      );
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("최종 삭제 확인");
+      await page.screenshot({
+        path: path.join(output, "admin-content-delete.png"),
+        fullPage: true,
+        animations: "disabled",
+      });
+      await dialog
+        .getByRole("button", { name: "삭제하기", exact: true })
+        .click();
+      await page.waitForURL(base + "/admin/contents");
+      await heading("학습 콘텐츠");
+      assert.equal(
+        await page.getByText("숨김 후 수정한 문장", { exact: true }).count(),
+        0,
+      );
+      const last = writes.filter((w) => w.method === "DELETE").at(-1);
+      assert.equal(last.body.reason, "최종 삭제 확인");
+      assert.ok(!contents.some((c) => c.id === disposableContentId));
     },
   );
   await check("mobile navigation and horizontal overflow", async () => {

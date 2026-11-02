@@ -141,6 +141,7 @@ export function AudioPanel({ content }: { content: Content }) {
           공개와 별도입니다.
         </Message>
         <form
+          aria-label="기준 음성 등록"
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();
