@@ -23,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { adminErrorMessage } from "../api";
+import { displayLabel as label } from "../presentation";
 import { useAdminCommand } from "../hooks";
 import type { AdminPage } from "../types";
 import styles from "../admin.module.css";
@@ -37,52 +38,7 @@ export const formatDate = (value: string | null | undefined) =>
         minute: "2-digit",
       })
     : "—";
-const labels: Record<string, string> = {
-  ACTIVE: "활성",
-  SUSPENDED: "이용 제한",
-  WITHDRAWN: "탈퇴",
-  USER: "일반 회원",
-  ADMIN: "관리자",
-  free: "무료",
-  paid: "유료",
-  admin: "테스트 이용등급",
-  DRAFT: "초안",
-  PUBLISHED: "공개",
-  HIDDEN: "숨김",
-  RECEIVED: "접수",
-  IN_PROGRESS: "처리 중",
-  ANSWERED: "답변 완료",
-  CLOSED: "종료",
-  SENT: "발송 완료",
-  GENERAL: "일반 안내",
-  PLAN: "요금제 안내",
-  ALL_ACTIVE: "전체 활성 회원",
-  SELECTED_USERS: "선택 회원",
-  PRONUNCIATION: "발음",
-  INTONATION: "억양",
-  BOTH: "발음·억양",
-  BEGINNER: "초급",
-  INTERMEDIATE: "중급",
-  ADVANCED: "고급",
-  SENTENCE: "문장",
-  NEWS: "뉴스",
-  ANNOUNCER: "아나운서",
-  CLASS_PRACTICE: "클래스 문장",
-  TRAINING_SESSIONS: "학습 세션",
-  RECORDINGS: "녹음",
-  ANALYSES: "AI 분석",
-  PAYMENTS: "테스트 결제",
-  CANCELLATIONS: "취소·환불",
-  INQUIRIES: "문의",
-  NOTIFICATIONS: "알림",
-  COURSE_PROGRESS: "클래스 진도",
-  TITLES: "현재 칭호",
-  TITLE_EXAMS: "승급 심사",
-  DIRECT_ANALYSES: "직접 분석",
-  COACHING_USAGE: "코칭 사용량",
-  PRIVATE_CONTENTS: "개인 콘텐츠",
-};
-export const label = (value: string) => labels[value] ?? value;
+export { displayLabel as label } from "../presentation";
 export function Badge({ value }: { value: string }) {
   const color = [
     "ACTIVE",

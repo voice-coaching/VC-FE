@@ -8,6 +8,7 @@ import {
   identifierValue,
   saveContent,
   deleteContent,
+  deleteMember,
   createCampaign,
   uploadAnnouncerAudio,
   resumeAnnouncerUpload,
@@ -293,4 +294,64 @@ test("local editor date values must be valid and become an explicit offset", () 
     "2026-11-02T00:00:00.000Z",
   );
   assert.throws(() => offsetTime(""));
+});
+
+// API codes remain unchanged in requests; only operator-facing text is translated.
+test("administrator record labels hide internal fields and format status, money, time and reasons", async () => {
+  const {
+    displayLabel,
+    recordColumnLabel,
+    displayRecordValue,
+    changedFieldLabels,
+  } = await import("./presentation");
+  assert.equal(recordColumnLabel("recordingId"), "녹음 번호");
+  assert.equal(displayLabel("KAKAO"), "카카오");
+  assert.equal(displayRecordValue("ANALYSES", "status", "FAILED"), "실패");
+  assert.equal(
+    displayRecordValue("ANALYSES", "failureCode", "runpod_execution_failed"),
+    "음성 평가를 완료하지 못했습니다",
+  );
+  assert.equal(displayRecordValue("PAYMENTS", "amount", 15000), "15,000");
+  assert.equal(displayLabel("FUTURE_BACKEND_ENUM"), "기타");
+  assert.equal(recordColumnLabel("futureInternalField"), "추가 정보");
+  assert.equal(changedFieldLabels("scriptText,status"), "연습 원문, 처리 상태");
+  assert.equal(displayRecordValue("RECORDINGS", "durationMs", 2500), "2.5초");
+});
+
+test("member deletion checks the typed number and preserves exact account timestamp", async () => {
+  const timestamp = "2026-11-03T09:00:00.123456+09:00";
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({
+      userId: 30,
+      deletedAt: "2026-11-03T09:01:00+09:00",
+      alreadyDeleted: false,
+    });
+  };
+  await assert.rejects(deleteMember(30, timestamp, "31", "삭제 요청 확인"));
+  assert.equal(calls.length, 0);
+  await deleteMember(30, timestamp, "30", "삭제 요청 확인");
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.ok(calls[0].url.endsWith("/users/30"));
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    confirmationUserId: 30,
+    expectedUpdatedAt: timestamp,
+    reason: "삭제 요청 확인",
+  });
+});
+test("stale member deletion does not retry or report success", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return Response.json(
+      {
+        result: false,
+        message: "changed",
+        code: "ADMIN_EDIT_CONFLICT",
+        data: null,
+      },
+      { status: 409 },
+    );
+  };
+  await assert.rejects(deleteMember(30, "2026-11-03T09:00:00Z", "30", "삭제"));
+  assert.equal(calls.length, 1);
 });

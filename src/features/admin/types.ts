@@ -148,6 +148,13 @@ export const USER_RESOURCES = [
   "DIRECT_ANALYSES",
   "COACHING_USAGE",
   "PRIVATE_CONTENTS",
+  "ONBOARDING",
+  "SCRIPT_LIBRARY",
+  "NOTIFICATION_SETTINGS",
+  "PROCESSING_CONSENTS",
+  "MEMBERSHIP_GRANTS",
+  "PROFILE_IMAGES",
+  "ANALYSIS_SEGMENTS",
 ] as const;
 export type UserResource = (typeof USER_RESOURCES)[number];
 export type MemberOverview = {
@@ -166,6 +173,19 @@ export type MemberOverview = {
     canRequestCoaching: boolean;
   } | null;
   usageUnavailableReason: string | null;
+  account?: {
+    email: string | null;
+    lastLoginAt: string | null;
+    updatedAt: string | null;
+    withdrawnAt: string | null;
+    termsAgreedAt: string | null;
+    privacyAgreedAt: string | null;
+    loginConnections: {
+      provider: string | null;
+      email: string | null;
+      connectedAt: string | null;
+    }[];
+  } | null;
 };
 export type MemberRecord = {
   fields: Record<string, string | number | boolean | null>;
@@ -175,3 +195,9 @@ export type Query = Record<
   string,
   string | number | boolean | null | undefined
 >;
+
+export type MemberDeletion = {
+  userId: number;
+  deletedAt: string;
+  alreadyDeleted: boolean;
+};

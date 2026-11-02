@@ -190,12 +190,21 @@ const resources = [
   "DIRECT_ANALYSES",
   "COACHING_USAGE",
   "PRIVATE_CONTENTS",
+  "ONBOARDING",
+  "SCRIPT_LIBRARY",
+  "NOTIFICATION_SETTINGS",
+  "PROCESSING_CONSENTS",
+  "MEMBERSHIP_GRANTS",
+  "PROFILE_IMAGES",
+  "ANALYSIS_SEGMENTS",
 ];
 let allow = true,
   dispatches = 0,
   puts = 0,
   rejectEdit = false,
-  rejectDelete = false;
+  rejectDelete = false,
+  rejectMemberDeletion = false;
+const deletedMembers = new Set();
 let disposableContentId;
 const writes = [];
 const errors = [];
@@ -250,7 +259,12 @@ await context.route("**/api/backend/**", async (route) => {
   const body = method === "GET" ? null : req.postDataJSON();
   const reply = (data) =>
     route.fulfill({
-      status: method === "POST" && !path.endsWith("/dispatch") ? 201 : 200,
+      status:
+        method === "POST" &&
+        !path.endsWith("/dispatch") &&
+        !path.endsWith("/withdrawal")
+          ? 201
+          : 200,
       contentType: "application/json",
       body: JSON.stringify(envelope(data)),
     });
@@ -314,28 +328,78 @@ await context.route("**/api/backend/**", async (route) => {
 
   if (path === "/users/resolve")
     return reply([{ userId: 30, source: "ANALYSIS" }]);
-  if (path === "/users") return reply(paged(users, url.searchParams));
-  if (/^\/users\/\d+\/overview$/.test(path))
+  if (path === "/users")
+    return reply(
+      paged(
+        users.filter((user) => !deletedMembers.has(user.id)),
+        url.searchParams,
+      ),
+    );
+  if (/^\/users\/\d+\/overview$/.test(path)) {
+    const member = users.find((user) => user.id === Number(path.split("/")[2]));
     return reply({
-      user: users[0],
+      user: member,
       counts: resources.map((resource) => ({
         resource,
         count: resource === "ANALYSES" ? 1 : 0,
       })),
-      coachingUsage: {
-        membershipType: "free",
-        environment: null,
-        unlimited: false,
-        startsAt: now,
-        expiresAt: "2026-12-02T00:00:00Z",
-        limit: 8,
-        used: 1,
-        reserved: 0,
-        remaining: 7,
-        canRequestCoaching: true,
+      coachingUsage:
+        member.status === "WITHDRAWN"
+          ? null
+          : {
+              membershipType: member.membershipType,
+              environment: null,
+              unlimited: false,
+              startsAt: now,
+              expiresAt: "2026-12-02T00:00:00Z",
+              limit: 8,
+              used: 1,
+              reserved: 0,
+              remaining: 7,
+              canRequestCoaching: true,
+            },
+      usageUnavailableReason:
+        member.status === "WITHDRAWN" ? "ACCOUNT_INACTIVE" : null,
+      account: {
+        email: member.status === "WITHDRAWN" ? null : "member@example.invalid",
+        lastLoginAt: now,
+        updatedAt: now,
+        withdrawnAt: member.status === "WITHDRAWN" ? now : null,
+        termsAgreedAt: now,
+        privacyAgreedAt: now,
+        loginConnections:
+          member.status === "WITHDRAWN"
+            ? []
+            : [
+                {
+                  provider: "KAKAO",
+                  email: "social@example.invalid",
+                  connectedAt: now,
+                },
+              ],
       },
-      usageUnavailableReason: null,
     });
+  }
+  if (method === "DELETE" && /^\/users\/\d+$/.test(path)) {
+    const member = users.find((user) => user.id === Number(path.split("/")[2]));
+    if (rejectMemberDeletion)
+      return route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: false,
+          message: "changed",
+          code: "ADMIN_EDIT_CONFLICT",
+          data: null,
+        }),
+      });
+    assert.equal(body.confirmationUserId, member.id);
+    assert.equal(body.expectedUpdatedAt, now);
+    assert.ok(body.reason.trim());
+    const alreadyDeleted = deletedMembers.has(member.id);
+    deletedMembers.add(member.id);
+    return reply({ userId: member.id, deletedAt: now, alreadyDeleted });
+  }
   if (/^\/users\/\d+\/records$/.test(path))
     return reply(
       paged(
@@ -593,11 +657,27 @@ try {
     await nav("회원 관리").click();
     await page.getByRole("link", { name: "연습 회원", exact: true }).click();
     await heading("연습 회원님의 기록");
-    await page.getByRole("button", { name: /AI 분석/ }).click();
-    await page.getByText("execution_failed", { exact: true }).waitFor();
+    await page.getByRole("button", { name: /^음성 평가/ }).click();
+    await page
+      .getByText("음성 평가를 완료하지 못했습니다", { exact: true })
+      .waitFor();
+    await page
+      .getByRole("columnheader", { name: "녹음 번호", exact: true })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("columnheader", { name: "recordingId", exact: true })
+        .count(),
+      0,
+    );
+    await page.getByText("social@example.invalid", { exact: true }).waitFor();
+    assert.equal(
+      await page.getByText("execution_failed", { exact: true }).count(),
+      0,
+    );
     await nav("회원 관리").click();
     await page
-      .getByLabel("회원 번호 또는 UUID", { exact: true })
+      .getByLabel("회원 번호 또는 평가 조회 번호", { exact: true })
       .fill("532fe9f8-14e4-47ce-a011-7c9d5f6a2acd");
     await page.getByRole("button", { name: "연결된 회원 조회" }).click();
     await page.getByRole("link", { name: "회원 #30 보기" }).waitFor();
@@ -911,6 +991,87 @@ try {
       const last = writes.filter((w) => w.method === "DELETE").at(-1);
       assert.equal(last.body.reason, "최종 삭제 확인");
       assert.ok(!contents.some((c) => c.id === disposableContentId));
+    },
+  );
+  await check(
+    "member deletion requires the exact number and preserves the screen on a conflict",
+    async () => {
+      await page.goto(base + "/admin/users/30");
+      await heading("연습 회원님의 기록");
+      const before = writes.filter(
+        (w) => w.method === "DELETE" && w.path === "/users/30",
+      ).length;
+      await page
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("31");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("회원 요청 확인");
+      await dialog
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
+        .click();
+      await dialog
+        .getByText("확인할 회원 번호가 일치하지 않습니다.", { exact: true })
+        .waitFor();
+      assert.equal(
+        writes.filter((w) => w.method === "DELETE" && w.path === "/users/30")
+          .length,
+        before,
+      );
+      rejectMemberDeletion = true;
+      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
+      await dialog
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
+        .click();
+      await dialog
+        .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
+          exact: false,
+        })
+        .waitFor();
+      assert.ok(page.url().endsWith("/admin/users/30"));
+      assert.equal(
+        await dialog.getByLabel("작업 사유", { exact: true }).inputValue(),
+        "회원 요청 확인",
+      );
+      await dialog
+        .getByRole("button", { name: "돌아가기", exact: true })
+        .click();
+      rejectMemberDeletion = false;
+    },
+  );
+  await check(
+    "deleted members leave the list and the current administrator cannot delete itself",
+    async () => {
+      await page
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("탈퇴 요청 확인");
+      await dialog
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
+        .click();
+      await heading("회원 관리");
+      assert.ok(page.url().endsWith("/admin/users"));
+      assert.equal(
+        await page
+          .getByRole("link", { name: "연습 회원", exact: true })
+          .count(),
+        0,
+      );
+      assert.ok(deletedMembers.has(30));
+      await page.goto(base + "/admin/users/9001");
+      await heading("운영 관리자님의 기록");
+      assert.equal(
+        await page
+          .getByRole("button", { name: "회원 삭제하기", exact: true })
+          .isDisabled(),
+        true,
+      );
     },
   );
   await check("mobile navigation and horizontal overflow", async () => {

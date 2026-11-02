@@ -384,3 +384,27 @@ export function makePrimary(audio: Audio, reason: string): Promise<Audio> {
     reason: reasonSchema.parse(reason),
   });
 }
+
+/** The number confirmation and exact server timestamp protect against wrong/stale member actions. */
+export async function deleteMember(
+  userId: number,
+  updatedAt: string | null,
+  confirmation: string,
+  reason: string,
+) {
+  const confirmationUserId = validId(confirmation);
+  if (confirmationUserId !== userId)
+    throw new Error("확인할 회원 번호가 일치하지 않습니다.");
+  const receipt = await adminApi.remove<unknown>(`/users/${userId}`, {
+    confirmationUserId,
+    expectedUpdatedAt: updatedAt,
+    reason: reasonSchema.parse(reason),
+  });
+  return z
+    .object({
+      userId: z.literal(userId),
+      deletedAt: z.string().datetime({ offset: true }),
+      alreadyDeleted: z.boolean(),
+    })
+    .parse(receipt);
+}
