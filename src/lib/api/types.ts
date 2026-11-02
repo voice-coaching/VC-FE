@@ -506,7 +506,7 @@ export interface AnalysisCapabilities {
   voiceProcessingConsentRequired: boolean;
   videoProcessingConsentRequired: boolean;
   consentPolicyRevision: string | null;
-  videoProcessingConsentPolicyRevision: string;
+  videoProcessingConsentPolicyRevision: string | null;
 }
 
 export interface AnalysisConsentInput {
@@ -993,7 +993,7 @@ export interface ApiContract {
     ): Promise<{ sessionId: Id; selectedRecordingId: Id; selectedAt: string }>;
     analyze(
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
     ): Promise<AnalysisRequest>;
     getAnalysisStatus(
       sessionId: Id,
@@ -1001,7 +1001,7 @@ export interface ApiContract {
     ): Promise<AnalysisProgress>;
     retryAnalysis(
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
       expected?: import("../canonical-analysis").CanonicalViewIdentity,
     ): Promise<AnalysisRequest>;
     getSessionAnalysis(sessionId: Id): Promise<SessionAnalysis>;

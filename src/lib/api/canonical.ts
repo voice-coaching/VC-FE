@@ -68,7 +68,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
 
   async function submit(
     sessionId: Id,
-    consent: AnalysisConsentInput,
+    consent: AnalysisConsentInput | undefined,
     retry: boolean,
     signal?: AbortSignal,
     audiovisual = false,
@@ -107,22 +107,22 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
     status,
     analyzeAudiovisual: (
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
       signal?: AbortSignal,
     ) => submit(sessionId, consent, false, signal, true),
     retryAudiovisual: (
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
       signal?: AbortSignal,
     ) => submit(sessionId, consent, true, signal, true),
     analyze: (
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
       signal?: AbortSignal,
     ) => submit(sessionId, consent, false, signal),
     retry: (
       sessionId: Id,
-      consent: AnalysisConsentInput,
+      consent?: AnalysisConsentInput,
       signal?: AbortSignal,
     ) => submit(sessionId, consent, true, signal),
   };
