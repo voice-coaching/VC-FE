@@ -61,6 +61,24 @@ export const adminLabels: Record<string, string> = {
   TITLE_EXAMS: "승급 심사",
   DIRECT_ANALYSES: "별도 음성 평가",
   COACHING_USAGE: "코칭 사용 내역",
+  ONBOARDING: "학습 목표",
+  SCRIPT_LIBRARY: "내 문장 보관함",
+  NOTIFICATION_SETTINGS: "알림 설정",
+  PROCESSING_CONSENTS: "정보 처리 동의",
+  MEMBERSHIP_GRANTS: "시험 이용권 부여",
+  PROFILE_IMAGES: "프로필 사진 내역",
+  ANALYSIS_SEGMENTS: "구간별 평가",
+  VOICE_ANALYSIS: "음성 평가",
+  FACE_VIDEO_PROCESSING: "영상 처리",
+  DELETE_PENDING: "삭제 대기",
+  DELETED: "삭제 완료",
+  MATCH: "일치",
+  SUBSTITUTION: "다른 발음",
+  OMISSION: "빠진 발음",
+  ADDITION: "추가 발음",
+  NORMAL: "양호",
+  CAUTION: "주의",
+  NEEDS_IMPROVEMENT: "연습 필요",
   PRIVATE_CONTENTS: "직접 작성한 문장",
   PENDING: "대기 중",
   RECORDING: "녹음 중",
@@ -126,6 +144,27 @@ export function displayLabel(value: string | null | undefined): string {
   return adminLabels[value] ?? (/[가-힣]/.test(value) ? value : "기타");
 }
 const columns: Record<string, string> = {
+  currentLevel: "현재 학습 수준",
+  goalText: "학습 목표",
+  dailyGoalMinutes: "하루 목표 시간",
+  weeklyGoalCount: "주간 목표 횟수",
+  topicId: "보관함 분류 번호",
+  reminderTime: "알림 시간",
+  weekdays: "알림 요일",
+  timezone: "시간대",
+  scope: "동의 항목",
+  policyRevision: "동의 약관 번호",
+  grantedAt: "동의·부여일",
+  revokedAt: "동의 철회일",
+  activatedAt: "사용 시작일",
+  cleanupAfter: "정리 예정일",
+  sequenceNo: "구간 순서",
+  startMs: "시작 시점",
+  endMs: "종료 시점",
+  matchType: "발음 비교",
+  resultStatus: "평가 상태",
+  errorType: "연습 항목",
+  feedback: "평가 안내",
   nickname: "회원 이름",
   profileImageUrl: "프로필 사진",
   email: "이메일",
@@ -239,6 +278,11 @@ const enumFields = new Set([
   "contentType",
   "type",
   "category",
+  "currentLevel",
+  "scope",
+  "matchType",
+  "resultStatus",
+  "errorType",
 ]);
 export function displayRecordValue(
   resource: UserResource,
@@ -284,6 +328,33 @@ export function displayRecordValue(
         } as Record<string, string>
       )[String(value)] ?? "음성 파일"
     );
+  if (key === "weekdays") {
+    const days: Record<string, string> = {
+      MONDAY: "월",
+      TUESDAY: "화",
+      WEDNESDAY: "수",
+      THURSDAY: "목",
+      FRIDAY: "금",
+      SATURDAY: "토",
+      SUNDAY: "일",
+      MON: "월",
+      TUE: "화",
+      WED: "수",
+      THU: "목",
+      FRI: "금",
+      SAT: "토",
+      SUN: "일",
+    };
+    return String(value)
+      .split(",")
+      .map((day) => days[day.trim()] ?? "확인 필요")
+      .join(", ");
+  }
+  if (key === "startMs" || key === "endMs") return `${Number(value) / 1000}초`;
+  if (key === "dailyGoalMinutes") return `${value}분`;
+  if (key === "weeklyGoalCount") return `${value}회`;
+  if (key === "sizeBytes")
+    return `${(Number(value) / 1024).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}KB`;
   if (key === "durationMs")
     return `${(Number(value) / 1000).toLocaleString("ko-KR")}초`;
   if (key === "fileSizeBytes")

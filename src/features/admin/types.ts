@@ -148,6 +148,13 @@ export const USER_RESOURCES = [
   "DIRECT_ANALYSES",
   "COACHING_USAGE",
   "PRIVATE_CONTENTS",
+  "ONBOARDING",
+  "SCRIPT_LIBRARY",
+  "NOTIFICATION_SETTINGS",
+  "PROCESSING_CONSENTS",
+  "MEMBERSHIP_GRANTS",
+  "PROFILE_IMAGES",
+  "ANALYSIS_SEGMENTS",
 ] as const;
 export type UserResource = (typeof USER_RESOURCES)[number];
 export type MemberOverview = {
