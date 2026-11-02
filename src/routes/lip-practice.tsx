@@ -9,6 +9,7 @@ import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
 import { canonicalApi } from "@/lib/api/canonical";
+import { voiceProcessingConsentInput } from "@/lib/analysis-consent";
 import { assertCoachingInput, coachingLimitNotice } from "@/lib/coaching-usage";
 
 import {
@@ -477,9 +478,7 @@ export default function LipPractice() {
       ) {
         throw new Error("현재 서버의 음성 발음 분석 기능을 사용할 수 없어요.");
       }
-      if (!capabilities.consentPolicyRevision) {
-        throw new Error("음성 처리 동의 정책 정보를 불러오지 못했어요.");
-      }
+      const consent = voiceProcessingConsentInput(capabilities);
       if (reportClip.durationMs < capabilities.minimumDurationMs) {
         throw new Error(
           `분석하려면 ${Math.ceil(capabilities.minimumDurationMs / 1_000)}초 이상 촬영해 주세요.`,
@@ -593,10 +592,7 @@ export default function LipPractice() {
       awaitingAdmission = true;
       const requested = await canonicalApi.analyzeAudiovisual(
         sessionId,
-        {
-          accepted: true,
-          policyRevision: capabilities.consentPolicyRevision,
-        },
+        consent,
         owner.signal,
       );
       requireActive();

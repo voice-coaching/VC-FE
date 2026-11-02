@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { ApiError, getAuthSessionVersion } from "@/lib/api/client";
 import { canonicalApi } from "@/lib/api/canonical";
 import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
+import { voiceProcessingConsentInput } from "@/lib/analysis-consent";
 import {
   awaitCanonicalPersistence,
   completeCanonicalPractice,
@@ -528,14 +529,7 @@ export function RecordingPracticeSession({
   }
 
   async function getConsentInput() {
-    const capabilities = await getAnalysisCapabilities();
-    if (!capabilities.consentPolicyRevision) {
-      throw new Error("음성 처리 동의 정책 정보를 불러오지 못했습니다.");
-    }
-    return {
-      accepted: true as const,
-      policyRevision: capabilities.consentPolicyRevision,
-    };
+    return voiceProcessingConsentInput(await getAnalysisCapabilities());
   }
 
   async function startRecording() {
