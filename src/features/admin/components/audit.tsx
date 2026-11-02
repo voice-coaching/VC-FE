@@ -1,4 +1,5 @@
 "use client";
+import { displayLabel, changedFieldLabels } from "../presentation";
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { useAdminQuery } from "../hooks";
@@ -69,14 +70,38 @@ export function AuditPage() {
               "INQUIRY",
               "NOTIFICATION_CAMPAIGN",
               "POPUP",
+              "USER",
             ].map((value) => (
               <option key={value} value={value}>
-                {value}
+                {displayLabel(value)}
               </option>
             ))}
           </Select>
           <Field label="대상 번호" name="targetId" maxLength={100} />
-          <Field label="작업 코드" name="action" maxLength={80} />
+          <Select label="작업 종류" name="action">
+            <option value="">전체 작업</option>
+            {[
+              "CONTENT_CREATE",
+              "CONTENT_EDIT",
+              "CONTENT_PUBLICATION",
+              "CONTENT_DELETE",
+              "NOTICE_CREATE",
+              "NOTICE_EDIT",
+              "INQUIRY_ANSWER",
+              "INQUIRY_STATUS",
+              "REFERENCE_AUDIO_REGISTER",
+              "REFERENCE_AUDIO_PRIMARY",
+              "POPUP_CREATE",
+              "POPUP_EDIT",
+              "NOTIFICATION_CREATE",
+              "NOTIFICATION_DISPATCH",
+              "USER_WITHDRAW",
+            ].map((value) => (
+              <option key={value} value={value}>
+                {displayLabel(value)}
+              </option>
+            ))}
+          </Select>
           <Field label="시작" name="from" type="datetime-local" />
           <Field label="종료" name="to" type="datetime-local" />
           <Button type="submit">
@@ -108,14 +133,16 @@ export function AuditPage() {
                   {audits.data.items.map((audit) => (
                     <tr key={audit.id}>
                       <td>
-                        {audit.action}
-                        <small>변경: {audit.changedFields}</small>
+                        {displayLabel(audit.action)}
+                        <small>
+                          변경: {changedFieldLabels(audit.changedFields)}
+                        </small>
                         <small className={styles.mono}>
-                          추적 {audit.correlationId}
+                          조회 번호 {audit.correlationId}
                         </small>
                       </td>
                       <td>
-                        {audit.targetType}
+                        {displayLabel(audit.targetType)}
                         <small>#{audit.targetId}</small>
                       </td>
                       <td className={styles.wrap}>{audit.reason}</td>

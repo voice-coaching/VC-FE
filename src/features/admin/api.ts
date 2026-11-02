@@ -60,8 +60,16 @@ export const adminApi = {
 };
 export function adminErrorMessage(error: unknown): string {
   if (error instanceof z.ZodError)
-    return error.issues.map((issue) => issue.message).join(" · ");
+    return error.issues
+      .map((issue) =>
+        /[가-힣]/.test(issue.message)
+          ? issue.message
+          : "입력한 값을 확인해 주세요.",
+      )
+      .join(" · ");
   if (error instanceof ApiError) {
+    if (error.code === "ADMIN_SELF_WITHDRAWAL_NOT_ALLOWED")
+      return "현재 로그인한 관리자 본인의 계정은 여기서 탈퇴 처리할 수 없습니다.";
     if (error.status === 409)
       return "다른 관리자가 수정했거나 상태가 변경되었습니다. 최신 상세를 다시 확인해 주세요. 입력한 내용은 자동으로 덮어쓰지 않습니다.";
     if (error.status === 404)
@@ -69,7 +77,7 @@ export function adminErrorMessage(error: unknown): string {
     if (error.status === 0 || error.status === 408 || error.status === 504)
       return "서버의 처리 결과를 확인하지 못했습니다. 같은 요청을 새로 만들기 전에 목록·상세에서 반영 여부를 확인해 주세요.";
   }
-  return error instanceof Error
+  return error instanceof Error && /[가-힣]/.test(error.message)
     ? error.message
-    : "요청을 처리하지 못했습니다. 다시 확인해 주세요.";
+    : "요청을 처리하지 못했습니다. 잠시 후 다시 확인해 주세요.";
 }

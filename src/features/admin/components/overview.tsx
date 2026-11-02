@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { displayLabel } from "../presentation";
 import {
   Users,
   FileText,
@@ -183,7 +184,7 @@ export function OverviewPage() {
                       <td className={styles.wrap}>
                         {item.reason}
                         <small>
-                          {item.action} · 관리자 #{item.actorId}
+                          {displayLabel(item.action)} · 관리자 #{item.actorId}
                         </small>
                         <small>{formatDate(item.createdAt)}</small>
                       </td>

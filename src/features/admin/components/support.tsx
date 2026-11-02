@@ -355,7 +355,7 @@ export function InquiriesPage() {
                           #{inquiry.userId}
                         </Link>
                       </td>
-                      <td>{inquiry.category}</td>
+                      <td>{label(inquiry.category)}</td>
                       <td>
                         <Badge value={inquiry.status} />
                       </td>
@@ -411,7 +411,7 @@ export function InquiryDetail({ inquiryId }: { inquiryId: number }) {
                 ],
                 ["문의 분류", current.category],
                 ["접수 시각", formatDate(current.createdAt)],
-                ["관련 세션", current.relatedSessionId ?? "—"],
+                ["관련 학습 기록", current.relatedSessionId ?? "—"],
               ]}
             />
             <hr className="my-6 border-slate-100" />

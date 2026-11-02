@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { recordColumnLabel, displayRecordValue } from "../presentation";
+import { MemberWithdrawalPanel } from "./member-withdrawal";
 import { Search } from "lucide-react";
 import { useAdminCommand, useAdminQuery } from "../hooks";
 import { adminApi } from "../api";
@@ -50,7 +52,7 @@ export function MembersPage() {
       />
       <Panel
         title="전체 회원"
-        description="실제 관리자 권한과 테스트 이용등급은 서로 다른 값입니다."
+        description="실제 관리자 권한과 시험 이용권은 서로 다른 값입니다."
       >
         <form
           className={styles.filters}
@@ -141,8 +143,8 @@ export function MembersPage() {
         )}
       </Panel>
       <Panel
-        title="분석 UUID로 회원 찾기"
-        description="분석 요청·실행·직접 분석 작업 ID 또는 숫자 회원 번호로 조회합니다."
+        title="평가 조회 번호로 회원 찾기"
+        description="평가에 연결된 조회 번호 또는 회원 번호로 찾아보세요."
         padded
       >
         <form
@@ -163,11 +165,11 @@ export function MembersPage() {
           }}
         >
           <Field
-            label="회원 번호 또는 UUID"
+            label="회원 번호 또는 평가 조회 번호"
             name="identifier"
             required
             maxLength={36}
-            placeholder="분석 요청 UUID를 입력해 주세요."
+            placeholder="평가 조회 번호를 입력해 주세요."
           />
           <div>
             <Button type="submit" disabled={resolve.busy}>
@@ -182,11 +184,14 @@ export function MembersPage() {
               <Message>해당 ID에 연결된 회원이 없습니다.</Message>
             ) : (
               matches.map((match) => (
-                <p key={`${match.userId}-${match.source}`} className="mb-2">
+                <p
+                  key={`${match.userId}-${label(match.source)}`}
+                  className="mb-2"
+                >
                   <ButtonLink href={`/admin/users/${match.userId}`}>
                     회원 #{match.userId} 보기
                   </ButtonLink>
-                  <span className={styles.muted}> · {match.source}</span>
+                  <span className={styles.muted}> · {label(match.source)}</span>
                 </p>
               ))
             )}
@@ -207,12 +212,19 @@ export function MemberDetail({ userId }: { userId: number }) {
   );
   const user = overview.data?.user;
   const usage = overview.data?.coachingUsage;
+  const account = overview.data?.account;
   return (
     <>
       <Heading
         title={user ? `${user.nickname}님의 기록` : "회원 상세"}
         description={`회원 #${userId}의 이용 현황과 관련 기록입니다.`}
       >
+        <Button
+          disabled={overview.isFetching}
+          onClick={() => void overview.refetch()}
+        >
+          최신 상태 조회
+        </Button>
         <ButtonLink href="/admin/users">회원 목록</ButtonLink>
       </Heading>
       <LoadState
@@ -227,17 +239,22 @@ export function MemberDetail({ userId }: { userId: number }) {
               <DetailList
                 items={[
                   ["회원 번호", `#${user.id}`],
-                  ["이메일", user.maskedEmail],
+                  ["이메일", account?.email ?? user.maskedEmail],
                   ["회원 상태", <Badge key="status" value={user.status} />],
-                  ["실제 권한", label(user.role)],
+                  ["접근 권한", label(user.role)],
                   [
                     "이용등급",
                     <Badge key="membership" value={user.membershipType} />,
                   ],
-                  ["이용 환경", user.membershipEnvironment],
+                  ["이용 환경", label(user.membershipEnvironment)],
                   ["이용 종료", formatDate(user.membershipExpiresAt)],
-                  ["로그인 방식", user.loginProviders.join(", ")],
+                  ["로그인 방식", user.loginProviders.map(label).join(", ")],
                   ["가입일", formatDate(user.createdAt)],
+                  ["최근 로그인", formatDate(account?.lastLoginAt)],
+                  ["정보 변경일", formatDate(account?.updatedAt)],
+                  ["탈퇴일", formatDate(account?.withdrawnAt)],
+                  ["이용약관 동의일", formatDate(account?.termsAgreedAt)],
+                  ["개인정보 동의일", formatDate(account?.privacyAgreedAt)],
                 ]}
               />
             </Panel>
@@ -267,9 +284,32 @@ export function MemberDetail({ userId }: { userId: number }) {
               )}
             </Panel>
           </div>
+          {account && (
+            <Panel title="간편 로그인 연결" padded>
+              {account.loginConnections.length ? (
+                account.loginConnections.map((connection, index) => (
+                  <div key={`${connection.provider}-${index}`} className="mb-4">
+                    <DetailList
+                      items={[
+                        ["로그인 방식", label(connection.provider)],
+                        [
+                          "연결 이메일",
+                          connection.email ?? "제공된 이메일 없음",
+                        ],
+                        ["연결일", formatDate(connection.connectedAt)],
+                      ]}
+                    />
+                  </div>
+                ))
+              ) : (
+                <Message>연결된 간편 로그인 계정이 없습니다.</Message>
+              )}
+            </Panel>
+          )}
+          <MemberWithdrawalPanel member={user} updatedAt={account?.updatedAt} />
           <Panel
             title="관련 기록"
-            description="개인 원문·비밀번호·토큰·원본 녹음 주소는 표시하지 않습니다."
+            description="민감한 개인정보와 비밀 인증 정보는 표시하지 않습니다."
             padded
           >
             <div className={styles.tabs}>
@@ -293,7 +333,7 @@ export function MemberDetail({ userId }: { userId: number }) {
               ))}
             </div>
             {(resource === "PAYMENTS" || resource === "CANCELLATIONS") && (
-              <Message>이 기록은 TEST 결제 환경의 원장입니다.</Message>
+              <Message>실제 청구가 발생하지 않는 시험 결제 내역입니다.</Message>
             )}
             <LoadState
               loading={records.isPending}
@@ -307,7 +347,7 @@ export function MemberDetail({ userId }: { userId: number }) {
                   <thead>
                     <tr>
                       {Object.keys(records.data.items[0].fields).map((key) => (
-                        <th key={key}>{key}</th>
+                        <th key={key}>{recordColumnLabel(key)}</th>
                       ))}
                     </tr>
                   </thead>
@@ -323,7 +363,7 @@ export function MemberDetail({ userId }: { userId: number }) {
                                 : undefined
                             }
                           >
-                            {value === null ? "—" : String(value)}
+                            {displayRecordValue(resource, key, value)}
                           </td>
                         ))}
                       </tr>

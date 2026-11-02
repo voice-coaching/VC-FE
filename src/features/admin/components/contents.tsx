@@ -132,7 +132,10 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
                           {content.title}
                         </Link>
                         <small>
-                          #{content.id} · {content.category ?? "분류 없음"}
+                          #{content.id} ·{" "}
+                          {content.category
+                            ? label(content.category)
+                            : "분류 없음"}
                         </small>
                       </td>
                       <td>{label(content.type)}</td>
@@ -211,7 +214,7 @@ export function ContentDetail({
                 items={[
                   ["콘텐츠 번호", `#${current.id}`],
                   ["콘텐츠 유형", label(current.type)],
-                  ["수정 버전", current.version],
+                  ["수정 번호", current.version],
                   ["최초 공개", formatDate(current.publishedAt)],
                 ]}
               />
@@ -354,7 +357,7 @@ function ContentEditor({
             <option value="">카테고리를 선택해 주세요.</option>
             {categories.data?.map((category) => (
               <option key={category.code} value={category.code}>
-                {category.label} · {category.code}
+                {category.label}
               </option>
             ))}
           </Select>

@@ -173,7 +173,7 @@ function CampaignEditor() {
               name="userIds"
               required
               placeholder="예: 12, 34, 56"
-              hint="회원 관리에서 확인한 숫자 ID를 쉼표나 줄바꿈으로 구분합니다. 최대 500명."
+              hint="회원 관리에서 확인한 회원 번호를 쉼표나 줄바꿈으로 구분합니다. 최대 500명까지 선택할 수 있습니다."
               rows={3}
             />
           )}
@@ -251,7 +251,7 @@ function CampaignReview({ campaign }: { campaign: Campaign }) {
                 ? campaign.userIds.map((id) => `#${id}`).join(", ")
                 : "전체 활성 회원",
             ],
-            ["이동 경로", campaign.deepLink],
+            ["이동 화면", label(campaign.deepLink)],
             ["작성일", formatDate(campaign.createdAt)],
             ["발송일", formatDate(campaign.sentAt)],
           ]}

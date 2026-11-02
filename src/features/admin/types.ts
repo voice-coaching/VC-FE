@@ -166,6 +166,19 @@ export type MemberOverview = {
     canRequestCoaching: boolean;
   } | null;
   usageUnavailableReason: string | null;
+  account?: {
+    email: string | null;
+    lastLoginAt: string | null;
+    updatedAt: string | null;
+    withdrawnAt: string | null;
+    termsAgreedAt: string | null;
+    privacyAgreedAt: string | null;
+    loginConnections: {
+      provider: string | null;
+      email: string | null;
+      connectedAt: string | null;
+    }[];
+  } | null;
 };
 export type MemberRecord = {
   fields: Record<string, string | number | boolean | null>;
@@ -175,3 +188,9 @@ export type Query = Record<
   string,
   string | number | boolean | null | undefined
 >;
+
+export type MemberWithdrawal = {
+  userId: number;
+  withdrawnAt: string | null;
+  alreadyWithdrawn: boolean;
+};

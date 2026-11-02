@@ -112,7 +112,7 @@ function ScopedAdminShell({
     <div className={styles.console}>
       <aside className={styles.sidebar}>
         <Link className={styles.logo} href="/admin">
-          SpeakAI<span>ADMIN</span>
+          SpeakAI<span>관리자</span>
         </Link>
         <p className={styles.navLabel}>운영 관리</p>
         <nav className={styles.nav} aria-label="관리자 메뉴">
@@ -132,7 +132,7 @@ function ScopedAdminShell({
             <ArrowUpRight size={15} />
             서비스 화면 보기
           </Link>
-          SpeakAI 운영 콘솔
+          SpeakAI 관리 화면
           <br />
           권한이 있는 운영자만 접근합니다.
         </div>
