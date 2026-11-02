@@ -17,6 +17,7 @@ import {
 import type { TrainingSession } from "./types";
 import {
   canonicalAttemptKey,
+  canonicalViewCompletable,
   type CanonicalViewIdentity,
 } from "../canonical-analysis";
 import {
@@ -484,7 +485,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
       async retryAnalysis(sessionId, consent, expected) {
         const current = await currentAnalysis(sessionId, expected);
-        if (!current.actions.canRetry)
+        if (!current.actions.canRetry || current.jobStatus !== "FAILED")
           throw new CanonicalResultUnavailable(current);
         return canonical.retry(sessionId, consent);
       },
@@ -504,7 +505,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request(`/api/recordings/${id(recordingId)}/playback-url`),
       async complete(sessionId, totalLearningSeconds, expected) {
         const current = await currentAnalysis(sessionId, expected);
-        if (!current.actions.canComplete)
+        if (!canonicalViewCompletable(current))
           throw new CanonicalResultUnavailable(current);
         return request(`/api/training-sessions/${id(sessionId)}/complete`, {
           method: "POST",

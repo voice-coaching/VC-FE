@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import {
   readCanonicalAnalysisView,
+  canonicalAttemptUnassigned,
   type CanonicalViewExpectation,
 } from "../canonical-analysis";
 
@@ -57,6 +58,12 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       `/api/v3/analyses/${expected.analysisId}${waitSeconds ? `?waitSeconds=${waitSeconds}` : ""}`,
       { method: "GET", cache: "no-store", signal, endpointErrorsOnly: true },
     );
+    if (canonicalAttemptUnassigned(data, expected))
+      throw new ApiError(
+        "분석 실행을 배정하고 있습니다.",
+        503,
+        "CANONICAL_ATTEMPT_PENDING",
+      );
     const view = readCanonicalAnalysisView(data, expected);
     if (
       ["COMPLETED", "FAILED"].includes(view.jobStatus) &&
