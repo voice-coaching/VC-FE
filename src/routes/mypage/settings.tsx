@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { AdminEntryLink } from "@/features/admin/components/admin-entry-link";
 import { BackButton } from "@/components/back-button";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEventHandler } from "react";
@@ -430,6 +431,8 @@ export default function AccountSettings() {
             />
           </Link>
         </section>
+
+        <AdminEntryLink />
 
         {GROUPS.slice(1).map((group) => (
           <section key={group.title} className="bg-white">
