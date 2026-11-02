@@ -9,17 +9,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useAdminCommand, useAdminQuery, useAdminSession } from "../hooks";
+import { useAdminCommand, useAdminSession } from "../hooks";
 import { deleteMember } from "../services";
-import type { AdminAccess, Member } from "../types";
-import {
-  Panel,
-  Message,
-  Button,
-  Field,
-  Reason,
-  CommandFeedback,
-} from "./shared";
+import { useAdminActor } from "../actor";
+import type { Member } from "../types";
+import { Panel, Message, Button, Reason, CommandFeedback } from "./shared";
 import styles from "../admin.module.css";
 
 export function MemberDeletionPanel({
@@ -29,10 +23,10 @@ export function MemberDeletionPanel({
   member: Member;
   updatedAt: string | null | undefined;
 }) {
-  const actor = useAdminQuery<AdminAccess>("/me");
-  const command = useAdminCommand();
+  const actor = useAdminActor();
+  const command = useAdminCommand(["/users", "/audit-logs"]);
   const [open, setOpen] = useState(false);
-  const self = actor.data?.id === member.id;
+  const self = actor?.id === member.id;
   const router = useRouter();
   const queries = useQueryClient();
   const session = useAdminSession();
@@ -57,13 +51,7 @@ export function MemberDeletionPanel({
       )}
       <Button
         danger
-        disabled={
-          self ||
-          updatedAt === undefined ||
-          !actor.data ||
-          actor.isError ||
-          command.busy
-        }
+        disabled={self || updatedAt === undefined || !actor || command.busy}
         onClick={() => {
           command.clearFeedback();
           setOpen(true);
@@ -98,7 +86,6 @@ export function MemberDeletionPanel({
                   deleteMember(
                     member.id,
                     updatedAt,
-                    String(data.get("confirmation") ?? ""),
                     String(data.get("reason") ?? ""),
                   ),
                 () => {
@@ -117,14 +104,6 @@ export function MemberDeletionPanel({
               );
             }}
           >
-            <Field
-              name="confirmation"
-              label="확인할 회원 번호"
-              type="number"
-              min={1}
-              required
-              placeholder={String(member.id)}
-            />
             <Reason />
             <CommandFeedback command={command} />
             <div className={styles.actions}>

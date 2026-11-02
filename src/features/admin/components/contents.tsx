@@ -221,6 +221,7 @@ export function ContentDetail({
               <div className={`${styles.actions} mt-6`}>
                 {current.status !== "PUBLISHED" && (
                   <ConfirmAction
+                    invalidationPaths={["/contents", "/audit-logs"]}
                     title="콘텐츠를 공개할까요?"
                     description="문장과 기준 음성을 검수한 뒤 공개해 주세요."
                     buttonLabel="공개하기"
@@ -232,6 +233,7 @@ export function ContentDetail({
                 )}{" "}
                 {current.status === "PUBLISHED" && (
                   <ConfirmAction
+                    invalidationPaths={["/contents", "/audit-logs"]}
                     title="콘텐츠를 숨길까요?"
                     description="공용 목록에서 숨기며 기존 학습 기록은 보존됩니다."
                     buttonLabel="숨기기"
@@ -245,6 +247,7 @@ export function ContentDetail({
                   </Button>
                 )}
                 <ConfirmAction
+                  invalidationPaths={["/contents", "/audit-logs"]}
                   title="콘텐츠를 삭제할까요?"
                   description="새 학습 목록과 연습에서 제외됩니다. 기존 학습 기록은 보존되며 이 화면에서 복구할 수 없습니다. 저장하지 않은 편집 내용은 적용되지 않습니다."
                   buttonLabel="삭제하기"
@@ -293,7 +296,7 @@ function ContentEditor({
   announcer: boolean;
 }) {
   const router = useRouter();
-  const command = useAdminCommand();
+  const command = useAdminCommand(["/contents", "/audit-logs"]);
   const [type, setType] = useState<ContentType>(
     current?.type ?? initial?.type ?? (announcer ? "ANNOUNCER" : "SENTENCE"),
   );

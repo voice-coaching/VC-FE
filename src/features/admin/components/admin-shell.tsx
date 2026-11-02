@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, getAccessToken } from "@/lib/api/client";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { adminApi, adminErrorMessage, subscribeAdminDenial } from "../api";
+import { AdminActorContext } from "../actor";
 import { useAdminSession } from "../hooks";
 import {
   LayoutDashboard,
@@ -56,7 +57,7 @@ function ScopedAdminShell({
   const anonymous =
     getAuthSessionSnapshot().status === "anonymous" && !getAccessToken();
   const access = useQuery({
-    queryKey: ["admin", session, "access"],
+    queryKey: ["admin", session, "access", pathname],
     queryFn: ({ signal }) => adminApi.access(signal),
     enabled: !anonymous,
     retry: false,
@@ -156,7 +157,9 @@ function ScopedAdminShell({
           </div>
         </header>
         <main id="admin-main" className={styles.main}>
-          {children}
+          <AdminActorContext.Provider value={access.data}>
+            {children}
+          </AdminActorContext.Provider>
         </main>
       </div>
     </div>

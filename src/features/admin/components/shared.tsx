@@ -333,6 +333,7 @@ export function CommandFeedback({
 }
 /** A reason and explicit confirmation are required before publishing, dispatching or changing status. */
 export function ConfirmAction({
+  invalidationPaths = ["*"],
   title,
   description,
   buttonLabel,
@@ -345,12 +346,13 @@ export function ConfirmAction({
   description: string;
   buttonLabel: string;
   action: (reason: string) => Promise<unknown>;
+  invalidationPaths?: readonly string[];
   primary?: boolean;
   danger?: boolean;
   onDone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const command = useAdminCommand();
+  const command = useAdminCommand(invalidationPaths);
   return (
     <>
       <Button

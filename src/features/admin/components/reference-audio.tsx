@@ -29,8 +29,8 @@ export function AudioPanel({ content }: { content: Content }) {
   const audios = useAdminQuery<AudioList>(
     `/contents/${content.id}/reference-audios`,
   );
-  const command = useAdminCommand();
-  const playback = useAdminCommand();
+  const command = useAdminCommand(["/contents", "/audit-logs"]);
+  const playback = useAdminCommand([]);
   const [pending, setPending] = useState<AudioUploadAttempt | null>(null);
   const [preview, setPreview] = useState<{
     audioId: number;
@@ -99,6 +99,7 @@ export function AudioPanel({ content }: { content: Content }) {
               </Button>
               {!audio.primary && (
                 <ConfirmAction
+                  invalidationPaths={["/contents", "/audit-logs"]}
                   title="대표 음성으로 지정할까요?"
                   description="사용자에게 제공되는 기본 기준 음성이 변경됩니다."
                   buttonLabel="대표 음성 지정"

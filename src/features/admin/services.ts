@@ -16,7 +16,7 @@ const required = (label: string, max: number) =>
   z
     .string()
     .trim()
-    .min(1, `${label}을 입력해 주세요.`)
+    .min(1, `${label} 입력이 필요합니다.`)
     .max(max, `${label}은 ${max}자 이하입니다.`);
 const reasonSchema = required("작업 사유", 500);
 const linkSchema = z.enum(["/home", "/notifications", "/mypage"]);
@@ -385,18 +385,14 @@ export function makePrimary(audio: Audio, reason: string): Promise<Audio> {
   });
 }
 
-/** The number confirmation and exact server timestamp protect against wrong/stale member actions. */
+/** The selected route identifies the member; the exact server timestamp still prevents stale deletion. */
 export async function deleteMember(
   userId: number,
   updatedAt: string | null,
-  confirmation: string,
   reason: string,
 ) {
-  const confirmationUserId = validId(confirmation);
-  if (confirmationUserId !== userId)
-    throw new Error("확인할 회원 번호가 일치하지 않습니다.");
+  validId(String(userId));
   const receipt = await adminApi.remove<unknown>(`/users/${userId}`, {
-    confirmationUserId,
     expectedUpdatedAt: updatedAt,
     reason: reasonSchema.parse(reason),
   });

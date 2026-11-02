@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { ApiError, createHttpClient } from "@/lib/api/client";
+import {
+  ApiError,
+  createHttpClient,
+  getAuthSessionVersion,
+} from "@/lib/api/client";
 import type { AdminAccess, Query } from "./types";
 
 const client = createHttpClient("/api/backend");
@@ -22,11 +26,12 @@ export function queryString(query: Query = {}): string {
       params.set(key, String(value));
   return params.size ? `?${params.toString()}` : "";
 }
-/** All admin reads use the existing login/refresh/proxy, without retaining completed responses. */
+/** All admin reads use the existing login/refresh/proxy, with HTTP no-store; short-lived UI state is managed by the query policy. */
 async function request<T>(
   path: string,
   options: Parameters<typeof client.request>[1] = {},
 ): Promise<T> {
+  const session = getAuthSessionVersion();
   try {
     return await client.request<T>(`/api/admin${path}`, {
       ...options,
@@ -34,6 +39,7 @@ async function request<T>(
     });
   } catch (error) {
     if (
+      getAuthSessionVersion() === session &&
       error instanceof ApiError &&
       (error.status === 401 || error.status === 403)
     )
