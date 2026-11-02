@@ -29,5 +29,5 @@ export const cacheResources = {
   historyDetail: (sessionId: Id) =>
     `training-history-detail-${value(sessionId)}`,
   referenceAudios: (contentId: Id) => `reference-audios-${value(contentId)}`,
-  analysisCapabilities: "analysis-capabilities:mime-ranges-v2",
+  analysisCapabilities: "analysis-capabilities:mime-ranges-optional-consent-v3",
 } as const;
