@@ -51,6 +51,9 @@ export const adminApi = {
   create<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, { method: "POST", body, timeoutMs: 120_000 });
   },
+  remove<T>(path: string, body: unknown): Promise<T> {
+    return request<T>(path, { method: "DELETE", body, timeoutMs: 120_000 });
+  },
   edit<T>(path: string, body: unknown): Promise<T> {
     return request<T>(path, { method: "PATCH", body, timeoutMs: 120_000 });
   },

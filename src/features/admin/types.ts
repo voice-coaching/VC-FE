@@ -36,6 +36,11 @@ export type Content = {
   publishedAt: string | null;
   updatedAt: string;
 };
+export type ContentDeletion = {
+  id: number;
+  version: number;
+  deletedAt: string;
+};
 export type Category = {
   type: ContentType;
   code: string;

@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Search } from "lucide-react";
-import { useAdminQuery, useAdminCommand } from "../hooks";
-import { saveContent, publication } from "../services";
+import { useAdminQuery, useAdminCommand, useAdminSession } from "../hooks";
+import { saveContent, publication, deleteContent } from "../services";
 import type {
   AdminPage,
   Content,
@@ -169,13 +170,24 @@ export function ContentDetail({
   );
   const [cloning, setCloning] = useState(false);
   const current = content.data;
-  const editable = current?.status === "DRAFT" && current.publishedAt === null;
+  const router = useRouter();
+  const queries = useQueryClient();
+  const session = useAdminSession();
+  const listHref = announcer ? "/admin/announcer" : "/admin/contents";
   return (
     <>
       <Heading
         title={contentId ? "콘텐츠 상세" : "새 콘텐츠 등록"}
         description="문장 내용을 검수한 뒤 공개해 주세요."
       >
+        {contentId && (
+          <Button
+            disabled={content.isFetching}
+            onClick={() => void content.refetch()}
+          >
+            최신 상태 조회
+          </Button>
+        )}
         <ButtonLink href={announcer ? "/admin/announcer" : "/admin/contents"}>
           목록
         </ButtonLink>
@@ -207,7 +219,7 @@ export function ContentDetail({
                 {current.status !== "PUBLISHED" && (
                   <ConfirmAction
                     title="콘텐츠를 공개할까요?"
-                    description="공개 후에는 원문을 직접 수정할 수 없습니다. 문장과 기준 음성을 검수해 주세요."
+                    description="문장과 기준 음성을 검수한 뒤 공개해 주세요."
                     buttonLabel="공개하기"
                     primary
                     action={(reason) =>
@@ -224,32 +236,44 @@ export function ContentDetail({
                     action={(reason) => publication(current, "HIDDEN", reason)}
                   />
                 )}{" "}
-                {!editable && (
+                {current && (
                   <Button onClick={() => setCloning(true)}>
                     내용을 복사해 새 초안 작성
                   </Button>
                 )}
+                <ConfirmAction
+                  title="콘텐츠를 삭제할까요?"
+                  description="새 학습 목록과 연습에서 제외됩니다. 기존 학습 기록은 보존되며 이 화면에서 복구할 수 없습니다. 저장하지 않은 편집 내용은 적용되지 않습니다."
+                  buttonLabel="삭제하기"
+                  danger
+                  action={(reason) => deleteContent(current, reason)}
+                  onDone={() => {
+                    const path = `/contents/${current.id}`;
+                    queries.removeQueries({
+                      predicate: (query) =>
+                        query.queryKey[0] === "admin" &&
+                        query.queryKey[1] === session &&
+                        typeof query.queryKey[2] === "string" &&
+                        (query.queryKey[2] === path ||
+                          query.queryKey[2].startsWith(`${path}/`)),
+                    });
+                    router.replace(listHref);
+                  }}
+                />
               </div>
             </Panel>
           )}
-          {current && !editable && !cloning ? (
-            <Panel title="등록된 연습 문장" padded>
-              <p className={styles.prose}>{current.scriptText}</p>
-              <Message>
-                공개 이력이 있는 원문은 보호됩니다. 내용 변경은 새 초안으로
-                작성해 주세요.
-              </Message>
-            </Panel>
-          ) : (
-            <ContentEditor
-              key={`${current?.id ?? "new"}-${current?.version ?? 0}-${cloning}`}
-              current={cloning ? undefined : current}
-              initial={current}
-              announcer={announcer}
-            />
-          )}{" "}
+          <ContentEditor
+            key={`${current?.id ?? "new"}-${current?.version ?? 0}-${cloning}`}
+            current={cloning ? undefined : current}
+            initial={current}
+            announcer={announcer}
+          />{" "}
           {current?.type === "ANNOUNCER" && !cloning && (
-            <AudioPanel content={current} />
+            <AudioPanel
+              key={`${current.id}:${current.version}`}
+              content={current}
+            />
           )}
         </>
       )}
@@ -274,10 +298,16 @@ function ContentEditor({
   const categories = useAdminQuery<Category[]>("/content-categories", { type });
   return (
     <Panel
-      title={current ? "초안 편집" : "콘텐츠 작성"}
+      title={current ? "콘텐츠 편집" : "콘텐츠 작성"}
       description="공용 콘텐츠로 저장됩니다. 등록 이후 음성을 연결하고 공개할 수 있습니다."
       padded
     >
+      {current?.type === "ANNOUNCER" && (
+        <Message>
+          원문을 수정하면 기존 기준 음성이 제외됩니다. 저장한 문장에 맞는 음성을
+          다시 등록해 주세요. 제목만 수정하면 음성은 유지됩니다.
+        </Message>
+      )}
       <form
         className={styles.form}
         onSubmit={(event) => {
@@ -408,7 +438,11 @@ function ContentEditor({
             primary
             disabled={command.busy || !categories.data?.length}
           >
-            {command.busy ? "저장 중…" : current ? "초안 저장" : "초안 등록"}
+            {command.busy
+              ? "저장 중…"
+              : current
+                ? "변경사항 저장"
+                : "초안 등록"}
           </Button>
         </div>
       </form>

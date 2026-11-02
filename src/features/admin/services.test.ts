@@ -7,6 +7,7 @@ import {
   parseMemberIds,
   identifierValue,
   saveContent,
+  deleteContent,
   createCampaign,
   uploadAnnouncerAudio,
   resumeAnnouncerUpload,
@@ -97,31 +98,84 @@ test("revoked admin access broadcasts a denial and all reads request no-store", 
   assert.equal(calls[0].options.cache, "no-store");
   assert.equal(calls[0].options.credentials, "include");
 });
-test("published content is never sent to the draft edit endpoint", async () => {
+test("published and hidden content edit the existing ID with its current version", async () => {
   const data = form({
     type: "ANNOUNCER",
     focus: "PRONUNCIATION",
     category: "ANNOUNCER_PRACTICE",
     difficulty: "BEGINNER",
-    title: "제목",
+    title: "수정 제목",
     description: "",
-    scriptText: "문장",
+    scriptText: "수정 원문",
     targets: "",
     seconds: "10",
     reason: "검수",
   });
-  globalThis.fetch = async () => {
-    throw new Error("unexpected network");
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({ ...content, version: 4 });
   };
-  await assert.rejects(
-    saveContent(data, {
+  for (const status of ["PUBLISHED", "HIDDEN"]) {
+    await saveContent(data, {
       ...content,
-      status: "PUBLISHED",
+      status,
       publishedAt: "2026-11-01T00:00:00Z",
-    }),
-    /새 초안/,
-  );
+    });
+    const call = calls.at(-1)!;
+    assert.equal(call.options.method, "PATCH");
+    assert.ok(call.url.endsWith("/api/admin/contents/279"));
+    const body = JSON.parse(String(call.options.body));
+    assert.equal(body.version, 3);
+    assert.equal(body.content.scriptText, "수정 원문");
+    assert.equal(body.status, undefined);
+  }
 });
+test("deletion sends the exact version and reason with the existing authentication", async () => {
+  saveAccessToken("test-admin-access");
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({ id: 279, version: 4, deletedAt: "2026-11-02T09:00:00Z" });
+  };
+  const receipt = await deleteContent(content, "검수 후 삭제");
+  assert.equal(receipt.id, 279);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.equal(
+    new Headers(calls[0].options.headers).get("authorization"),
+    "Bearer test-admin-access",
+  );
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    version: 3,
+    reason: "검수 후 삭제",
+  });
+});
+test("deletion rejects missing reasons and mismatched receipts", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({ id: 999, version: 4, deletedAt: "2026-11-02T09:00:00Z" });
+  };
+  await assert.rejects(deleteContent(content, " "));
+  assert.equal(calls.length, 0);
+  await assert.rejects(deleteContent(content, "삭제"));
+  assert.equal(calls.length, 1);
+});
+test("conflicting deletion is not retried automatically", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return Response.json(
+      {
+        result: false,
+        message: "changed",
+        code: "ADMIN_EDIT_CONFLICT",
+        data: null,
+      },
+      { status: 409 },
+    );
+  };
+  await assert.rejects(deleteContent(content, "삭제"));
+  assert.equal(calls.length, 1);
+});
+
 test("selected campaign validates the recipient list and creates only a draft", async () => {
   const data = form({
     audience: "SELECTED_USERS",

@@ -397,7 +397,14 @@ export function ConfirmAction({
   const command = useAdminCommand();
   return (
     <>
-      <Button primary={primary} danger={danger} onClick={() => setOpen(true)}>
+      <Button
+        primary={primary}
+        danger={danger}
+        onClick={() => {
+          command.clearFeedback();
+          setOpen(true);
+        }}
+      >
         {buttonLabel}
       </Button>
       <Dialog

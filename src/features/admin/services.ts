@@ -6,6 +6,7 @@ import type {
   AudioIntent,
   AudioRegistration,
   Content,
+  ContentDeletion,
   Notice,
   Campaign,
   Popup,
@@ -101,8 +102,8 @@ export async function saveContent(
     });
   const reason = reasonSchema.parse(text(data, "reason"));
   if (current) {
-    if (current.status !== "DRAFT" || current.publishedAt !== null)
-      throw new Error("공개 이력이 있는 문장은 새 초안으로 등록해 주세요.");
+    if (content.type !== current.type)
+      throw new Error("등록된 콘텐츠의 유형은 변경할 수 없습니다.");
     return adminApi.edit(`/contents/${current.id}`, {
       version: current.version,
       content,
@@ -110,6 +111,23 @@ export async function saveContent(
     });
   }
   return adminApi.create("/contents", { content, reason });
+}
+/** Delete only the selected version and require a matching server receipt before navigating. */
+export async function deleteContent(
+  current: Content,
+  reason: string,
+): Promise<ContentDeletion> {
+  const receipt = await adminApi.remove<unknown>(`/contents/${current.id}`, {
+    version: current.version,
+    reason: reasonSchema.parse(reason),
+  });
+  return z
+    .object({
+      id: z.literal(current.id),
+      version: z.number().int().min(current.version),
+      deletedAt: z.string().datetime({ offset: true }),
+    })
+    .parse(receipt);
 }
 export function publication(
   content: Content,

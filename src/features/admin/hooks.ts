@@ -58,5 +58,10 @@ export function useAdminCommand() {
     },
     [queries, session],
   );
-  return { busy, error, success, run };
+  const clearFeedback = useCallback(() => {
+    if (busyRef.current) return;
+    setError(null);
+    setSuccess(null);
+  }, []);
+  return { busy, error, success, run, clearFeedback };
 }
