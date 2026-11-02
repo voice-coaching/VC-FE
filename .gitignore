@@ -6,3 +6,6 @@ out/
 *.log
 *.tsbuildinfo
 .qa-artifacts/
+
+# Local admin UI browser verification artifacts
+/test-artifacts/

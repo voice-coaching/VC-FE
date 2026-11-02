@@ -1,0 +1,896 @@
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+import assert from "node:assert/strict";
+import { writeFile, mkdir } from "node:fs/promises";
+import path from "node:path";
+const base = process.env.ADMIN_TEST_BASE_URL || "http://127.0.0.1:3100";
+if (!["127.0.0.1", "localhost"].includes(new URL(base).hostname))
+  throw new Error("Admin UI tests may run against localhost only.");
+const output = fileURLToPath(
+  new URL("../test-artifacts/admin-ui/", import.meta.url),
+);
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.ADMIN_BROWSER_EXECUTABLE_PATH
+    ? { executablePath: process.env.ADMIN_BROWSER_EXECUTABLE_PATH }
+    : {}),
+});
+const now = "2026-11-02T00:00:00Z";
+const users = [
+  {
+    id: 30,
+    nickname: "연습 회원",
+    maskedEmail: "t***@example.invalid",
+    status: "ACTIVE",
+    role: "USER",
+    createdAt: now,
+    membershipType: "free",
+    membershipExpiresAt: null,
+    membershipEnvironment: null,
+    loginProviders: ["LOCAL"],
+  },
+  {
+    id: 31,
+    nickname: "발음 연습생",
+    maskedEmail: "v***@example.invalid",
+    status: "ACTIVE",
+    role: "USER",
+    createdAt: now,
+    membershipType: "paid",
+    membershipExpiresAt: "2026-12-02T00:00:00Z",
+    membershipEnvironment: "TEST",
+    loginProviders: ["LOCAL"],
+  },
+  {
+    id: 9001,
+    nickname: "운영 관리자",
+    maskedEmail: "a***@example.invalid",
+    status: "ACTIVE",
+    role: "ADMIN",
+    createdAt: now,
+    membershipType: "admin",
+    membershipExpiresAt: null,
+    membershipEnvironment: "TEST",
+    loginProviders: ["LOCAL"],
+  },
+];
+const contents = [
+  {
+    id: 279,
+    version: 1,
+    type: "ANNOUNCER",
+    focus: "PRONUNCIATION",
+    category: "ANNOUNCER_PRACTICE",
+    difficulty: "BEGINNER",
+    title: "아나운서 따라 읽기",
+    description: "정확한 발음을 연습합니다.",
+    scriptText: "오늘 아침 서울의 날씨를 전해 드립니다.",
+    targetPronunciations: [],
+    estimatedSeconds: 15,
+    status: "PUBLISHED",
+    publishedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 304,
+    version: 0,
+    type: "SENTENCE",
+    focus: "PRONUNCIATION",
+    category: "FINAL_CONSONANT",
+    difficulty: "BEGINNER",
+    title: "받침 발음 연습",
+    description: "받침을 빠뜨리지 않고 읽습니다.",
+    scriptText: "밤이 되면 따뜻한 밥을 먹습니다.",
+    targetPronunciations: ["밤", "밥"],
+    estimatedSeconds: 8,
+    status: "DRAFT",
+    publishedAt: null,
+    updatedAt: now,
+  },
+];
+const notices = [
+  {
+    id: 1,
+    version: 0,
+    title: "서비스 이용 안내",
+    summary: "처음 이용하는 회원을 위한 안내입니다.",
+    sections: [
+      { title: "이용 방법", paragraphs: ["매일 문장 하나로 연습해 보세요."] },
+    ],
+    pinned: true,
+    published: true,
+    publishedAt: now,
+  },
+];
+const inquiries = [
+  {
+    id: 48,
+    version: 0,
+    userId: 30,
+    category: "SERVICE",
+    subject: "녹음 이용 방법 문의",
+    body: "녹음을 다시 진행하려면 어떻게 해야 하나요?",
+    relatedSessionId: 123,
+    replyEmail: null,
+    status: "RECEIVED",
+    answer: null,
+    createdAt: now,
+    answeredAt: null,
+  },
+];
+const campaigns = [
+  {
+    id: 11,
+    version: 0,
+    audience: "ALL_ACTIVE",
+    kind: "GENERAL",
+    title: "서비스 점검 안내",
+    body: "점검 시간 동안 일부 기능 이용이 제한됩니다.",
+    deepLink: "/notifications",
+    userIds: [],
+    status: "DRAFT",
+    audienceCount: 3,
+    sentCount: 0,
+    createdAt: now,
+    sentAt: null,
+  },
+];
+const popups = [
+  {
+    id: 1,
+    version: 0,
+    title: "함께 시작하는 발음 연습",
+    body: "매일 한 문장씩 차근차근 연습해 보세요.",
+    deepLink: "/home",
+    priority: 10,
+    startsAt: now,
+    endsAt: "2026-11-05T00:00:00Z",
+    enabled: true,
+    createdAt: now,
+  },
+];
+const audios = [
+  {
+    audioId: 64,
+    contentId: 279,
+    speakerName: "전문 아나운서",
+    speakerType: "ANNOUNCER",
+    durationMs: 12000,
+    primary: true,
+    contentVersion: 1,
+    createdAt: now,
+  },
+];
+const audits = [
+  {
+    id: 1,
+    actorId: 9001,
+    action: "CONTENT_CREATE",
+    targetType: "CONTENT",
+    targetId: "304",
+    reason: "신규 연습 문장 등록",
+    changedFields: "title,scriptText",
+    outcome: "SUCCESS",
+    correlationId: "532fe9f8-14e4-47ce-a011-7c9d5f6a2acd",
+    createdAt: now,
+  },
+];
+const resources = [
+  "TRAINING_SESSIONS",
+  "RECORDINGS",
+  "ANALYSES",
+  "PAYMENTS",
+  "CANCELLATIONS",
+  "INQUIRIES",
+  "NOTIFICATIONS",
+  "COURSE_PROGRESS",
+  "TITLES",
+  "TITLE_EXAMS",
+  "DIRECT_ANALYSES",
+  "COACHING_USAGE",
+  "PRIVATE_CONTENTS",
+];
+let allow = true,
+  dispatches = 0,
+  puts = 0,
+  rejectEdit = false;
+const writes = [];
+const errors = [];
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 1050 },
+  locale: "ko-KR",
+});
+await context.addInitScript(() =>
+  localStorage.setItem("speakai.access-token", "ui-test-token-only"),
+);
+function envelope(data) {
+  return { result: true, message: "UI contract fixture", data };
+}
+function paged(items, query) {
+  const page = Number(query.get("page") || 0),
+    size = Number(query.get("size") || 20);
+  return {
+    items: items.slice(page * size, (page + 1) * size),
+    page,
+    size,
+    totalElements: items.length,
+    totalPages: Math.ceil(items.length / size),
+    hasNext: (page + 1) * size < items.length,
+  };
+}
+await context.route("https://storage.example.invalid/**", async (route) => {
+  const request = route.request();
+  if (request.method() === "OPTIONS") {
+    await route.fulfill({
+      status: 204,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "PUT",
+        "access-control-allow-headers": "*",
+      },
+    });
+    return;
+  }
+  assert.equal(request.headers().authorization, undefined);
+  assert.equal(request.headers().cookie, undefined);
+  puts++;
+  await route.fulfill({
+    status: 200,
+    headers: { "access-control-allow-origin": "*" },
+  });
+});
+await context.route("**/api/backend/**", async (route) => {
+  const req = route.request(),
+    url = new URL(req.url());
+  const path = url.pathname.replace("/api/backend/api/admin", "");
+  const method = req.method();
+  const body = method === "GET" ? null : req.postDataJSON();
+  const reply = (data) =>
+    route.fulfill({
+      status: method === "POST" && !path.endsWith("/dispatch") ? 201 : 200,
+      contentType: "application/json",
+      body: JSON.stringify(envelope(data)),
+    });
+  if (url.pathname === "/api/backend/api/users/me")
+    return reply({
+      ...users[2],
+      email: "admin@example.invalid",
+      profileImageUrl: null,
+      onboardingCompleted: true,
+    });
+  if (url.pathname === "/api/backend/api/users/me/notification-preferences")
+    return reply({
+      practiceReminder: {
+        enabled: false,
+        time: "09:00",
+        daysOfWeek: [],
+        timezone: "Asia/Seoul",
+      },
+      marketing: { enabled: false },
+      updatedAt: now,
+    });
+  if (path === "/me") {
+    if (!allow) {
+      await route.fulfill({
+        status: 403,
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: false,
+          message: "ACCESS_DENIED",
+          data: null,
+          code: "ACCESS_DENIED",
+        }),
+      });
+      return;
+    }
+    return reply({ id: 9001, nickname: "운영 관리자", role: "ADMIN" });
+  }
+  if (!allow) {
+    await route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ result: false, message: "denied", data: null }),
+    });
+    return;
+  }
+  if (method !== "GET") writes.push({ path, method, body });
+  if (rejectEdit && method === "PATCH" && path === "/contents/304") {
+    rejectEdit = false;
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        result: false,
+        message: "conflict",
+        code: "ADMIN_EDIT_CONFLICT",
+        data: null,
+      }),
+    });
+    return;
+  }
+
+  if (path === "/users/resolve")
+    return reply([{ userId: 30, source: "ANALYSIS" }]);
+  if (path === "/users") return reply(paged(users, url.searchParams));
+  if (/^\/users\/\d+\/overview$/.test(path))
+    return reply({
+      user: users[0],
+      counts: resources.map((resource) => ({
+        resource,
+        count: resource === "ANALYSES" ? 1 : 0,
+      })),
+      coachingUsage: {
+        membershipType: "free",
+        environment: null,
+        unlimited: false,
+        startsAt: now,
+        expiresAt: "2026-12-02T00:00:00Z",
+        limit: 8,
+        used: 1,
+        reserved: 0,
+        remaining: 7,
+        canRequestCoaching: true,
+      },
+      usageUnavailableReason: null,
+    });
+  if (/^\/users\/\d+\/records$/.test(path))
+    return reply(
+      paged(
+        url.searchParams.get("resource") === "ANALYSES"
+          ? [
+              {
+                fields: {
+                  id: 96,
+                  recordingId: 126,
+                  status: "FAILED",
+                  failureCode: "execution_failed",
+                  requestId: "532fe9f8-14e4-47ce-a011-7c9d5f6a2acd",
+                },
+              },
+            ]
+          : [],
+        url.searchParams,
+      ),
+    );
+  if (path === "/content-categories")
+    return reply([
+      {
+        type: url.searchParams.get("type"),
+        code:
+          url.searchParams.get("type") === "ANNOUNCER"
+            ? "ANNOUNCER_PRACTICE"
+            : "FINAL_CONSONANT",
+        label:
+          url.searchParams.get("type") === "ANNOUNCER"
+            ? "아나운서 연습"
+            : "받침",
+        sortOrder: 1,
+      },
+    ]);
+  if (path === "/contents") {
+    if (method === "POST") {
+      const item = {
+        ...body.content,
+        id: 400 + contents.length,
+        version: 0,
+        status: "DRAFT",
+        publishedAt: null,
+        updatedAt: now,
+      };
+      contents.push(item);
+      return reply(item);
+    }
+    const type = url.searchParams.get("type");
+    return reply(
+      paged(
+        type ? contents.filter((c) => c.type === type) : contents,
+        url.searchParams,
+      ),
+    );
+  }
+  if (/\/reference-audios\/upload-url$/.test(path))
+    return reply({
+      uploadId: "test-upload",
+      uploadUrl: "https://storage.example.invalid/signed",
+      requiredHeaders: { "content-type": "audio/mpeg" },
+      expiresAt: "2099-01-01T00:00:00Z",
+    });
+  if (/\/contents\/\d+\/reference-audios$/.test(path)) {
+    if (method === "POST") {
+      const audio = {
+        audioId: 65,
+        contentId: 279,
+        speakerName: body.speakerName,
+        speakerType: "ANNOUNCER",
+        durationMs: 3000,
+        primary: body.primary,
+        contentVersion: 2,
+        createdAt: now,
+      };
+      audios.forEach((a) => (a.primary = false));
+      audios.push(audio);
+      contents[0].version = 2;
+      return reply(audio);
+    }
+    return reply({ items: audios, contentVersion: contents[0].version });
+  }
+  if (/\/reference-audios\/\d+\/playback-url$/.test(path))
+    return reply({
+      audioId: 64,
+      playbackUrl: "https://storage.example.invalid/playback",
+      expiresAt: "2099-01-01T00:00:00Z",
+    });
+  if (/\/contents\/\d+\/publication$/.test(path)) {
+    const id = Number(path.split("/")[2]);
+    const item = contents.find((c) => c.id === id);
+    item.status = body.status;
+    item.publishedAt = now;
+    item.version++;
+    return reply(item);
+  }
+  if (/^\/contents\/\d+$/.test(path)) {
+    const item = contents.find((c) => c.id === Number(path.split("/")[2]));
+    if (method === "PATCH")
+      Object.assign(item, body.content, { version: item.version + 1 });
+    return reply(item);
+  }
+  if (path === "/notices") {
+    if (method === "POST") {
+      const item = { ...body.notice, id: notices.length + 1, version: 0 };
+      notices.push(item);
+      return reply(item);
+    }
+    return reply(paged(notices, url.searchParams));
+  }
+  if (/^\/notices\/\d+$/.test(path))
+    return reply(notices.find((n) => n.id === Number(path.split("/")[2])));
+  if (path === "/inquiries")
+    return reply(
+      paged(
+        url.searchParams.get("status")
+          ? inquiries.filter(
+              (item) => item.status === url.searchParams.get("status"),
+            )
+          : inquiries,
+        url.searchParams,
+      ),
+    );
+  if (/^\/inquiries\/\d+\/(answer|status)$/.test(path)) {
+    const item = inquiries[0];
+    if (path.endsWith("/answer"))
+      Object.assign(item, {
+        answer: body.answer,
+        status: "ANSWERED",
+        answeredAt: now,
+      });
+    else item.status = body.status;
+    item.version++;
+    return reply(item);
+  }
+  if (/^\/inquiries\/\d+$/.test(path)) return reply(inquiries[0]);
+  if (path === "/notification-campaigns") {
+    if (method === "POST") {
+      const item = {
+        ...body,
+        id: campaigns.length + 20,
+        version: 0,
+        status: "DRAFT",
+        audienceCount: body.userIds.length || 3,
+        sentCount: 0,
+        createdAt: now,
+        sentAt: null,
+      };
+      campaigns.push(item);
+      return reply(item);
+    }
+    return reply(paged(campaigns, url.searchParams));
+  }
+  if (/\/notification-campaigns\/\d+\/dispatch$/.test(path)) {
+    const c = campaigns.find((c) => c.id === Number(path.split("/")[2]));
+    if (c.status === "DRAFT") {
+      dispatches++;
+      c.status = "SENT";
+      c.sentCount = c.audienceCount;
+      c.sentAt = now;
+      c.version++;
+    }
+    return reply(c);
+  }
+  if (/^\/notification-campaigns\/\d+$/.test(path))
+    return reply(campaigns.find((c) => c.id === Number(path.split("/")[2])));
+  if (path === "/popups") {
+    if (method === "POST") {
+      const item = {
+        ...body.popup,
+        id: popups.length + 1,
+        version: 0,
+        createdAt: now,
+        endsAt: new Date(
+          Date.parse(body.popup.startsAt) + body.popup.durationDays * 86400000,
+        ).toISOString(),
+      };
+      popups.push(item);
+      return reply(item);
+    }
+    return reply(paged(popups, url.searchParams));
+  }
+  if (/^\/popups\/\d+$/.test(path))
+    return reply(popups.find((p) => p.id === Number(path.split("/")[2])));
+  if (path === "/audit-logs") return reply(paged(audits, url.searchParams));
+  throw new Error(`Unhandled fixture request ${method} ${path}`);
+});
+const page = await context.newPage();
+page.on("pageerror", (error) => errors.push(error.message));
+const heading = (title) =>
+  page.getByRole("heading", { name: title, exact: true }).waitFor();
+const nav = (title) =>
+  page
+    .getByRole("navigation", { name: "관리자 메뉴" })
+    .getByRole("link", { name: title, exact: true });
+const results = [];
+async function check(name, fn) {
+  await fn();
+  results.push(name);
+  console.log("PASS", name);
+}
+try {
+  await check("desktop dashboard and real count layout", async () => {
+    await page.goto(base + "/admin");
+    await heading("운영 현황");
+    await page.getByText("답변을 기다리는 문의", { exact: true }).waitFor();
+    await page.screenshot({
+      path: path.join(output, "admin-overview.png"),
+      fullPage: true,
+    });
+  });
+  await check("all admin menus render without browser errors", async () => {
+    for (const title of [
+      "회원 관리",
+      "학습 콘텐츠",
+      "아나운서 음성",
+      "공지사항",
+      "문의 관리",
+      "알림 발송",
+      "팝업 관리",
+      "작업 이력",
+    ]) {
+      await nav(title).click();
+      await heading(title);
+    }
+  });
+  await check("member detail and analysis UUID lookup", async () => {
+    await nav("회원 관리").click();
+    await page.getByRole("link", { name: "연습 회원", exact: true }).click();
+    await heading("연습 회원님의 기록");
+    await page.getByRole("button", { name: /AI 분석/ }).click();
+    await page.getByText("execution_failed", { exact: true }).waitFor();
+    await nav("회원 관리").click();
+    await page
+      .getByLabel("회원 번호 또는 UUID", { exact: true })
+      .fill("532fe9f8-14e4-47ce-a011-7c9d5f6a2acd");
+    await page.getByRole("button", { name: "연결된 회원 조회" }).click();
+    await page.getByRole("link", { name: "회원 #30 보기" }).waitFor();
+  });
+  await check("content draft creation and explicit publication", async () => {
+    await nav("학습 콘텐츠").click();
+    await page.getByRole("link", { name: "새 콘텐츠", exact: true }).click();
+    await page
+      .getByLabel("카테고리", { exact: true })
+      .selectOption("FINAL_CONSONANT");
+    await page
+      .getByLabel("콘텐츠 제목", { exact: true })
+      .fill("브라우저 검증 문장");
+    await page
+      .getByLabel("연습할 문장·원문", { exact: true })
+      .fill("밤이 되면 따뜻한 밥을 먹습니다.");
+    await page.getByLabel("작업 사유", { exact: true }).fill("브라우저 검증");
+    await page.getByRole("button", { name: "초안 등록", exact: true }).click();
+    await page.waitForURL(/\/admin\/contents\/\d+$/);
+    await page.getByRole("button", { name: "공개하기", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByLabel("작업 사유", { exact: true })
+      .fill("문장 검수 완료");
+    await dialog.getByRole("button", { name: "공개하기", exact: true }).click();
+    await page
+      .getByText("공개 이력이 있는 원문은 보호됩니다.", { exact: false })
+      .waitFor();
+  });
+  await check(
+    "editing conflict keeps the unsaved form and existing category",
+    async () => {
+      await page.goto(base + "/admin/contents/304");
+      await page
+        .getByRole("heading", { name: "콘텐츠 상세", exact: true })
+        .waitFor();
+      await page.waitForFunction(
+        () =>
+          document.querySelector('select[name="category"]')?.value ===
+          "FINAL_CONSONANT",
+      );
+      assert.equal(
+        await page.getByLabel("카테고리", { exact: true }).inputValue(),
+        "FINAL_CONSONANT",
+      );
+      await page
+        .getByLabel("콘텐츠 제목", { exact: true })
+        .fill("보존할 수정 제목");
+      await page
+        .getByLabel("작업 사유", { exact: true })
+        .fill("동시 수정 검증");
+      rejectEdit = true;
+      await page
+        .getByRole("button", { name: "초안 저장", exact: true })
+        .click();
+      await page
+        .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
+          exact: false,
+        })
+        .waitFor();
+      assert.equal(
+        await page.getByLabel("콘텐츠 제목", { exact: true }).inputValue(),
+        "보존할 수정 제목",
+      );
+    },
+  );
+  await check(
+    "announcer audio upload uses private PUT and connects registration",
+    async () => {
+      await nav("아나운서 음성").click();
+      await page
+        .getByRole("link", { name: "아나운서 따라 읽기", exact: true })
+        .click();
+      await page.getByLabel("음성 파일", { exact: true }).setInputFiles({
+        name: "sample.mp3",
+        mimeType: "audio/mpeg",
+        buffer: Buffer.from([1, 2, 3, 4]),
+      });
+      await page
+        .getByLabel("화자 표시명", { exact: true })
+        .fill("테스트 아나운서");
+      await page
+        .getByLabel("작업 사유", { exact: true })
+        .fill("기준 음성 검수");
+      await page
+        .getByRole("button", { name: "업로드하고 등록", exact: true })
+        .click();
+      await page
+        .getByText("테스트 아나운서", { exact: false })
+        .first()
+        .waitFor();
+      assert.equal(puts, 1);
+      await page.screenshot({
+        path: path.join(output, "admin-announcer.png"),
+        fullPage: true,
+      });
+    },
+  );
+  await check(
+    "notification draft never dispatches before reason confirmation",
+    async () => {
+      await nav("알림 발송").click();
+      await page.getByRole("link", { name: "알림 작성", exact: true }).click();
+      await page
+        .getByLabel("발송 대상", { exact: true })
+        .selectOption("SELECTED_USERS");
+      await page.getByLabel("회원 번호", { exact: true }).fill("30,31");
+      await page
+        .getByLabel("알림 제목", { exact: true })
+        .fill("UI 검증용 요금제 안내");
+      await page
+        .getByLabel("알림 본문", { exact: true })
+        .fill("요금제를 확인해 주세요.");
+      await page.getByLabel("알림 유형", { exact: true }).selectOption("PLAN");
+      await page.getByLabel("작업 사유", { exact: true }).fill("초안 검토");
+      await page
+        .getByRole("button", { name: "초안 저장·검토", exact: true })
+        .click();
+      await page.waitForURL(/\/admin\/notifications\/\d+$/);
+      assert.equal(dispatches, 0);
+      await page
+        .getByRole("button", { name: "검토 완료·발송하기", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("대상 검토 후 발송");
+      await dialog
+        .getByRole("button", { name: "검토 완료·발송하기", exact: true })
+        .click();
+      await page
+        .getByText("총 2명에게 전달했습니다.", { exact: false })
+        .waitFor();
+      assert.equal(dispatches, 1);
+    },
+  );
+  await check(
+    "popup duration is sent explicitly and server end date is shown",
+    async () => {
+      await nav("팝업 관리").click();
+      await page.getByRole("link", { name: "팝업 등록", exact: true }).click();
+      await page.getByLabel("제목", { exact: true }).fill("기간 팝업 검증");
+      await page.getByLabel("본문", { exact: true }).fill("3일간 안내합니다.");
+      await page.getByLabel("노출 일수", { exact: true }).fill("3");
+      await page.getByLabel("설정한 기간에 팝업 노출", { exact: true }).check();
+      await page.getByLabel("작업 사유", { exact: true }).fill("기간 확인");
+      await page
+        .getByRole("button", { name: "팝업 저장", exact: true })
+        .click();
+      await page.waitForURL(/\/admin\/popups\/\d+$/);
+      await page
+        .getByText("현재 저장된 종료 시각:", { exact: false })
+        .waitFor();
+      assert.equal(
+        writes.find((w) => w.path === "/popups").body.popup.durationDays,
+        3,
+      );
+    },
+  );
+  await check("notice sections create a typed plain text notice", async () => {
+    await nav("공지사항").click();
+    await page.getByRole("link", { name: "새 공지", exact: true }).click();
+    await page.getByLabel("제목", { exact: true }).fill("운영 공지 검증");
+    await page
+      .getByLabel("짧은 요약", { exact: true })
+      .fill("문단과 구역을 확인합니다.");
+    await page.getByLabel("구역 제목", { exact: true }).fill("이용 안내");
+    await page
+      .getByLabel("본문", { exact: true })
+      .fill("첫 번째 문단입니다.\n두 번째 문단입니다.");
+    await page.getByLabel("작업 사유", { exact: true }).fill("공지 검수");
+    await page.getByRole("button", { name: "공지 저장", exact: true }).click();
+    await page.waitForURL(/\/admin\/notices\/\d+$/);
+    const notice = writes.find((w) => w.path === "/notices").body.notice;
+    assert.equal(notice.sections[0].paragraphs.length, 2);
+    assert.equal(notice.published, false);
+  });
+  await check(
+    "inquiry answer and close are distinct allowed operations",
+    async () => {
+      await nav("문의 관리").click();
+      await page
+        .getByRole("link", { name: "녹음 이용 방법 문의", exact: true })
+        .click();
+      await page
+        .getByLabel("답변 내용", { exact: true })
+        .fill("현재 문장에서 다시 녹음을 선택해 주세요.");
+      await page.getByLabel("작업 사유", { exact: true }).fill("문의 답변");
+      await page
+        .getByRole("button", { name: "답변 저장", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "문의 종료", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("답변 완료 확인");
+      await dialog
+        .getByRole("button", { name: "문의 종료", exact: true })
+        .click();
+      await page.getByLabel("답변 내용", { exact: true }).waitFor();
+      assert.equal(inquiries[0].status, "CLOSED");
+    },
+  );
+  await check("mobile navigation and horizontal overflow", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(base + "/admin");
+    await heading("운영 현황");
+    await page.screenshot({
+      path: path.join(output, "admin-mobile.png"),
+      fullPage: true,
+    });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+      true,
+    );
+  });
+  await check(
+    "settings reveals administrator entry only after server approval",
+    async () => {
+      await page.goto(base + "/mypage/settings");
+      await heading("설정");
+      await page
+        .getByRole("link", { name: "관리자 페이지", exact: true })
+        .waitFor();
+      await page.screenshot({
+        path: path.join(output, "admin-settings-entry.png"),
+        fullPage: true,
+      });
+    },
+  );
+  await check(
+    "test membership admin cannot reveal an unauthorized administrator entry",
+    async () => {
+      allow = false;
+      const denial = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/admin/me") && response.status() === 403,
+      );
+      await page.reload();
+      await denial;
+      await heading("설정");
+      assert.equal(
+        await page
+          .getByRole("link", { name: "관리자 페이지", exact: true })
+          .count(),
+        0,
+      );
+      allow = true;
+      await page.goto(base + "/admin");
+      await heading("운영 현황");
+    },
+  );
+  await check("a revoked role hides the previous account data", async () => {
+    allow = false;
+    await page.evaluate(() => {
+      localStorage.setItem("speakai.access-token", "different-test-account");
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "speakai.access-token",
+          newValue: "different-test-account",
+        }),
+      );
+    });
+    await heading("관리자 접근을 확인해 주세요");
+    assert.equal(
+      await page.getByRole("navigation", { name: "관리자 메뉴" }).count(),
+      0,
+    );
+  });
+  await check(
+    "anonymous login failure does not repeat refresh forever",
+    async () => {
+      const anonymous = await browser.newContext();
+      let requests = 0;
+      await anonymous.route("**/api/backend/**", async (route) => {
+        requests++;
+        await route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            result: false,
+            message: "login required",
+            data: null,
+          }),
+        });
+      });
+      const visitor = await anonymous.newPage();
+      await visitor.goto(base + "/admin");
+      await visitor
+        .getByRole("heading", { name: "관리자 접근을 확인해 주세요" })
+        .waitFor();
+      await visitor.waitForTimeout(700);
+      assert.ok(requests <= 3, `unexpected auth requests: ${requests}`);
+      await anonymous.close();
+    },
+  );
+  assert.deepEqual(errors, []);
+  await writeFile(
+    path.join(output, "results.json"),
+    JSON.stringify(
+      {
+        checks: results,
+        browserErrors: errors,
+        writes: writes.map((w) => ({ path: w.path, method: w.method })),
+        dispatches,
+        puts,
+      },
+      null,
+      2,
+    ),
+  );
+  console.log("ALL PASSED", results.length);
+} catch (error) {
+  await page.screenshot({
+    path: path.join(output, "failure.png"),
+    fullPage: true,
+  });
+  throw error;
+} finally {
+  await context.close();
+  await browser.close();
+}
