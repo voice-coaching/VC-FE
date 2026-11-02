@@ -386,7 +386,7 @@ export function makePrimary(audio: Audio, reason: string): Promise<Audio> {
 }
 
 /** The number confirmation and exact server timestamp protect against wrong/stale member actions. */
-export async function withdrawMember(
+export async function deleteMember(
   userId: number,
   updatedAt: string | null,
   confirmation: string,
@@ -395,19 +395,16 @@ export async function withdrawMember(
   const confirmationUserId = validId(confirmation);
   if (confirmationUserId !== userId)
     throw new Error("확인할 회원 번호가 일치하지 않습니다.");
-  const receipt = await adminApi.create<unknown>(
-    `/users/${userId}/withdrawal`,
-    {
-      confirmationUserId,
-      expectedUpdatedAt: updatedAt,
-      reason: reasonSchema.parse(reason),
-    },
-  );
+  const receipt = await adminApi.remove<unknown>(`/users/${userId}`, {
+    confirmationUserId,
+    expectedUpdatedAt: updatedAt,
+    reason: reasonSchema.parse(reason),
+  });
   return z
     .object({
       userId: z.literal(userId),
-      withdrawnAt: z.string().datetime({ offset: true }).nullable(),
-      alreadyWithdrawn: z.boolean(),
+      deletedAt: z.string().datetime({ offset: true }),
+      alreadyDeleted: z.boolean(),
     })
     .parse(receipt);
 }

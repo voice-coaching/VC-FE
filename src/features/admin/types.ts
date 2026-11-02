@@ -196,8 +196,8 @@ export type Query = Record<
   string | number | boolean | null | undefined
 >;
 
-export type MemberWithdrawal = {
+export type MemberDeletion = {
   userId: number;
-  withdrawnAt: string | null;
-  alreadyWithdrawn: boolean;
+  deletedAt: string;
+  alreadyDeleted: boolean;
 };

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { recordColumnLabel, displayRecordValue } from "../presentation";
-import { MemberWithdrawalPanel } from "./member-withdrawal";
+import { MemberDeletionPanel } from "./member-deletion";
 import { Search } from "lucide-react";
 import { useAdminCommand, useAdminQuery } from "../hooks";
 import { adminApi } from "../api";
@@ -306,7 +306,7 @@ export function MemberDetail({ userId }: { userId: number }) {
               )}
             </Panel>
           )}
-          <MemberWithdrawalPanel member={user} updatedAt={account?.updatedAt} />
+          <MemberDeletionPanel member={user} updatedAt={account?.updatedAt} />
           <Panel
             title="관련 기록"
             description="민감한 개인정보와 비밀 인증 정보는 표시하지 않습니다."

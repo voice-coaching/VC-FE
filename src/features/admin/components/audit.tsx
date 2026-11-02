@@ -95,7 +95,7 @@ export function AuditPage() {
               "POPUP_EDIT",
               "NOTIFICATION_CREATE",
               "NOTIFICATION_DISPATCH",
-              "USER_WITHDRAW",
+              "USER_DELETE",
             ].map((value) => (
               <option key={value} value={value}>
                 {displayLabel(value)}

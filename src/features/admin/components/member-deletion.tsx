@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -7,8 +9,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useAdminCommand, useAdminQuery } from "../hooks";
-import { withdrawMember } from "../services";
+import { useAdminCommand, useAdminQuery, useAdminSession } from "../hooks";
+import { deleteMember } from "../services";
 import type { AdminAccess, Member } from "../types";
 import {
   Panel,
@@ -20,7 +22,7 @@ import {
 } from "./shared";
 import styles from "../admin.module.css";
 
-export function MemberWithdrawalPanel({
+export function MemberDeletionPanel({
   member,
   updatedAt,
 }: {
@@ -31,25 +33,20 @@ export function MemberWithdrawalPanel({
   const command = useAdminCommand();
   const [open, setOpen] = useState(false);
   const self = actor.data?.id === member.id;
-  if (member.status === "WITHDRAWN")
-    return (
-      <Panel title="탈퇴 처리" padded>
-        <Message>
-          탈퇴 처리된 회원입니다. 남아 있는 학습·결제 내역은 계속 확인할 수
-          있습니다.
-        </Message>
-      </Panel>
-    );
+  const router = useRouter();
+  const queries = useQueryClient();
+  const session = useAdminSession();
   return (
-    <Panel title="회원 탈퇴 처리" padded>
+    <Panel title="회원 및 업무 기록 삭제" padded>
       <Message>
-        회원의 이메일·로그인 연결을 정리하고 이름을 익명으로 바꿉니다. 개인
-        문장은 정리하며 녹음 파일은 삭제 대상으로 등록합니다. 학습·결제 내역은
-        보존됩니다.
+        회원 정보와 로그인 연결, 학습·평가·결제·문의·개인 문장 등 서비스에
+        저장된 기록을 삭제합니다. 이 화면에서 복구할 수 없습니다. 별도 보관소의
+        음성·평가 원본 파일은 삭제하지 않습니다. 결제 기록을 지워도 결제 취소나
+        환불이 실행되지는 않습니다.
       </Message>
       {self && (
         <Message>
-          현재 로그인한 관리자 본인의 계정은 여기서 탈퇴 처리할 수 없습니다.
+          현재 로그인한 관리자 본인의 계정은 여기서 삭제할 수 없습니다.
         </Message>
       )}
       {updatedAt === undefined && (
@@ -72,7 +69,7 @@ export function MemberWithdrawalPanel({
           setOpen(true);
         }}
       >
-        탈퇴 처리하기
+        회원 삭제하기
       </Button>
       {!open && <CommandFeedback command={command} />}
       <Dialog
@@ -83,11 +80,11 @@ export function MemberWithdrawalPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>이 회원을 탈퇴 처리할까요?</DialogTitle>
+            <DialogTitle>회원과 업무 기록을 삭제할까요?</DialogTitle>
             <DialogDescription>
-              {member.nickname} · 회원 번호 {member.id}. 로그인과 서비스 이용이
-              중단됩니다. 학습·결제 기록은 남으며 이 화면에서 복구할 수
-              없습니다.
+              {member.nickname} · 회원 번호 {member.id}. 회원과 연결된 서비스
+              기록을 삭제합니다. 최소한의 삭제 확인·관리 작업 기록은 남깁니다.
+              다른 회원과 공용 콘텐츠는 삭제하지 않습니다.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -98,13 +95,25 @@ export function MemberWithdrawalPanel({
               if (updatedAt === undefined) return;
               void command.run(
                 () =>
-                  withdrawMember(
+                  deleteMember(
                     member.id,
                     updatedAt,
                     String(data.get("confirmation") ?? ""),
                     String(data.get("reason") ?? ""),
                   ),
-                () => setOpen(false),
+                () => {
+                  setOpen(false);
+                  const path = `/users/${member.id}`;
+                  queries.removeQueries({
+                    predicate: (query) =>
+                      query.queryKey[0] === "admin" &&
+                      query.queryKey[1] === session &&
+                      typeof query.queryKey[2] === "string" &&
+                      (query.queryKey[2] === path ||
+                        query.queryKey[2].startsWith(`${path}/`)),
+                  });
+                  router.replace("/admin/users");
+                },
               );
             }}
           >
@@ -123,7 +132,7 @@ export function MemberWithdrawalPanel({
                 돌아가기
               </Button>
               <Button danger type="submit" disabled={command.busy}>
-                {command.busy ? "탈퇴 처리 중…" : "탈퇴 처리하기"}
+                {command.busy ? "삭제 중…" : "회원 삭제하기"}
               </Button>
             </div>
           </form>

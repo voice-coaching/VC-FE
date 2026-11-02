@@ -203,7 +203,8 @@ let allow = true,
   puts = 0,
   rejectEdit = false,
   rejectDelete = false,
-  rejectWithdrawal = false;
+  rejectMemberDeletion = false;
+const deletedMembers = new Set();
 let disposableContentId;
 const writes = [];
 const errors = [];
@@ -327,7 +328,13 @@ await context.route("**/api/backend/**", async (route) => {
 
   if (path === "/users/resolve")
     return reply([{ userId: 30, source: "ANALYSIS" }]);
-  if (path === "/users") return reply(paged(users, url.searchParams));
+  if (path === "/users")
+    return reply(
+      paged(
+        users.filter((user) => !deletedMembers.has(user.id)),
+        url.searchParams,
+      ),
+    );
   if (/^\/users\/\d+\/overview$/.test(path)) {
     const member = users.find((user) => user.id === Number(path.split("/")[2]));
     return reply({
@@ -373,9 +380,9 @@ await context.route("**/api/backend/**", async (route) => {
       },
     });
   }
-  if (/^\/users\/\d+\/withdrawal$/.test(path)) {
+  if (method === "DELETE" && /^\/users\/\d+$/.test(path)) {
     const member = users.find((user) => user.id === Number(path.split("/")[2]));
-    if (rejectWithdrawal)
+    if (rejectMemberDeletion)
       return route.fulfill({
         status: 409,
         contentType: "application/json",
@@ -389,13 +396,9 @@ await context.route("**/api/backend/**", async (route) => {
     assert.equal(body.confirmationUserId, member.id);
     assert.equal(body.expectedUpdatedAt, now);
     assert.ok(body.reason.trim());
-    const alreadyWithdrawn = member.status === "WITHDRAWN";
-    member.status = "WITHDRAWN";
-    member.nickname = "탈퇴한 회원";
-    member.maskedEmail = null;
-    member.loginProviders = [];
-    member.membershipType = "free";
-    return reply({ userId: member.id, withdrawnAt: now, alreadyWithdrawn });
+    const alreadyDeleted = deletedMembers.has(member.id);
+    deletedMembers.add(member.id);
+    return reply({ userId: member.id, deletedAt: now, alreadyDeleted });
   }
   if (/^\/users\/\d+\/records$/.test(path))
     return reply(
@@ -991,15 +994,15 @@ try {
     },
   );
   await check(
-    "member withdrawal requires the exact number and preserves the screen on a conflict",
+    "member deletion requires the exact number and preserves the screen on a conflict",
     async () => {
       await page.goto(base + "/admin/users/30");
       await heading("연습 회원님의 기록");
-      const before = writes.filter((w) =>
-        w.path.endsWith("/withdrawal"),
+      const before = writes.filter(
+        (w) => w.method === "DELETE" && w.path === "/users/30",
       ).length;
       await page
-        .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("31");
@@ -1007,19 +1010,20 @@ try {
         .getByLabel("작업 사유", { exact: true })
         .fill("회원 요청 확인");
       await dialog
-        .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       await dialog
         .getByText("확인할 회원 번호가 일치하지 않습니다.", { exact: true })
         .waitFor();
       assert.equal(
-        writes.filter((w) => w.path.endsWith("/withdrawal")).length,
+        writes.filter((w) => w.method === "DELETE" && w.path === "/users/30")
+          .length,
         before,
       );
-      rejectWithdrawal = true;
+      rejectMemberDeletion = true;
       await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
       await dialog
-        .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       await dialog
         .getByText("다른 관리자가 수정했거나 상태가 변경되었습니다.", {
@@ -1034,14 +1038,14 @@ try {
       await dialog
         .getByRole("button", { name: "돌아가기", exact: true })
         .click();
-      rejectWithdrawal = false;
+      rejectMemberDeletion = false;
     },
   );
   await check(
-    "withdrawn members retain readable records and the current administrator cannot withdraw itself",
+    "deleted members leave the list and the current administrator cannot delete itself",
     async () => {
       await page
-        .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("확인할 회원 번호", { exact: true }).fill("30");
@@ -1049,24 +1053,22 @@ try {
         .getByLabel("작업 사유", { exact: true })
         .fill("탈퇴 요청 확인");
       await dialog
-        .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+        .getByRole("button", { name: "회원 삭제하기", exact: true })
         .click();
-      await heading("탈퇴한 회원님의 기록");
+      await heading("회원 관리");
+      assert.ok(page.url().endsWith("/admin/users"));
       assert.equal(
         await page
-          .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+          .getByRole("link", { name: "연습 회원", exact: true })
           .count(),
         0,
       );
-      await page.getByRole("button", { name: /^음성 평가/ }).click();
-      await page
-        .getByText("음성 평가를 완료하지 못했습니다", { exact: true })
-        .waitFor();
+      assert.ok(deletedMembers.has(30));
       await page.goto(base + "/admin/users/9001");
       await heading("운영 관리자님의 기록");
       assert.equal(
         await page
-          .getByRole("button", { name: "탈퇴 처리하기", exact: true })
+          .getByRole("button", { name: "회원 삭제하기", exact: true })
           .isDisabled(),
         true,
       );
