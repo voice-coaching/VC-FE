@@ -23,6 +23,14 @@
 | GET | `/api/analysis-capabilities/canonical` | 사용자 로그인 | 분석 계약·접수 가능 상태·목적별 지원 범위 |
 | GET | `/api/v3/analyses/{analysisId}` | 사용자 로그인·소유 확인 | 현재 실행 결과와 저장·후속 작업 상태 |
 
+## 승급시험 재개·새 시작
+
+| Method | URL | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/users/me/title-exams/{examId}/restart` | 사용자 로그인·본인 미채점 시험 | `{previousTrainingSessionId}`를 보내 이전 작업을 취소하고 새 녹음 세션에 연결. 응답은 기존 시험 조회 형식 |
+
+`TitleExamSession`은 기존 녹음·분석이 있으면 재개/새 시작 선택 전까지 녹음 화면을 mount하지 않는다. 미분석 저장 녹음의 재개는 확인 화면과 별도의 분석 버튼을 사용한다. 새 시작은 Backend의 위 API 배포가 선행되어야 하며, API 실패 시 기존 녹음 자동 제출로 우회하지 않는다. 이미 채점된 시험에서 새 시작은 기존 시험 생성 API의 다음 응시 자격을 따른다.
+
 
 ## 문장별 독립 연습
 
