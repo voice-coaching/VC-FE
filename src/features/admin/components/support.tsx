@@ -6,6 +6,7 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { useAdminQuery, useAdminCommand } from "../hooks";
 import {
   saveNotice,
+  deleteNotice,
   localDateTime,
   answerInquiry,
   transitionInquiry,
@@ -163,7 +164,23 @@ function NoticeEditor({ current }: { current?: Notice }) {
     })) ?? [{ title: "안내", paragraphsText: "" }],
   );
   return (
-    <Panel title="공지 내용" padded>
+    <Panel
+      title="공지 내용"
+      padded
+      action={
+        current && (
+          <ConfirmAction
+            invalidationPaths={["/notices", "/audit-logs"]}
+            title="공지를 삭제할까요?"
+            description="공지 목록과 사용자 화면에서 삭제됩니다. 저장하지 않은 편집 내용도 사라지며 복구할 수 없습니다."
+            buttonLabel="공지 삭제"
+            danger
+            action={(reason) => deleteNotice(current, reason)}
+            onDone={() => router.replace("/admin/notices")}
+          />
+        )
+      }
+    >
       <form
         className={styles.form}
         onSubmit={(event) => {

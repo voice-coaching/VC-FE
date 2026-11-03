@@ -3,6 +3,7 @@ import { adminApi } from "./api";
 import { getAuthSessionVersion } from "@/lib/api/client";
 import type {
   Audio,
+  AudioList,
   AudioIntent,
   AudioRegistration,
   Content,
@@ -212,6 +213,15 @@ export function transitionInquiry(
   });
 }
 export function createCampaign(data: FormData): Promise<Campaign> {
+  return saveCampaign(data);
+}
+/** Edit the version opened by the operator; saving a draft never dispatches it. */
+export function saveCampaign(
+  data: FormData,
+  current?: Campaign,
+): Promise<Campaign> {
+  if (current && current.status !== "DRAFT")
+    throw new Error("발송한 알림은 수정할 수 없습니다.");
   const audience = z
     .enum(["ALL_ACTIVE", "SELECTED_USERS"])
     .parse(text(data, "audience"));
@@ -219,7 +229,7 @@ export function createCampaign(data: FormData): Promise<Campaign> {
     audience === "ALL_ACTIVE" ? [] : parseMemberIds(text(data, "userIds"));
   if (audience === "SELECTED_USERS" && !userIds.length)
     throw new Error("알림을 받을 회원 번호를 선택해 주세요.");
-  return adminApi.create("/notification-campaigns", {
+  const draft = {
     audience,
     kind: z.enum(["GENERAL", "PLAN"]).parse(text(data, "kind")),
     title: required("제목", 200).parse(text(data, "title")),
@@ -227,7 +237,83 @@ export function createCampaign(data: FormData): Promise<Campaign> {
     deepLink: linkSchema.parse(text(data, "deepLink")),
     userIds,
     reason: reasonSchema.parse(text(data, "reason")),
+  };
+  return current
+    ? adminApi.edit(`/notification-campaigns/${current.id}`, {
+        ...draft,
+        version: current.version,
+      })
+    : adminApi.create("/notification-campaigns", draft);
+}
+/** A null receipt distinguishes successful deletion from a mismatched backend deployment. */
+export async function deleteNotice(
+  current: Notice,
+  reason: string,
+): Promise<void> {
+  const receipt = await adminApi.remove<unknown>(`/notices/${current.id}`, {
+    version: current.version,
+    reason: reasonSchema.parse(reason),
   });
+  z.null().parse(receipt);
+}
+export async function deleteCampaign(
+  current: Campaign,
+  reason: string,
+): Promise<void> {
+  if (current.status !== "DRAFT")
+    throw new Error("발송한 알림은 삭제할 수 없습니다.");
+  const receipt = await adminApi.remove<unknown>(
+    `/notification-campaigns/${current.id}`,
+    {
+      version: current.version,
+      reason: reasonSchema.parse(reason),
+    },
+  );
+  z.null().parse(receipt);
+}
+/** Use the list's parent version and verify the returned list before updating playback and selection. */
+export async function deleteReferenceAudio(
+  audio: Audio,
+  reason: string,
+): Promise<AudioList> {
+  const receipt = await adminApi.remove<unknown>(
+    `/reference-audios/${audio.audioId}`,
+    {
+      version: audio.contentVersion,
+      reason: reasonSchema.parse(reason),
+    },
+  );
+  const result = z
+    .object({
+      contentVersion: z
+        .number()
+        .int()
+        .min(audio.contentVersion + 1),
+      items: z.array(
+        z.object({
+          audioId: z.number().int().positive(),
+          contentId: z.literal(audio.contentId),
+          speakerName: z.string(),
+          speakerType: z.literal("ANNOUNCER"),
+          durationMs: z.number().int().nullable(),
+          primary: z.boolean(),
+          contentVersion: z.number().int(),
+          createdAt: z.string().nullable(),
+        }),
+      ),
+    })
+    .parse(receipt);
+  if (
+    result.items.some(
+      (item) =>
+        item.audioId === audio.audioId ||
+        item.contentVersion !== result.contentVersion,
+    )
+  )
+    throw new Error(
+      "삭제 후 음성 목록을 확인하지 못했습니다. 목록을 다시 조회해 주세요.",
+    );
+  return result;
 }
 export function dispatchCampaign(
   campaign: Campaign,

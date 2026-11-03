@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Plus, Bell, Send, Clock3 } from "lucide-react";
 import { useAdminQuery, useAdminCommand } from "../hooks";
 import {
-  createCampaign,
+  saveCampaign,
+  deleteCampaign,
   dispatchCampaign,
   savePopup,
   localDateTime,
@@ -108,6 +109,7 @@ export function CampaignsPage() {
   );
 }
 export function CampaignDetail({ campaignId }: { campaignId?: number }) {
+  const [editing, setEditing] = useState(false);
   const campaign = useAdminQuery<Campaign>(
     `/notification-campaigns/${campaignId}`,
     {},
@@ -131,15 +133,37 @@ export function CampaignDetail({ campaignId }: { campaignId?: number }) {
       {campaignId === undefined ? (
         <CampaignEditor />
       ) : (
-        campaign.data && <CampaignReview campaign={campaign.data} />
+        campaign.data &&
+        (editing && campaign.data.status === "DRAFT" ? (
+          <CampaignEditor
+            current={campaign.data}
+            onSaved={() => setEditing(false)}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <CampaignReview
+            campaign={campaign.data}
+            onEdit={() => setEditing(true)}
+          />
+        ))
       )}
     </>
   );
 }
-function CampaignEditor() {
+function CampaignEditor({
+  current,
+  onSaved,
+  onCancel,
+}: {
+  current?: Campaign;
+  onSaved?: () => void;
+  onCancel?: () => void;
+}) {
   const router = useRouter();
   const command = useAdminCommand(["/notification-campaigns", "/audit-logs"]);
-  const [audience, setAudience] = useState("ALL_ACTIVE");
+  // Keep the opened version even if background reads refresh while the operator edits.
+  const [baseline] = useState(current);
+  const [audience, setAudience] = useState(current?.audience ?? "ALL_ACTIVE");
   return (
     <div className={styles.grid}>
       <Panel title="알림 내용" padded>
@@ -149,12 +173,19 @@ function CampaignEditor() {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             void command.run(
-              () => createCampaign(data),
-              (saved) => router.push(`/admin/notifications/${saved.id}`),
+              () => saveCampaign(data, baseline),
+              (saved) => {
+                onSaved?.();
+                router.push(`/admin/notifications/${saved.id}`);
+              },
             );
           }}
         >
-          <Select label="알림 유형" name="kind">
+          <Select
+            label="알림 유형"
+            name="kind"
+            defaultValue={baseline?.kind ?? "GENERAL"}
+          >
             <option value="GENERAL">서비스 일반 안내</option>
             <option value="PLAN">요금제 안내</option>
           </Select>
@@ -162,7 +193,9 @@ function CampaignEditor() {
             label="발송 대상"
             name="audience"
             value={audience}
-            onChange={(event) => setAudience(event.target.value)}
+            onChange={(event) =>
+              setAudience(event.target.value as Campaign["audience"])
+            }
           >
             <option value="ALL_ACTIVE">전체 활성 회원</option>
             <option value="SELECTED_USERS">선택 회원</option>
@@ -171,21 +204,33 @@ function CampaignEditor() {
             <Textarea
               label="회원 번호"
               name="userIds"
+              defaultValue={baseline?.userIds.join(", ") ?? ""}
               required
               placeholder="예: 12, 34, 56"
               hint="회원 관리에서 확인한 회원 번호를 쉼표나 줄바꿈으로 구분합니다. 최대 500명까지 선택할 수 있습니다."
               rows={3}
             />
           )}
-          <Field label="알림 제목" name="title" maxLength={200} required />
+          <Field
+            label="알림 제목"
+            name="title"
+            defaultValue={baseline?.title ?? ""}
+            maxLength={200}
+            required
+          />
           <Textarea
             label="알림 본문"
             name="body"
+            defaultValue={baseline?.body ?? ""}
             maxLength={1000}
             rows={6}
             required
           />
-          <Select name="deepLink" label="알림 클릭 시 이동">
+          <Select
+            name="deepLink"
+            label="알림 클릭 시 이동"
+            defaultValue={baseline?.deepLink ?? "/notifications"}
+          >
             <option value="/notifications">알림함</option>
             <option value="/mypage">마이페이지</option>
             <option value="/home">홈</option>
@@ -193,8 +238,17 @@ function CampaignEditor() {
           <Reason />
           <CommandFeedback command={command} />
           <div className={styles.formFooter}>
+            {onCancel && (
+              <Button onClick={onCancel} disabled={command.busy}>
+                편집 취소
+              </Button>
+            )}
             <Button type="submit" primary disabled={command.busy}>
-              {command.busy ? "저장 중…" : "초안 저장·검토"}
+              {command.busy
+                ? "저장 중…"
+                : baseline
+                  ? "초안 수정 저장"
+                  : "초안 저장·검토"}
             </Button>
           </div>
         </form>
@@ -219,7 +273,14 @@ function CampaignEditor() {
     </div>
   );
 }
-function CampaignReview({ campaign }: { campaign: Campaign }) {
+function CampaignReview({
+  campaign,
+  onEdit,
+}: {
+  campaign: Campaign;
+  onEdit: () => void;
+}) {
+  const router = useRouter();
   return (
     <div className={styles.grid}>
       <Panel
@@ -262,6 +323,18 @@ function CampaignReview({ campaign }: { campaign: Campaign }) {
               대상 인원은 발송 시점에 달라질 수 있습니다. 발송한 알림은 이
               화면에서 회수하거나 편집할 수 없습니다.
             </Message>
+            <div className={`${styles.actions} mb-4`}>
+              <Button onClick={onEdit}>초안 수정</Button>
+              <ConfirmAction
+                invalidationPaths={["/notification-campaigns", "/audit-logs"]}
+                title="이 알림 초안을 삭제할까요?"
+                description="발송 전 초안과 선택한 회원 목록을 삭제합니다. 회원에게 알림이 발송되지 않으며 복구할 수 없습니다."
+                buttonLabel="초안 삭제"
+                danger
+                action={(reason) => deleteCampaign(campaign, reason)}
+                onDone={() => router.replace("/admin/notifications")}
+              />
+            </div>
             <ConfirmAction
               invalidationPaths={["/notification-campaigns", "/audit-logs"]}
               title="이 알림을 발송할까요?"
