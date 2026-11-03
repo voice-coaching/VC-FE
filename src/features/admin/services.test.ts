@@ -5,7 +5,6 @@ import { adminApi, queryString, subscribeAdminDenial } from "./api";
 import { clearAccessToken, saveAccessToken } from "@/lib/api/client";
 import {
   parseMemberIds,
-  identifierValue,
   saveContent,
   deleteContent,
   deleteMember,
@@ -53,18 +52,13 @@ function form(values: Record<string, string>): FormData {
   for (const [key, value] of Object.entries(values)) data.set(key, value);
   return data;
 }
-test("selected recipients are positive unique IDs and UUID search never accepts SQL", () => {
+test("selected notification recipients are positive unique member IDs", () => {
   assert.deepEqual(parseMemberIds("12,34\n56"), [12, 34, 56]);
   for (const input of ["1,1", "0", "1 or 1=1", "9007199254740993"])
     assert.throws(() => parseMemberIds(input));
   assert.throws(() =>
     parseMemberIds(Array.from({ length: 501 }, (_, i) => i + 1).join(",")),
   );
-  assert.equal(
-    identifierValue(" 532fe9f8-14e4-47ce-a011-7c9d5f6a2acd "),
-    "532fe9f8-14e4-47ce-a011-7c9d5f6a2acd",
-  );
-  assert.throws(() => identifierValue("' or 1=1 --"));
 });
 test("filters are encoded and whole list omits empty category", () => {
   assert.equal(

@@ -190,7 +190,6 @@ export type MemberOverview = {
 export type MemberRecord = {
   fields: Record<string, string | number | boolean | null>;
 };
-export type IdentifierMatch = { userId: number; source: string };
 export type Query = Record<
   string,
   string | number | boolean | null | undefined
