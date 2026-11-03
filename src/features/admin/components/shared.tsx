@@ -341,6 +341,7 @@ export function ConfirmAction({
   primary = false,
   danger = false,
   onDone,
+  disabled = false,
 }: {
   title: string;
   description: string;
@@ -350,6 +351,7 @@ export function ConfirmAction({
   primary?: boolean;
   danger?: boolean;
   onDone?: () => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const command = useAdminCommand(invalidationPaths);
@@ -358,6 +360,7 @@ export function ConfirmAction({
       <Button
         primary={primary}
         danger={danger}
+        disabled={disabled || command.busy}
         onClick={() => {
           command.clearFeedback();
           setOpen(true);
@@ -402,7 +405,7 @@ export function ConfirmAction({
                 type="submit"
                 primary={primary}
                 danger={danger}
-                disabled={command.busy}
+                disabled={disabled || command.busy}
               >
                 {command.busy ? "처리 중…" : buttonLabel}
               </Button>

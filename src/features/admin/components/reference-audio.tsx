@@ -9,6 +9,7 @@ import {
   type AudioUploadAttempt,
   registerAnnouncerAudio,
   makePrimary,
+  deleteReferenceAudio,
 } from "../services";
 import type { AudioList, AudioRegistration, Content } from "../types";
 import {
@@ -115,6 +116,41 @@ export function AudioPanel({ content }: { content: Content }) {
                   }
                 />
               )}
+              <ConfirmAction
+                invalidationPaths={[
+                  "/contents",
+                  "/reference-audios",
+                  "/audit-logs",
+                ]}
+                title="이 기준 음성을 삭제할까요?"
+                description={
+                  audio.primary
+                    ? "대표 음성을 삭제하면 남은 음성 중 하나가 대표가 됩니다. 마지막 음성을 삭제하면 기준 음성이 없는 상태가 됩니다. 기존 학습 기록과 원본 파일은 보존됩니다."
+                    : "기준 음성 목록에서 제외하고 새 재생을 중단합니다. 기존 학습 기록과 원본 파일은 보존됩니다."
+                }
+                buttonLabel="음성 삭제"
+                danger
+                disabled={
+                  command.busy ||
+                  playback.busy ||
+                  !!pending ||
+                  audios.isFetching
+                }
+                action={(reason) =>
+                  deleteReferenceAudio(
+                    {
+                      ...audio,
+                      contentVersion:
+                        audios.data?.contentVersion ?? audio.contentVersion,
+                    },
+                    reason,
+                  )
+                }
+                onDone={() => {
+                  setPreview(null);
+                  playback.clearFeedback();
+                }}
+              />
             </div>
             {preview?.audioId === audio.audioId && (
               <audio

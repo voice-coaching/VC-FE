@@ -118,7 +118,7 @@ export type Audio = {
   durationMs: number | null;
   primary: boolean;
   contentVersion: number;
-  createdAt: string;
+  createdAt: string | null;
 };
 export type AudioList = { items: Audio[]; contentVersion: number };
 export type AudioIntent = {

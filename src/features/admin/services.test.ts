@@ -10,12 +10,16 @@ import {
   deleteContent,
   deleteMember,
   createCampaign,
+  saveCampaign,
+  deleteCampaign,
+  deleteNotice,
+  deleteReferenceAudio,
   uploadAnnouncerAudio,
   resumeAnnouncerUpload,
   offsetTime,
   type AudioUploadAttempt,
 } from "./services";
-import type { Content } from "./types";
+import type { Content, Campaign, Notice, Audio } from "./types";
 const originalFetch = globalThis.fetch;
 let calls: { url: string; options: RequestInit }[] = [];
 const result = (data: unknown) =>
@@ -353,4 +357,137 @@ test("stale member deletion does not retry or report success", async () => {
   };
   await assert.rejects(deleteMember(30, "2026-11-03T09:00:00Z", "삭제"));
   assert.equal(calls.length, 1);
+});
+
+const draft: Campaign = {
+  id: 11,
+  version: 4,
+  audience: "SELECTED_USERS",
+  kind: "GENERAL",
+  title: "기존",
+  body: "내용",
+  deepLink: "/home",
+  userIds: [30],
+  status: "DRAFT",
+  audienceCount: 1,
+  sentCount: 0,
+  createdAt: "2026-11-03T00:00:00Z",
+  sentAt: null,
+};
+const campaignForm = () =>
+  form({
+    audience: "SELECTED_USERS",
+    kind: "PLAN",
+    title: "수정 안내",
+    body: "새 내용",
+    deepLink: "/mypage",
+    userIds: "31,32",
+    reason: "대상 정정",
+  });
+test("editing a draft sends its opened version and full replacement fields without dispatching", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({ ...draft, version: 5 });
+  };
+  await saveCampaign(campaignForm(), draft);
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].url.endsWith("/api/admin/notification-campaigns/11"));
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    version: 4,
+    audience: "SELECTED_USERS",
+    kind: "PLAN",
+    title: "수정 안내",
+    body: "새 내용",
+    deepLink: "/mypage",
+    userIds: [31, 32],
+    reason: "대상 정정",
+  });
+});
+test("sent campaigns cannot be edited or deleted by the service", () => {
+  const sent = { ...draft, status: "SENT" as const };
+  assert.throws(() => saveCampaign(campaignForm(), sent));
+  return assert.rejects(deleteCampaign(sent, "정리"));
+});
+test("draft editing reuses recipient and link validation before HTTP", () => {
+  for (const values of [
+    { userIds: "30,30" },
+    { userIds: "0" },
+    { deepLink: "https://outside.invalid" },
+    { reason: " " },
+  ]) {
+    const data = campaignForm();
+    for (const [key, value] of Object.entries(values)) data.set(key, value);
+    assert.throws(() => saveCampaign(data, draft));
+  }
+});
+test("notice and draft deletion require reason and accept only null success receipts", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result(null);
+  };
+  await deleteNotice({ id: 7, version: 9 } as Notice, "공지 정리");
+  await deleteCampaign(draft, "초안 정리");
+  assert.deepEqual(
+    calls.map((call) => call.options.method),
+    ["DELETE", "DELETE"],
+  );
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    version: 9,
+    reason: "공지 정리",
+  });
+  assert.deepEqual(JSON.parse(String(calls[1].options.body)), {
+    version: 4,
+    reason: "초안 정리",
+  });
+  await assert.rejects(deleteNotice({ id: 7, version: 9 } as Notice, " "));
+  globalThis.fetch = async () => result({ id: 7 });
+  await assert.rejects(
+    deleteNotice({ id: 7, version: 9 } as Notice, "공지 정리"),
+  );
+});
+const reference: Audio = {
+  audioId: 64,
+  contentId: 279,
+  contentVersion: 3,
+  speakerName: "아나운서",
+  speakerType: "ANNOUNCER",
+  durationMs: null,
+  primary: true,
+  createdAt: "2026-11-03T00:00:00Z",
+};
+test("audio deletion uses the parent version and returns replacement primary and advanced version", async () => {
+  const receipt = {
+    contentVersion: 4,
+    items: [{ ...reference, audioId: 65, contentVersion: 4 }],
+  };
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result(receipt);
+  };
+  assert.deepEqual(await deleteReferenceAudio(reference, "음성 정리"), receipt);
+  assert.equal(calls[0].options.method, "DELETE");
+  assert.ok(calls[0].url.endsWith("/api/admin/reference-audios/64"));
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    version: 3,
+    reason: "음성 정리",
+  });
+  globalThis.fetch = async () => result({ items: [], contentVersion: 4 });
+  assert.deepEqual(await deleteReferenceAudio(reference, "마지막 정리"), {
+    items: [],
+    contentVersion: 4,
+  });
+});
+test("audio deletion rejects retained IDs, another content and unchanged parent versions", async () => {
+  for (const receipt of [
+    { items: [], contentVersion: 3 },
+    { items: [{ ...reference, contentVersion: 4 }], contentVersion: 4 },
+    {
+      items: [{ ...reference, audioId: 65, contentId: 1, contentVersion: 4 }],
+      contentVersion: 4,
+    },
+  ]) {
+    globalThis.fetch = async () => result(receipt);
+    await assert.rejects(deleteReferenceAudio(reference, "정리"));
+  }
 });

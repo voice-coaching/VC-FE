@@ -203,7 +203,10 @@ let allow = true,
   puts = 0,
   rejectEdit = false,
   rejectDelete = false,
-  rejectMemberDeletion = false;
+  rejectMemberDeletion = false,
+  rejectNoticeDelete = false,
+  rejectCampaignEdit = false,
+  rejectDraftDelete = false;
 const deletedMembers = new Set();
 let disposableContentId;
 const writes = [];
@@ -250,6 +253,27 @@ await context.route("https://storage.example.invalid/**", async (route) => {
   }
   assert.equal(request.headers().authorization, undefined);
   assert.equal(request.headers().cookie, undefined);
+  if (request.method() === "GET") {
+    const wav = Buffer.alloc(44 + 32000);
+    wav.write("RIFF", 0);
+    wav.writeUInt32LE(wav.length - 8, 4);
+    wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(16000, 24);
+    wav.writeUInt32LE(32000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write("data", 36);
+    wav.writeUInt32LE(32000, 40);
+    return route.fulfill({
+      status: 200,
+      contentType: "audio/wav",
+      headers: { "access-control-allow-origin": "*" },
+      body: wav,
+    });
+  }
   puts++;
   await route.fulfill({
     status: 200,
@@ -332,6 +356,54 @@ await context.route("**/api/backend/**", async (route) => {
     return;
   }
 
+  const fail = (status, code = "ADMIN_EDIT_CONFLICT") =>
+    route.fulfill({
+      status,
+      contentType: "application/json",
+      body: JSON.stringify({
+        result: false,
+        message: "changed",
+        code,
+        data: null,
+      }),
+    });
+  if (
+    method === "DELETE" &&
+    path.startsWith("/notices/") &&
+    rejectNoticeDelete
+  ) {
+    rejectNoticeDelete = false;
+    return fail(409);
+  }
+  if (
+    method === "PATCH" &&
+    path.startsWith("/notification-campaigns/") &&
+    rejectCampaignEdit
+  ) {
+    rejectCampaignEdit = false;
+    return fail(409);
+  }
+  if (
+    method === "DELETE" &&
+    path.startsWith("/notification-campaigns/") &&
+    rejectDraftDelete
+  ) {
+    rejectDraftDelete = false;
+    return fail(504, "UPSTREAM_TIMEOUT");
+  }
+  if (method === "DELETE" && /^\/reference-audios\/\d+$/.test(path)) {
+    const index = audios.findIndex(
+      (audio) => audio.audioId === Number(path.split("/")[2]),
+    );
+    if (index < 0) return fail(404, "RESOURCE_NOT_FOUND");
+    assert.equal(body.version, contents[0].version);
+    assert.ok(body.reason.trim());
+    const [removed] = audios.splice(index, 1);
+    contents[0].version++;
+    if (removed.primary && audios.length) audios[0].primary = true;
+    for (const audio of audios) audio.contentVersion = contents[0].version;
+    return reply({ items: audios, contentVersion: contents[0].version });
+  }
   if (path === "/users/resolve")
     return reply([{ userId: 30, source: "ANALYSIS" }]);
   if (path === "/users")
@@ -506,7 +578,7 @@ await context.route("**/api/backend/**", async (route) => {
   }
   if (/\/reference-audios\/\d+\/playback-url$/.test(path))
     return reply({
-      audioId: 64,
+      audioId: Number(path.split("/")[2]),
       playbackUrl: "https://storage.example.invalid/playback",
       expiresAt: "2099-01-01T00:00:00Z",
     });
@@ -560,8 +632,17 @@ await context.route("**/api/backend/**", async (route) => {
     }
     return reply(paged(notices, url.searchParams));
   }
-  if (/^\/notices\/\d+$/.test(path))
-    return reply(notices.find((n) => n.id === Number(path.split("/")[2])));
+  if (/^\/notices\/\d+$/.test(path)) {
+    const index = notices.findIndex((n) => n.id === Number(path.split("/")[2]));
+    if (index < 0) return fail(404, "RESOURCE_NOT_FOUND");
+    if (method === "DELETE") {
+      assert.equal(body.version, notices[index].version);
+      assert.ok(body.reason.trim());
+      notices.splice(index, 1);
+      return reply(null);
+    }
+    return reply(notices[index]);
+  }
   if (path === "/inquiries")
     return reply(
       paged(
@@ -614,8 +695,28 @@ await context.route("**/api/backend/**", async (route) => {
     }
     return reply(c);
   }
-  if (/^\/notification-campaigns\/\d+$/.test(path))
-    return reply(campaigns.find((c) => c.id === Number(path.split("/")[2])));
+  if (/^\/notification-campaigns\/\d+$/.test(path)) {
+    const index = campaigns.findIndex(
+      (c) => c.id === Number(path.split("/")[2]),
+    );
+    if (index < 0) return fail(404, "RESOURCE_NOT_FOUND");
+    const item = campaigns[index];
+    if (method !== "GET") {
+      if (item.status !== "DRAFT" || body.version !== item.version)
+        return fail(409);
+      assert.ok(body.reason.trim());
+      if (method === "DELETE") {
+        campaigns.splice(index, 1);
+        return reply(null);
+      }
+      assert.equal(method, "PATCH");
+      Object.assign(item, body, {
+        version: item.version + 1,
+        audienceCount: body.userIds.length || 3,
+      });
+    }
+    return reply(item);
+  }
   if (path === "/popups") {
     if (method === "POST") {
       const item = {
@@ -1003,6 +1104,287 @@ try {
     assert.equal(notice.sections[0].paragraphs.length, 2);
     assert.equal(notice.published, false);
   });
+  await check(
+    "notice delete requires reason, retains a conflict and returns to the refreshed list",
+    async () => {
+      await page.goto(base + "/admin/notices/1");
+      await heading("공지 편집");
+      await page
+        .getByRole("button", { name: "공지 삭제", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      const before = writes.filter(
+        (w) => w.path === "/notices/1" && w.method === "DELETE",
+      ).length;
+      await dialog
+        .getByRole("button", { name: "공지 삭제", exact: true })
+        .click();
+      assert.equal(
+        writes.filter((w) => w.path === "/notices/1" && w.method === "DELETE")
+          .length,
+        before,
+      );
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("지난 공지 정리");
+      rejectNoticeDelete = true;
+      await dialog
+        .getByRole("button", { name: "공지 삭제", exact: true })
+        .click();
+      await dialog.getByText(/다른 관리자가 수정/).waitFor();
+      assert.ok(page.url().endsWith("/admin/notices/1"));
+      assert.equal(
+        await dialog.getByLabel("작업 사유", { exact: true }).inputValue(),
+        "지난 공지 정리",
+      );
+      await dialog
+        .getByRole("button", { name: "공지 삭제", exact: true })
+        .click();
+      await page.waitForURL(/\/admin\/notices$/);
+      await heading("공지사항");
+      assert.equal(
+        await page
+          .getByRole("link", { name: "서비스 이용 안내", exact: true })
+          .count(),
+        0,
+      );
+    },
+  );
+  await check(
+    "draft edit preserves input on conflict, updates recipients and sends the new version",
+    async () => {
+      await page.goto(base + "/admin/notifications/11");
+      await heading("알림 검토·발송");
+      await page
+        .getByRole("button", { name: "초안 수정", exact: true })
+        .click();
+      await page
+        .getByLabel("알림 제목", { exact: true })
+        .fill("수정된 서비스 안내");
+      await page
+        .getByLabel("발송 대상", { exact: true })
+        .selectOption("SELECTED_USERS");
+      await page.getByLabel("회원 번호", { exact: true }).fill("31");
+      await page
+        .getByLabel("작업 사유", { exact: true })
+        .fill("내용과 대상 정정");
+      const sentBefore = dispatches;
+      rejectCampaignEdit = true;
+      await page
+        .getByRole("button", { name: "초안 수정 저장", exact: true })
+        .click();
+      await page.getByText(/다른 관리자가 수정/).waitFor();
+      assert.equal(
+        await page.getByLabel("알림 제목", { exact: true }).inputValue(),
+        "수정된 서비스 안내",
+      );
+      assert.equal(dispatches, sentBefore);
+      await page
+        .getByRole("button", { name: "초안 수정 저장", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "수정된 서비스 안내", exact: true })
+        .waitFor();
+      assert.deepEqual(campaigns.find((c) => c.id === 11).userIds, [31]);
+      assert.equal(dispatches, sentBefore);
+      await page
+        .getByRole("button", { name: "검토 완료·발송하기", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("수정 내용 확인");
+      await dialog
+        .getByRole("button", { name: "검토 완료·발송하기", exact: true })
+        .click();
+      await page
+        .getByText("총 1명에게 전달했습니다.", { exact: false })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "초안 수정", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "초안 삭제", exact: true })
+          .count(),
+        0,
+      );
+      const sent = writes
+        .filter((w) => w.path === "/notification-campaigns/11/dispatch")
+        .at(-1);
+      assert.equal(sent.body.version, 1);
+      await page.screenshot({
+        path: path.join(output, "admin-completion-sent.png"),
+        fullPage: true,
+      });
+    },
+  );
+  await check(
+    "draft delete preserves an uncertain outcome and requires manual confirmation again",
+    async () => {
+      campaigns.push({
+        ...campaigns[0],
+        id: 91,
+        version: 0,
+        status: "DRAFT",
+        sentAt: null,
+        sentCount: 0,
+        title: "삭제할 초안",
+      });
+      await page.goto(base + "/admin/notifications/91");
+      await heading("알림 검토·발송");
+      await page
+        .getByRole("button", { name: "초안 삭제", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("중복 초안 정리");
+      rejectDraftDelete = true;
+      await dialog
+        .getByRole("button", { name: "초안 삭제", exact: true })
+        .click();
+      await dialog
+        .getByText(/서버의 처리 결과를 확인하지 못했습니다/)
+        .waitFor();
+      assert.ok(page.url().endsWith("/admin/notifications/91"));
+      assert.equal(
+        writes.filter(
+          (w) =>
+            w.path === "/notification-campaigns/91" && w.method === "DELETE",
+        ).length,
+        1,
+      );
+      await dialog
+        .getByRole("button", { name: "돌아가기", exact: true })
+        .click();
+      await page.reload();
+      await heading("알림 검토·발송");
+      await page
+        .getByRole("button", { name: "초안 삭제", exact: true })
+        .click();
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("목록 확인 후 정리");
+      await dialog
+        .getByRole("button", { name: "초안 삭제", exact: true })
+        .click();
+      await page.waitForURL(/\/admin\/notifications$/);
+      assert.equal(
+        campaigns.some((c) => c.id === 91),
+        false,
+      );
+    },
+  );
+  await check(
+    "audio delete clears playback, promotes remaining primary and allows the last deletion",
+    async () => {
+      await page.goto(base + "/admin/announcer/279");
+      await heading("콘텐츠 편집");
+      const cards = page
+        .locator('[class*="sectionEditor"]')
+        .filter({ has: page.getByText("테스트 아나운서", { exact: false }) });
+      await cards
+        .getByRole("button", { name: "미리듣기", exact: true })
+        .click();
+      await page.locator("audio").waitFor();
+      await cards
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("작업 사유", { exact: true }).fill("음성 교체");
+      await dialog
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .click();
+      await page.getByText("전문 아나운서", { exact: false }).first().waitFor();
+      await page
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .waitFor();
+      assert.equal(await page.locator("audio").count(), 0);
+      assert.equal(audios.length, 1);
+      assert.equal(audios[0].primary, true);
+      await page.screenshot({
+        path: path.join(output, "admin-completion-audio.png"),
+        fullPage: true,
+      });
+      await page
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .click();
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("마지막 음성 정리");
+      await dialog
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "음성 삭제", exact: true })
+        .waitFor({ state: "detached" });
+      assert.equal(audios.length, 0);
+      const deletions = writes.filter(
+        (w) => /^\/reference-audios\//.test(w.path) && w.method === "DELETE",
+      );
+      assert.deepEqual(
+        deletions.map((w) => w.body.version),
+        [2, 3],
+      );
+    },
+  );
+  await check(
+    "new destructive dialogs and draft editor fit the existing mobile layout",
+    async () => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(base + "/admin/notices/2");
+      await heading("공지 편집");
+      await page
+        .getByRole("button", { name: "공지 삭제", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("작업 사유", { exact: true }).waitFor();
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      );
+      await page.screenshot({
+        path: path.join(output, "admin-completion-mobile-notice.png"),
+        fullPage: true,
+      });
+      await dialog
+        .getByRole("button", { name: "돌아가기", exact: true })
+        .click();
+      campaigns.push({
+        ...campaigns[0],
+        id: 92,
+        version: 0,
+        status: "DRAFT",
+        sentAt: null,
+        sentCount: 0,
+        title: "모바일 초안",
+      });
+      await page.goto(base + "/admin/notifications/92");
+      await heading("알림 검토·발송");
+      await page
+        .getByRole("button", { name: "초안 수정", exact: true })
+        .click();
+      await page.getByLabel("알림 제목", { exact: true }).waitFor();
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      );
+      await page.screenshot({
+        path: path.join(output, "admin-completion-mobile-draft.png"),
+        fullPage: true,
+      });
+      await page
+        .getByRole("button", { name: "편집 취소", exact: true })
+        .click();
+      await page.setViewportSize({ width: 1440, height: 1050 });
+    },
+  );
   await check(
     "inquiry answer and close are distinct allowed operations",
     async () => {
