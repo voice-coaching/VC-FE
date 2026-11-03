@@ -34,6 +34,16 @@
 
 ## 확인 범위와 개발자 인수 항목
 
+클래스 상세 `CourseDetail`은 목록의 최상위 `progressPercent`를 상속하지 않는다.
+상세 API는 `progress.progressPercent`를 반환하며 홈의 이어하기 카드도 이 값을 읽는다.
+이력 목록의 진행값을 합칠 때도 같은 중첩 필드에 반영한다.
+
+완료 결과의 공개 projection을 만들 수 없는 Backend는
+`CANONICAL_RESULT_UNAVAILABLE` 오류를 반환해야 한다. `COMPLETED`와
+`canonicalAnalysis=null`을 성공으로 수용하거나 `rawResult`를 화면 데이터로 대신 쓰지 않는다.
+Backend와 AI 준비 상태는 해당 서버의 실제 계약으로 검증하며 클래스 타입 수정은
+분석·녹음·점수의 의미를 변경하지 않는다.
+
 로컬 Java compileJava, TypeScript noEmit, 변경 Python의 syntax compile, 문서/차이 정적 확인만 수행한다. 자동 회귀 테스트·브라우저 자동화·실제 녹음/추론·장애 주입은 실행하지 않는다. PR에서 실행되는 기존 저장소 CI 결과도 실제 음성·품질 수용을 대신하지 않는다.
 
 개발자가 확인할 항목:

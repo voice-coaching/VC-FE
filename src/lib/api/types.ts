@@ -400,7 +400,7 @@ export interface CourseSummary {
   progressPercent: number;
 }
 
-export interface CourseDetail extends CourseSummary {
+export interface CourseDetail extends Omit<CourseSummary, "progressPercent"> {
   description: string;
   stepCount: number;
   progress: {
