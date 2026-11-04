@@ -27,7 +27,8 @@ export class AnalysisFailed extends Error {}
 function transient(error: unknown): error is ApiError {
   return (
     error instanceof ApiError &&
-    (isCanonicalReadConflict(error) ||
+    (error.code === "CANONICAL_ATTEMPT_PENDING" ||
+      isCanonicalReadConflict(error) ||
       [502, 503, 504].includes(error.upstreamStatus ?? 0) ||
       (error.status === 0 && error.code === "NETWORK_ERROR") ||
       (error.status === 408 && error.code === "TIMEOUT"))

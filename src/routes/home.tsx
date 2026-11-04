@@ -242,7 +242,6 @@ export default function Home() {
               const course = await api.courses.get(item.courseId);
               return {
                 ...course,
-                progressPercent: item.progressPercent,
                 progress: {
                   ...course.progress,
                   status: item.status,
@@ -694,7 +693,7 @@ export default function Home() {
                           ? "/figma/home-before/chevron-intonation.svg"
                           : undefined
                       }
-                      count={`${Math.round(course.progressPercent)}%`}
+                      count={`${Math.round(course.progress.progressPercent)}%`}
                     />
                   ))}
                   {!ongoingTraining && ongoingCourses.length === 0 ? (

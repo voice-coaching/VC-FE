@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { ApiError, getAuthSessionVersion } from "@/lib/api/client";
 import { canonicalApi } from "@/lib/api/canonical";
 import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
+import { canonicalViewCompletable } from "@/lib/canonical-analysis";
 import { voiceProcessingConsentInput } from "@/lib/analysis-consent";
 import {
   awaitCanonicalPersistence,
@@ -725,7 +726,7 @@ export function RecordingPracticeSession({
       analysisPendingRef.current = true;
       return;
     }
-    if (!result.canonical?.actions.canComplete) {
+    if (!result.canonical || !canonicalViewCompletable(result.canonical)) {
       analysisPendingRef.current = false;
       setRequestError(
         "분석 결과는 준비됐지만 학습 완료를 확인할 수 없습니다. 현재 결과를 다시 확인해 주세요.",

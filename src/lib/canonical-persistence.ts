@@ -1,6 +1,7 @@
-import type {
-  CanonicalAnalysisView,
-  CanonicalViewIdentity,
+import {
+  canonicalViewCompletable,
+  type CanonicalAnalysisView,
+  type CanonicalViewIdentity,
 } from "./canonical-analysis";
 import type { ApiContract, Id } from "./api/types";
 import { canonicalApi } from "./api/canonical";
@@ -109,7 +110,7 @@ export async function completeCanonicalPractice(
   view: CanonicalAnalysisView,
   active: () => boolean = () => true,
 ) {
-  if (!view.actions.canComplete || resultStillPending(view)) return false;
+  if (!canonicalViewCompletable(view) || resultStillPending(view)) return false;
   const recordings = await api.training.listRecordings(sessionId);
   if (!active())
     throw new ApiError("요청이 변경되었습니다.", 499, "REQUEST_ABORTED");

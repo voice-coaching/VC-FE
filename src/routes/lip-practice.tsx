@@ -9,6 +9,7 @@ import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "@/components/report-save-dialog";
 import { reportSaves } from "@/lib/report-saves";
 import { canonicalApi } from "@/lib/api/canonical";
+import { canonicalViewCompletable } from "@/lib/canonical-analysis";
 import { voiceProcessingConsentInput } from "@/lib/analysis-consent";
 import { assertCoachingInput, coachingLimitNotice } from "@/lib/coaching-usage";
 
@@ -633,7 +634,7 @@ export default function LipPractice() {
         analysis = canonicalPresentation(current);
         show();
       }
-      if (analysis.canonical?.actions.canComplete) {
+      if (analysis.canonical && canonicalViewCompletable(analysis.canonical)) {
         await completeCanonicalPractice(
           api,
           sessionId,
@@ -716,7 +717,7 @@ export default function LipPractice() {
         ...previous,
         [selectedClip]: { ...bundle, analysis: canonicalPresentation(current) },
       }));
-      if (current.actions.canComplete) {
+      if (canonicalViewCompletable(current)) {
         await completeCanonicalPractice(api, bundle.sessionId, current, active);
         if (active()) setAnalysisError(null);
       } else setAnalysisError(new CanonicalResultUnavailable(current).message);
