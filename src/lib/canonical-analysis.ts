@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { lipVisualSchema } from "./canonical-lip";
 import { canonicalScoreSchema } from "./canonical-score";
+import { sixDimensionViewSchema } from "./six-dimension";
 
 // Deployed PUBLIC view allowlist. Safe subtrees follow runpod_result_v5;
 // this is never a parser for the private callback or raw core.
@@ -113,6 +114,7 @@ const coachingSchema = z.union([
       generationStatus: z.enum([
         "SCHEMA_AND_STRUCTURAL_SEMANTICS_VALID",
         "DETERMINISTIC_FALLBACK",
+        "STRUCTURALLY_VALID", "FAILED", "NOT_REQUESTED", "NOT_DISPATCHED",
       ]),
       items: z
         .array(
@@ -126,12 +128,18 @@ const coachingSchema = z.union([
         .min(0)
         .max(3),
       feedback: z.string().min(1).max(4000).optional(),
-      dispatchAttempts: z.literal(1),
+      sixDimension: sixDimensionViewSchema.optional(),
+      dispatchAttempts: z.union([z.literal(0), z.literal(1)]),
       fallbackReason: text.max(128).nullable(),
       naturalLanguageSemanticsFullyVerified: z.literal(false),
       visualCorrectiveClaimsAllowed: z.literal(false),
     })
-    .strict(),
+    .strict().superRefine((value, context) => {
+      const valid = value.sixDimension
+        ? value.generationStatus === value.sixDimension.generationStatus && value.items.length === 0
+        : value.dispatchAttempts === 1 && ["SCHEMA_AND_STRUCTURAL_SEMANTICS_VALID", "DETERMINISTIC_FALLBACK"].includes(value.generationStatus);
+      if (!valid) context.addIssue({ code: z.ZodIssueCode.custom, message: "COACHING_PROFILE_MISMATCH" });
+    }),
   z
     .object({
       ...coachingBase,

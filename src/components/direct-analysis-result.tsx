@@ -24,6 +24,7 @@ export function DirectAnalysisResult({
       practiceResult={result.practiceResult}
       practiceDecisionStatus={result.decision.status}
       sentenceMode={sentenceMode}
+      sixDimension={result.coaching.sixDimension}
       corrections={
         !result.failure && result.decision.status === "ACCEPT"
           ? result.coaching.items
