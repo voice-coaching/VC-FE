@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { canonicalScoreSchema } from "./canonical-score";
 import { candidateSchema } from "./canonical-analysis";
+import { sixDimensionViewSchema } from "./six-dimension";
 import { createHttpClient } from "./api/client";
 
 export const directAnalysisEnabled =
@@ -41,6 +42,7 @@ export const directResultSchema = z
       items: z.array(z.object({ candidate: candidateSchema, expression })),
       generationStatus: z.string(),
       feedback: z.string().min(1).max(4000).optional(),
+      sixDimension: sixDimensionViewSchema.optional(),
     }),
     failure: z.string().nullable(),
     // Optional while the AI release rolls out and for previously saved results.

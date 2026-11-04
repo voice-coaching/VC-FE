@@ -7,6 +7,8 @@ import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
+import { SixDimensionResult } from "@/components/six-dimension-result";
+import type { SixDimensionView } from "@/lib/six-dimension";
 import { CanonicalLipResult } from "@/components/canonical-lip-result";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
 import {
@@ -60,6 +62,7 @@ export function AnalysisView({
   practiceResult,
   practiceDecisionStatus,
   sentenceMode = false,
+  sixDimension: directSixDimension,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -72,8 +75,11 @@ export function AnalysisView({
   practiceResult?: DirectResult["practiceResult"];
   practiceDecisionStatus?: string;
   sentenceMode?: boolean;
+  sixDimension?: SixDimensionView;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
+  const sixDimension = directSixDimension ?? (canonicalCore?.coaching?.adapterStatus === "READY"
+    ? canonicalCore.coaching.sixDimension : undefined);
   const reviewItems =
     corrections ??
     (canonicalCore?.feedbackDeliveryAllowed &&
@@ -151,7 +157,11 @@ export function AnalysisView({
   }, [analysis.canonical, analysis.scoreBreakdown, analysis.scoreHierarchy]);
 
   let overlay: ReactNode = null;
-  if (report === "pronunciation") {
+  if (report === "pronunciation" && sixDimension) {
+    overlay = <ReportOverlay title="항목별 음성 평가" onBack={() => setReport(null)}>
+      <div className="px-5 pt-1"><SixDimensionResult value={sixDimension} /></div>
+    </ReportOverlay>;
+  } else if (report === "pronunciation") {
     overlay = (
       <ReportOverlay title="발음 분석" onBack={() => setReport(null)}>
         <div className="px-5 pt-1">
@@ -441,10 +451,11 @@ export function AnalysisView({
         aria-hidden={overlay != null}
         className={`min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
-        <section className="flex flex-col items-center gap-4 pt-2">
+        {!sixDimension && <section className="flex flex-col items-center gap-4 pt-2">
           <AnalysisSummary key={summary} text={summary} />
-        </section>
+        </section>}
         {analysis.canonical && <CanonicalLipResult view={analysis.canonical} />}
+        {sixDimension && <SixDimensionResult value={sixDimension} />}
 
         <section className="rounded-2xl bg-gradient-to-b from-white to-[#f6f8ff] p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
