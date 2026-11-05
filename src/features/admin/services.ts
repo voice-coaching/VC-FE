@@ -63,17 +63,6 @@ export function parseMemberIds(value: string): number[] {
     throw new Error("대상은 중복 없이 최대 500명까지 지정해 주세요.");
   return ids;
 }
-export function identifierValue(value: string): string {
-  const normalized = value.trim();
-  if (
-    !/^[1-9]\d{0,18}$/.test(normalized) &&
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      normalized,
-    )
-  )
-    throw new Error("회원 번호 또는 표준 분석 UUID를 입력해 주세요.");
-  return normalized;
-}
 export async function saveContent(
   data: FormData,
   current?: Content,

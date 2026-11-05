@@ -12,11 +12,13 @@ export function DirectAnalysisResult({
   content,
   recordingUrl,
   sentenceMode = false,
+  isCameraPractice = false,
 }: {
   result: DirectResult;
   content: AnalysisViewContent;
   recordingUrl?: string;
   sentenceMode?: boolean;
+  isCameraPractice?: boolean;
 }) {
   return (
     <AnalysisView
@@ -33,6 +35,7 @@ export function DirectAnalysisResult({
       segments={[]}
       content={content}
       recordingUrl={recordingUrl}
+      isCameraPractice={isCameraPractice}
       reportParameter={`directReport-${result.sourceIdentity.executionId}`}
     />
   );

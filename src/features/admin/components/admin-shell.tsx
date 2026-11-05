@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ApiError, getAccessToken } from "@/lib/api/client";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { adminApi, adminErrorMessage, subscribeAdminDenial } from "../api";
@@ -59,6 +59,9 @@ function ScopedAdminShell({
   const access = useQuery({
     queryKey: ["admin", session, "access", pathname],
     queryFn: ({ signal }) => adminApi.access(signal),
+    // Preserve this session's approved shell while each route rechecks in the background.
+    // The session-keyed parent remount and denial handling prevent cross-account reuse.
+    placeholderData: keepPreviousData,
     enabled: !anonymous,
     retry: false,
     gcTime: 0,

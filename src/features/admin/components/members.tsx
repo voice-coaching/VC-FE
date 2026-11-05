@@ -4,9 +4,7 @@ import Link from "next/link";
 import { recordColumnLabel, displayRecordValue } from "../presentation";
 import { MemberDeletionPanel } from "./member-deletion";
 import { Search } from "lucide-react";
-import { useAdminCommand, useAdminQuery } from "../hooks";
-import { adminApi } from "../api";
-import { identifierValue } from "../services";
+import { useAdminQuery } from "../hooks";
 import { USER_RESOURCES } from "../types";
 import type {
   AdminPage,
@@ -14,7 +12,6 @@ import type {
   MemberOverview,
   MemberRecord,
   UserResource,
-  IdentifierMatch,
   Query,
 } from "../types";
 import {
@@ -29,7 +26,6 @@ import {
   Select,
   Message,
   DetailList,
-  CommandFeedback,
   formatDate,
   label,
 } from "./shared";
@@ -37,8 +33,6 @@ import styles from "../admin.module.css";
 export function MembersPage() {
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<Query>({});
-  const [matches, setMatches] = useState<IdentifierMatch[] | null>(null);
-  const resolve = useAdminCommand([]);
   const members = useAdminQuery<AdminPage<Member>>("/users", {
     ...filters,
     page,
@@ -68,7 +62,7 @@ export function MembersPage() {
             const data = new FormData(event.currentTarget);
             setPage(0);
             setFilters({
-              keyword: String(data.get("keyword") ?? ""),
+              keyword: String(data.get("keyword") ?? "").trim(),
               status: String(data.get("status") ?? ""),
               role: String(data.get("role") ?? ""),
             });
@@ -76,8 +70,8 @@ export function MembersPage() {
         >
           <Field
             name="keyword"
-            label="회원 검색"
-            placeholder="닉네임, 이메일, 회원 번호"
+            label="이름 검색"
+            placeholder="회원 이름(닉네임)을 입력해 주세요."
             maxLength={200}
           />
           <Select name="status" label="회원 상태">
@@ -149,62 +143,6 @@ export function MembersPage() {
             </div>
             <Pager data={members.data} onPage={setPage} />
           </>
-        )}
-      </Panel>
-      <Panel
-        title="평가 조회 번호로 회원 찾기"
-        description="평가에 연결된 조회 번호 또는 회원 번호로 찾아보세요."
-        padded
-      >
-        <form
-          className={styles.form}
-          onSubmit={(event) => {
-            event.preventDefault();
-            const identifier = String(
-              new FormData(event.currentTarget).get("identifier") ?? "",
-            );
-            setMatches(null);
-            void resolve.run(
-              () =>
-                adminApi.read<IdentifierMatch[]>("/users/resolve", {
-                  identifier: identifierValue(identifier),
-                }),
-              setMatches,
-            );
-          }}
-        >
-          <Field
-            label="회원 번호 또는 평가 조회 번호"
-            name="identifier"
-            required
-            maxLength={36}
-            placeholder="평가 조회 번호를 입력해 주세요."
-          />
-          <div>
-            <Button type="submit" disabled={resolve.busy}>
-              연결된 회원 조회
-            </Button>
-          </div>
-        </form>
-        <CommandFeedback command={resolve} />
-        {matches && (
-          <div className="mt-5">
-            {matches.length === 0 ? (
-              <Message>해당 ID에 연결된 회원이 없습니다.</Message>
-            ) : (
-              matches.map((match) => (
-                <p
-                  key={`${match.userId}-${label(match.source)}`}
-                  className="mb-2"
-                >
-                  <ButtonLink href={`/admin/users/${match.userId}`}>
-                    회원 #{match.userId} 보기
-                  </ButtonLink>
-                  <span className={styles.muted}> · {label(match.source)}</span>
-                </p>
-              ))
-            )}
-          </div>
         )}
       </Panel>
     </>

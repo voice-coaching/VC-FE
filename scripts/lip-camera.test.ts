@@ -122,6 +122,14 @@ test("a single reviewed clip can open the result screen and submit audio immedia
   assert.equal(streamRef.current, null);
 });
 
+test("camera results explicitly enable video feedback", () => {
+  assert.match(
+    source,
+    /<DirectAnalysisResult[\s\S]*?isCameraPractice[\s\S]*?\/>/,
+  );
+  assert.match(source, /<AnalysisView[\s\S]*?isCameraPractice[\s\S]*?\/>/);
+});
+
 test("lip analysis submits captured audio through authenticated coaching admission", async () => {
   let analysisBody = "";
   function visit(node: ts.Node) {
@@ -207,6 +215,10 @@ test("lip analysis submits captured audio through authenticated coaching admissi
       await input.upload(info);
       return info;
     },
+    voiceProcessingConsentInput: () => ({
+      accepted: true,
+      policyRevision: "current-policy",
+    }),
     requireAnalysisScope: async () => {},
     invalidatesCanonicalResult: () => false,
     assertCoachingInput,
