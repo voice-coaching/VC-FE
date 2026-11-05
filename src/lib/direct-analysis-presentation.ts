@@ -8,6 +8,7 @@ export function directAnalysisPresentation(
 ): AnalysisResult {
   const accepted = !result.failure && result.decision.status === "ACCEPT";
   const feedback = accepted ? result.coaching.feedback?.trim() : undefined;
+  const legacyPoints = canonicalCriterionPoints(result.score);
   const itemFeedback = result.coaching.items
     .map(({ expression }) =>
       [
@@ -47,11 +48,13 @@ export function directAnalysisPresentation(
     visualSupplement: null,
     analyzedAt: null,
     scoreHierarchy:
-      result.score.validity === "RUBRIC_COMPUTED"
+      result.score.validity === "RUBRIC_COMPUTED" &&
+      typeof result.score.rubricRevision === "string" &&
+      legacyPoints.length > 0
         ? {
             rubricRevision: result.score.rubricRevision,
             leafCount: 0,
-            groups: canonicalCriterionPoints(result.score).map((row) => ({
+            groups: legacyPoints.map((row) => ({
               id: row.criterionId,
               label: row.label,
               description: "이번 녹음에서 제공된 항목별 발음 점수입니다.",
