@@ -198,6 +198,9 @@ const resources = [
   "PROFILE_IMAGES",
   "ANALYSIS_SEGMENTS",
 ];
+let holdAccess = false,
+  accessStarted,
+  releaseAccess;
 let allow = true,
   dispatches = 0,
   puts = 0,
@@ -317,6 +320,11 @@ await context.route("**/api/backend/**", async (route) => {
       updatedAt: now,
     });
   if (path === "/me") {
+    if (holdAccess)
+      await new Promise((resolve) => {
+        releaseAccess = resolve;
+        accessStarted?.();
+      });
     if (!allow) {
       await route.fulfill({
         status: 403,
@@ -404,13 +412,20 @@ await context.route("**/api/backend/**", async (route) => {
     for (const audio of audios) audio.contentVersion = contents[0].version;
     return reply({ items: audios, contentVersion: contents[0].version });
   }
-  if (path === "/users/resolve")
-    return reply([{ userId: 30, source: "ANALYSIS" }]);
   if (path === "/users")
     return reply(
       paged(
         [
-          ...users.filter((user) => !deletedMembers.has(user.id)),
+          ...users.filter(
+            (user) =>
+              !deletedMembers.has(user.id) &&
+              (!url.searchParams.get("keyword") ||
+                user.nickname.includes(url.searchParams.get("keyword"))) &&
+              (!url.searchParams.get("status") ||
+                user.status === url.searchParams.get("status")) &&
+              (!url.searchParams.get("role") ||
+                user.role === url.searchParams.get("role")),
+          ),
           ...(includeWithdrawn
             ? [
                 {
@@ -777,35 +792,46 @@ try {
       await heading(title);
     }
   });
-  await check("member detail and analysis UUID lookup", async () => {
-    await nav("회원 관리").click();
-    await page.getByRole("link", { name: "연습 회원", exact: true }).click();
-    await heading("연습 회원님의 기록");
-    await page.getByRole("button", { name: /^음성 평가/ }).click();
-    await page
-      .getByText("음성 평가를 완료하지 못했습니다", { exact: true })
-      .waitFor();
-    await page
-      .getByRole("columnheader", { name: "녹음 번호", exact: true })
-      .waitFor();
-    assert.equal(
+  await check(
+    "member detail uses Korean record names without evaluation lookup",
+    async () => {
+      await nav("회원 관리").click();
+      await page.getByRole("link", { name: "연습 회원", exact: true }).click();
+      await heading("연습 회원님의 기록");
+      await page.getByRole("button", { name: /^음성 평가/ }).click();
       await page
-        .getByRole("columnheader", { name: "recordingId", exact: true })
-        .count(),
-      0,
-    );
-    await page.getByText("social@example.invalid", { exact: true }).waitFor();
-    assert.equal(
-      await page.getByText("execution_failed", { exact: true }).count(),
-      0,
-    );
-    await nav("회원 관리").click();
-    await page
-      .getByLabel("회원 번호 또는 평가 조회 번호", { exact: true })
-      .fill("532fe9f8-14e4-47ce-a011-7c9d5f6a2acd");
-    await page.getByRole("button", { name: "연결된 회원 조회" }).click();
-    await page.getByRole("link", { name: "회원 #30 보기" }).waitFor();
-  });
+        .getByText("음성 평가를 완료하지 못했습니다", { exact: true })
+        .waitFor();
+      await page
+        .getByRole("columnheader", { name: "녹음 번호", exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("columnheader", { name: "recordingId", exact: true })
+          .count(),
+        0,
+      );
+      await page.getByText("social@example.invalid", { exact: true }).waitFor();
+      assert.equal(
+        await page.getByText("execution_failed", { exact: true }).count(),
+        0,
+      );
+      await nav("회원 관리").click();
+      assert.equal(
+        await page
+          .getByText("평가 조회 번호로 회원 찾기", { exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "연결된 회원 조회", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(reads.filter((r) => r.path === "/users/resolve").length, 0);
+    },
+  );
   await check(
     "retired members remain hidden and the withdrawn filter is absent",
     async () => {
@@ -849,15 +875,6 @@ try {
       const beforeAccess = reads.filter((r) => r.path === "/me").length;
       await nav("회원 관리").click();
       await heading("회원 관리");
-      await page
-        .getByLabel("회원 번호 또는 평가 조회 번호", { exact: true })
-        .fill("532fe9f8-14e4-47ce-a011-7c9d5f6a2acd");
-      await page
-        .getByRole("button", { name: "연결된 회원 조회", exact: true })
-        .click();
-      await page
-        .getByRole("link", { name: "회원 #30 보기", exact: true })
-        .waitFor();
       await nav("학습 콘텐츠").click();
       await page
         .getByRole("link", { name: contents[0].title, exact: true })
@@ -867,6 +884,105 @@ try {
       assert.ok(
         reads.filter((r) => r.path === "/me").length >= beforeAccess + 2,
       );
+    },
+  );
+  await check(
+    "same-session navigation keeps the page and input visible during delayed authorization",
+    async () => {
+      holdAccess = true;
+      const pending = new Promise((resolve) => {
+        accessStarted = resolve;
+      });
+      try {
+        await nav("회원 관리").click();
+        await pending;
+        await heading("회원 관리");
+        assert.equal(
+          await page
+            .getByRole("heading", { name: "관리자 권한 확인 중", exact: true })
+            .count(),
+          0,
+        );
+        await page
+          .getByLabel("이름 검색", { exact: true })
+          .fill("대기 중 입력");
+        assert.equal(
+          await page.getByRole("navigation", { name: "관리자 메뉴" }).count(),
+          1,
+        );
+        const completed = page.waitForResponse(
+          (r) => r.url().endsWith("/api/admin/me") && r.status() === 200,
+        );
+        holdAccess = false;
+        releaseAccess();
+        await completed;
+        assert.equal(
+          await page.getByLabel("이름 검색", { exact: true }).inputValue(),
+          "대기 중 입력",
+        );
+        await page.getByLabel("이름 검색", { exact: true }).fill("");
+      } finally {
+        holdAccess = false;
+        accessStarted = undefined;
+        releaseAccess?.();
+      }
+    },
+  );
+  await check(
+    "member name search encodes the nickname, handles empty results and restores the full list",
+    async () => {
+      const search = page.getByLabel("이름 검색", { exact: true });
+      await search.fill("  발음 연습생  ");
+      const loaded = page.waitForResponse(
+        (r) =>
+          new URL(r.url()).pathname.endsWith("/api/admin/users") &&
+          new URL(r.url()).searchParams.get("keyword") === "발음 연습생",
+      );
+      await search.press("Enter");
+      await loaded;
+      await page
+        .getByRole("link", { name: "발음 연습생", exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("link", { name: "연습 회원", exact: true })
+          .count(),
+        0,
+      );
+      await search.fill("없는 회원");
+      await search.press("Enter");
+      await page
+        .getByRole("link", { name: "발음 연습생", exact: true })
+        .waitFor({ state: "detached" });
+      await search.fill("");
+      await search.press("Enter");
+      await page
+        .getByRole("link", { name: "연습 회원", exact: true })
+        .waitFor();
+      assert.equal(reads.filter((r) => r.path === "/users/resolve").length, 0);
+      await page.screenshot({
+        path: path.join(output, "admin-member-name-search.png"),
+        fullPage: true,
+      });
+    },
+  );
+  await check(
+    "background navigation denial immediately hides the previously approved console",
+    async () => {
+      allow = false;
+      await nav("학습 콘텐츠").click();
+      await heading("관리자 접근을 확인해 주세요");
+      assert.equal(
+        await page.getByRole("navigation", { name: "관리자 메뉴" }).count(),
+        0,
+      );
+      assert.equal(
+        await page.getByLabel("이름 검색", { exact: true }).count(),
+        0,
+      );
+      allow = true;
+      await page.goto(base + "/admin");
+      await heading("운영 현황");
     },
   );
   await check(
