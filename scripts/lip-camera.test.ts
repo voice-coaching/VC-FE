@@ -215,6 +215,10 @@ test("lip analysis submits captured audio through authenticated coaching admissi
       await input.upload(info);
       return info;
     },
+    voiceProcessingConsentInput: () => ({
+      accepted: true,
+      policyRevision: "current-policy",
+    }),
     requireAnalysisScope: async () => {},
     invalidatesCanonicalResult: () => false,
     assertCoachingInput,
