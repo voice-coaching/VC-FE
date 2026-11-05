@@ -8,6 +8,8 @@ export function CanonicalScoreCriteria({
 }) {
   const score = view.canonicalAnalysis?.score;
   if (score?.validity !== "RUBRIC_COMPUTED") return null;
+  const rows = canonicalCriterionPoints(score);
+  if (rows.length === 0) return null;
   return (
     <section className="rounded-2xl bg-white p-5">
       <h2 className="text-[15px] font-bold">항목별 점수</h2>
@@ -19,7 +21,7 @@ export function CanonicalScoreCriteria({
         </p>
       )}
       <dl className="mt-3 space-y-2">
-        {canonicalCriterionPoints(score).map((row) => (
+        {rows.map((row) => (
           <div
             key={row.criterionId}
             className="flex justify-between gap-3 text-sm"
