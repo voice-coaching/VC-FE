@@ -8,6 +8,7 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
 import { CanonicalLipResult } from "@/components/canonical-lip-result";
+import { visibleAnalysisScoreGroups } from "@/lib/analysis-feedback";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
 import {
   CorrectionComparison,
@@ -55,6 +56,7 @@ export function AnalysisView({
   content,
   recordingUrl,
   recordingId,
+  isCameraPractice = false,
   reportParameter = "report",
   corrections,
   practiceResult,
@@ -67,6 +69,7 @@ export function AnalysisView({
   recordingUrl?: string;
   recordingId?: Id;
   courseMode?: boolean;
+  isCameraPractice?: boolean;
   reportParameter?: string;
   corrections?: ReportCorrection[];
   practiceResult?: DirectResult["practiceResult"];
@@ -136,7 +139,10 @@ export function AnalysisView({
       }));
     }
     if (analysis.scoreHierarchy?.groups.length) {
-      return analysis.scoreHierarchy.groups.map((group) => ({
+      return visibleAnalysisScoreGroups(
+        analysis.scoreHierarchy.groups,
+        isCameraPractice,
+      ).map((group) => ({
         id: group.id,
         label: group.label,
         description: group.description,
@@ -148,7 +154,12 @@ export function AnalysisView({
       }));
     }
     return [];
-  }, [analysis.canonical, analysis.scoreBreakdown, analysis.scoreHierarchy]);
+  }, [
+    analysis.canonical,
+    analysis.scoreBreakdown,
+    analysis.scoreHierarchy,
+    isCameraPractice,
+  ]);
 
   let overlay: ReactNode = null;
   if (report === "pronunciation") {
@@ -444,7 +455,12 @@ export function AnalysisView({
         <section className="flex flex-col items-center gap-4 pt-2">
           <AnalysisSummary key={summary} text={summary} />
         </section>
-        {analysis.canonical && <CanonicalLipResult view={analysis.canonical} />}
+        {analysis.canonical && (
+          <CanonicalLipResult
+            view={analysis.canonical}
+            isCameraPractice={isCameraPractice}
+          />
+        )}
 
         <section className="rounded-2xl bg-gradient-to-b from-white to-[#f6f8ff] p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
