@@ -17,6 +17,7 @@ import {
   createTitleExamSession,
   prepareTitleExam,
   titleExamErrorMessage,
+  validateTitleExamResult,
 } from "@/lib/title-exam";
 import { loadTitleExamResume } from "@/lib/title-exam-resume";
 import { invalidateLearningCaches } from "@/lib/learning-cache";
@@ -280,11 +281,13 @@ function ActiveTitleExamSession({
       const isCurrent = () =>
         mountedRef.current && authEpochRef.current === getAuthSessionVersion();
       try {
-        const graded = await api.users.submitTitleExam(examId, analysisId);
+        const graded = validateTitleExamResult(
+          await api.users.submitTitleExam(examId, analysisId),
+        );
         if (!isCurrent()) return;
         setResult(graded);
-        // Completion is cached before grading; promotion must invalidate it again.
-        invalidateLearningCaches();
+        // Completion is cached before grading; only a real promotion changes it again.
+        if (graded.status === "PASSED") invalidateLearningCaches();
       } catch (reason) {
         if (isCurrent()) setError(titleExamErrorMessage(reason));
       } finally {
@@ -314,19 +317,19 @@ function ActiveTitleExamSession({
           <>
             {result && (
               <section
-                className={`design-card border ${result.passed ? "border-[#84dfb7] bg-[#effcf6]" : "border-[#ffc4b8] bg-[#fff5f2]"}`}
+                className={`design-card border ${result.status === "PASSED" ? "border-[#84dfb7] bg-[#effcf6]" : "border-[#ffc4b8] bg-[#fff5f2]"}`}
                 aria-label="승급 시험 결과"
               >
                 <p className="text-xs font-semibold text-[#6b7684]">
                   승급 시험 {result.score}점 · 합격 기준 {result.passingScore}점
                 </p>
                 <h2 className="mt-2 text-xl font-bold">
-                  {result.passed
+                  {result.status === "PASSED"
                     ? `${result.currentTitle} 칭호로 승급했어요!`
                     : "아쉽게도 이번에는 불합격이에요"}
                 </h2>
                 <p className="mt-2 text-sm text-[#6b7684]">
-                  {result.passed
+                  {result.status === "PASSED"
                     ? "새 칭호는 마이페이지에 바로 반영됩니다."
                     : "마이페이지에서 다음 응시 가능 여부를 확인해 주세요."}
                 </p>

@@ -1,5 +1,36 @@
-import type { ApiContract, Id } from "./api/types";
+import type { ApiContract, Id, UserTitleExamResult } from "./api/types";
 import { ApiError } from "./api/client";
+
+/**
+ * Reject contradictory grading responses before they can be presented as a
+ * promotion. The server owns grading, but every success response must still
+ * agree with its status, score threshold, and resulting title.
+ */
+export function validateTitleExamResult(
+  result: UserTitleExamResult,
+): UserTitleExamResult {
+  const hasValidScore =
+    Number.isFinite(result.score) && Number.isFinite(result.passingScore);
+  const passedByScore = hasValidScore && result.score >= result.passingScore;
+  const titleChanged = result.currentTitle !== result.previousTitle;
+  const isConsistentPass =
+    result.status === "PASSED" &&
+    result.passed === true &&
+    passedByScore &&
+    titleChanged;
+  const isConsistentFailure =
+    result.status === "FAILED" &&
+    result.passed === false &&
+    !passedByScore &&
+    !titleChanged;
+
+  if (!isConsistentPass && !isConsistentFailure)
+    throw new Error(
+      "승급 시험 채점 결과를 확인할 수 없습니다. 마이페이지에서 현재 칭호를 확인해 주세요.",
+    );
+
+  return result;
+}
 
 export function titleExamErrorMessage(reason: unknown) {
   const messages: Record<string, string> = {

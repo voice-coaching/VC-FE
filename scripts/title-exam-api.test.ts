@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
 import { createRemoteApi } from "../src/lib/api/remote";
 import { ApiError } from "../src/lib/api/client";
-import { titleExamErrorMessage } from "../src/lib/title-exam";
+import {
+  titleExamErrorMessage,
+  validateTitleExamResult,
+} from "../src/lib/title-exam";
 
 test("generic backend exam messages are distinguished by code without guessing unknown errors", () => {
   const generic = "승급 시험 요청을 처리할 수 없습니다.";
@@ -226,6 +229,57 @@ test("grading sends only the server analysis ID, never a client score", async ()
   assert.equal(result.passed, true);
   assert.ok(result.score >= result.passingScore);
   assert.equal(result.currentTitle, "동네 아나운서");
+});
+
+test("failed grading keeps the current title and cannot be presented as a promotion", () => {
+  const failed = validateTitleExamResult({
+    examId: 456,
+    passed: false,
+    status: "FAILED",
+    score: 69,
+    passingScore: 70,
+    previousTitle: "왕초보",
+    currentTitle: "왕초보",
+    evaluatedAt: "2026-11-05T00:00:00Z",
+  });
+
+  assert.equal(failed.status, "FAILED");
+  assert.equal(failed.currentTitle, failed.previousTitle);
+});
+
+test("contradictory grading responses are rejected before promotion UI", () => {
+  const failedResult = {
+    examId: 456,
+    passed: false,
+    status: "FAILED" as const,
+    score: 69,
+    passingScore: 70,
+    previousTitle: "왕초보" as const,
+    currentTitle: "왕초보" as const,
+    evaluatedAt: "2026-11-05T00:00:00Z",
+  };
+
+  assert.throws(
+    () => validateTitleExamResult({ ...failedResult, passed: true }),
+    /채점 결과를 확인할 수 없습니다/,
+  );
+  assert.throws(
+    () =>
+      validateTitleExamResult({
+        ...failedResult,
+        currentTitle: "초보",
+      }),
+    /채점 결과를 확인할 수 없습니다/,
+  );
+  assert.throws(
+    () =>
+      validateTitleExamResult({
+        ...failedResult,
+        status: "PASSED",
+        passed: true,
+      }),
+    /채점 결과를 확인할 수 없습니다/,
+  );
 });
 
 test("all example difficulties use the existing content API and pronunciation filter", async () => {
