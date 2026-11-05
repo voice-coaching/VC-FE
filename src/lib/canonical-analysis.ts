@@ -367,17 +367,7 @@ export function readCanonicalAnalysisView(
   requireProjection(jobStatus === "FAILED" || view.serviceFailure === null);
   if (!canonical) return view;
   const { decision, selection, coaching } = canonical;
-  if (canonical.score.validity === "RUBRIC_COMPUTED") {
-    requireProjection(
-      jobStatus === "COMPLETED" && decision.status === "ACCEPT",
-    );
-  }
-  if (canonical.score.validity === "UNSCORABLE") {
-    requireProjection(
-      jobStatus === "FAILED" ||
-        (jobStatus === "COMPLETED" && coaching?.adapterStatus === "READY"),
-    );
-  }
+  // Score availability is AI-owned and does not decide feedback availability.
   requireProjection(
     decision.status !== "SYSTEM_FAILURE" || jobStatus === "FAILED",
   );
@@ -407,8 +397,7 @@ export function readCanonicalAnalysisView(
     requireProjection(
       jobStatus === "COMPLETED" &&
         decision.status === "ACCEPT" &&
-        selection !== null &&
-        selection.candidates.length === 0,
+        (selection === null || selection.candidates.length === 0),
     );
   } else if (coaching?.adapterStatus === "FAIL_CLOSED") {
     requireProjection(jobStatus === "FAILED" && selection === null);
@@ -437,7 +426,8 @@ export function readCanonicalAnalysisView(
         coaching?.adapterStatus === "READY" &&
         coaching.feedback &&
         selection === null
-      )
+      ) &&
+      !(coaching.adapterStatus === "NO_PERMITTED_COACHING_CONTENT" && selection === null)
     ) {
       requireProjection(selection !== null);
       requireProjection(
