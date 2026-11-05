@@ -15,7 +15,15 @@ const reasons: Record<string, string> = {
   CALIBRATION_MISSING: "검증된 점수 기준이 아직 없어요.",
 };
 
-export function CanonicalLipResult({ view }: { view: CanonicalAnalysisView }) {
+export function CanonicalLipResult({
+  view,
+  isCameraPractice,
+}: {
+  view: CanonicalAnalysisView;
+  isCameraPractice: boolean;
+}) {
+  if (!isCameraPractice) return null;
+
   const visual = view.canonicalAnalysis?.visual;
   if (!visual || visual.status === "NOT_CONNECTED") return null;
   return (

@@ -1028,6 +1028,7 @@ export default function LipPractice() {
                 ) : null}
                 <DirectAnalysisResult
                   result={selectedDirectResult}
+                  isCameraPractice
                   content={{
                     id: `lip-${selectedClip}`,
                     contentType: "SENTENCE",
@@ -1057,6 +1058,7 @@ export default function LipPractice() {
                   segments={selectedAnalysis.segments}
                   content={selectedAnalysis.content}
                   recordingUrl={reportClip?.url}
+                  isCameraPractice
                 />
               </div>
             ) : (
