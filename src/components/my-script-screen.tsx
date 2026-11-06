@@ -178,7 +178,9 @@ export function MyScriptScreen() {
       setScripts((items) =>
         items.filter((item) => !deleteIds.includes(String(item.id))),
       );
-      setSelected([]);
+      finishEditing();
+      setLibraryTopic(null);
+      setEditingId(null);
       setDeleteIds(null);
       setContent(null);
       setSavedNotice(null);
@@ -360,8 +362,8 @@ export function MyScriptScreen() {
       <AppShell
         nav={!editMode}
         viewportLocked
-        chromeColor="#f2f4f6"
-        className="relative flex flex-col !bg-[#f2f4f6]"
+        chromeColor="#ffffff"
+        className="relative flex flex-col !bg-white [--primary:#6346f6]"
       >
         <TopBar
           to="/home"
@@ -371,7 +373,7 @@ export function MyScriptScreen() {
             !libraryLoading &&
             !libraryError && (
               <button
-                className={`px-3 py-2 text-[14px] font-bold ${editMode ? "text-[#2f6bff]" : "text-[#4e5968]"}`}
+                className={`px-3 py-2 text-[14px] font-bold ${editMode ? "text-[#6346f6]" : "text-[#4e5968]"}`}
                 onClick={() => {
                   if (editMode) finishEditing();
                   else {
@@ -403,7 +405,7 @@ export function MyScriptScreen() {
             </p>
             <button
               onClick={() => setReload((value) => value + 1)}
-              className="rounded-full bg-white px-6 py-3 font-bold text-[#2f6bff]"
+              className="rounded-full bg-white px-6 py-3 font-bold text-[#6346f6]"
             >
               다시 시도
             </button>
@@ -411,10 +413,10 @@ export function MyScriptScreen() {
         ) : scripts.length === 0 && !editMode ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 pt-2 pb-20 text-center">
             <Image
-              src="/figma/my-script/empty.png"
+              src="/figma/my-script/empty-purple.png"
               alt=""
-              width={133}
-              height={133}
+              width={140}
+              height={140}
               priority
               className="shrink-0"
             />
@@ -438,7 +440,7 @@ export function MyScriptScreen() {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pt-2 pb-24">
             <div
-              className="mb-6 flex shrink-0 gap-2 overflow-x-auto"
+              className="mb-1 flex shrink-0 gap-2 overflow-x-auto"
               aria-label="주제 필터"
             >
               {[null, ...topicData.topics].map((name) => (
@@ -450,7 +452,7 @@ export function MyScriptScreen() {
                     setLibraryTopic(name);
                     setSelected([]);
                   }}
-                  className={`shrink-0 rounded-full px-3.5 py-[7px] text-[13px] leading-[18px] ${libraryTopic === name ? "bg-[#2f6bff] text-white" : "bg-white text-[#4e5968]"}`}
+                  className={`shrink-0 rounded-full px-3.5 py-[7px] text-[13px] leading-[18px] ${libraryTopic === name ? "bg-[#6346f6] text-white" : "bg-white text-[#4e5968]"}`}
                 >
                   {name ?? "전체"}
                 </button>
@@ -462,9 +464,9 @@ export function MyScriptScreen() {
                     setSavedNotice(null);
                     setStage("topics");
                   }}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4e5968]"
+                  className="flex h-8 w-9 shrink-0 items-center justify-center rounded-full bg-[#f2f4f6] text-[#4e5968]"
                 >
-                  <Settings size={18} />
+                  <Settings size={16} />
                 </button>
               )}
             </div>
@@ -486,11 +488,11 @@ export function MyScriptScreen() {
                 }
               >
                 <span>전체 선택</span>
-                <span className="ml-auto text-[#2f6bff]">
+                <span className="ml-auto text-[#6346f6]">
                   {selected.length > 0 ? `${selected.length}개 선택` : ""}
                 </span>
                 <span
-                  className={`grid size-[22px] place-items-center rounded-full border ${visibleScripts.length > 0 && selected.length === visibleScripts.length ? "border-[#2f6bff] bg-[#2f6bff] text-white" : "border-[#d1d6db]"}`}
+                  className={`grid size-[22px] place-items-center rounded-full border ${visibleScripts.length > 0 && selected.length === visibleScripts.length ? "border-[#6346f6] bg-[#6346f6] text-white" : "border-[#d1d6db]"}`}
                 >
                   {visibleScripts.length > 0 &&
                     selected.length === visibleScripts.length && (
@@ -499,7 +501,7 @@ export function MyScriptScreen() {
                 </span>
               </button>
             )}
-            <div className="flex flex-1 flex-col gap-2.5">
+            <div className="flex flex-1 flex-col">
               {visibleScripts.map((script) => (
                 <button
                   key={script.id}
@@ -521,10 +523,10 @@ export function MyScriptScreen() {
                     dismissSavedNotice();
                     void openScript(script.id);
                   }}
-                  className="flex w-full items-center gap-3 rounded-[16px] bg-white py-4 pr-3.5 pl-[18px] text-left shadow-[0_2px_3px_rgba(26,33,48,0.05)] disabled:opacity-50"
+                  className="flex w-full items-center gap-3 border-b border-[#f2f4f6] bg-white py-4 text-left last:border-b-0 disabled:opacity-50"
                 >
                   <span className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-                    <span className="rounded-full bg-[#edf2ff] px-2 py-0.5 text-[11px] leading-[14px] font-bold text-[#2f6bff]">
+                    <span className="rounded-full bg-[#f0edff] px-2 py-0.5 text-[11px] leading-[14px] font-bold text-[#6346f6]">
                       {topicData.assignments[String(script.id)] ?? "미분류"}
                     </span>
                     <span className="break-words text-[15px] leading-[22px] font-bold text-[#191f28]">
@@ -543,7 +545,7 @@ export function MyScriptScreen() {
                   </span>
                   {editMode ? (
                     <span
-                      className={`grid size-[22px] shrink-0 place-items-center rounded-full border ${selected.includes(String(script.id)) ? "border-[#2f6bff] bg-[#2f6bff] text-white" : "border-[#d1d6db]"}`}
+                      className={`grid size-[22px] shrink-0 place-items-center rounded-full border ${selected.includes(String(script.id)) ? "border-[#6346f6] bg-[#6346f6] text-white" : "border-[#d1d6db]"}`}
                     >
                       {selected.includes(String(script.id)) && (
                         <Check size={14} />
@@ -567,10 +569,10 @@ export function MyScriptScreen() {
                 ) && (
                   <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
                     <Image
-                      src="/figma/my-script/empty.png"
+                      src="/figma/my-script/empty-purple.png"
                       alt=""
-                      width={133}
-                      height={133}
+                      width={140}
+                      height={140}
                       className="shrink-0"
                     />
                     <div>
@@ -590,7 +592,7 @@ export function MyScriptScreen() {
           <footer className="shrink-0 bg-white px-5 pt-3 pb-9">
             <button
               disabled={!selected.length || saving}
-              className="h-14 w-full rounded-full bg-[#f04452] font-bold text-white disabled:bg-[#b8ccff]"
+              className="h-14 w-full rounded-full bg-[#f04452] font-bold text-white disabled:bg-[#cbc2ff]"
               onClick={() => {
                 setSaveError(null);
                 setDeleteIds([...selected]);
@@ -618,7 +620,7 @@ export function MyScriptScreen() {
                 setEditingId(null);
                 setStage("input");
               }}
-              className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#2f6bff] py-3.5 pr-5 pl-[18px] text-[15px] font-bold text-white shadow-[0_6px_8px_rgba(47,107,255,0.32)]"
+              className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-[#6346f6] py-3.5 pr-5 pl-[18px] text-[15px] font-bold text-white shadow-[0_6px_8px_rgba(99,70,246,0.32)]"
             >
               <Image
                 src="/figma/my-script/plus.svg"
@@ -659,7 +661,7 @@ export function MyScriptScreen() {
         viewportLocked
         chromeColor="#f2f4f6"
         bottomChromeColor="#ffffff"
-        className="flex flex-col !bg-[#f2f4f6]"
+        className="flex flex-col !bg-[#f2f4f6] [--primary:#6346f6]"
       >
         <TopBar
           to="/my-script"
@@ -732,7 +734,7 @@ export function MyScriptScreen() {
               전체 문장
             </span>
             <p>
-              <strong className="text-[16px] leading-6 text-[#2f6bff]">
+              <strong className="text-[16px] leading-6 text-[#6346f6]">
                 {detailSentences.length}
               </strong>
               <span className="text-[13px] text-[#4e5968]">문장</span>
@@ -760,7 +762,7 @@ export function MyScriptScreen() {
               setTitle("연습하기");
               setStage("practice");
             }}
-            className="h-14 w-full rounded-full bg-[#2f6bff] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
+            className="h-14 w-full rounded-full bg-[#6346f6] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
           >
             연습 시작하기
           </button>
@@ -777,7 +779,7 @@ export function MyScriptScreen() {
         viewportLocked
         chromeColor="#f2f4f6"
         bottomChromeColor="#ffffff"
-        className="flex flex-col !bg-[#f2f4f6]"
+        className="flex flex-col !bg-[#f2f4f6] [--primary:#6346f6]"
       >
         <TopBar to="/home" title={title} />
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -797,7 +799,7 @@ export function MyScriptScreen() {
       viewportLocked
       chromeColor="#f2f4f6"
       bottomChromeColor="#ffffff"
-      className="flex flex-col !bg-[#f2f4f6]"
+      className="flex flex-col !bg-[#f2f4f6] [--primary:#6346f6]"
     >
       <TopBar
         to="/home"
@@ -820,7 +822,7 @@ export function MyScriptScreen() {
       {stage === "input" ? (
         <main className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pt-2 pb-5">
           {!SCRIPT_LIBRARY_AVAILABLE && (
-            <p className="rounded-xl bg-[#edf2ff] px-4 py-3 text-xs leading-5 text-primary">
+            <p className="rounded-xl bg-[#f0edff] px-4 py-3 text-xs leading-5 text-primary">
               {SCRIPT_LIBRARY_UNAVAILABLE_MESSAGE}
             </p>
           )}
@@ -837,7 +839,7 @@ export function MyScriptScreen() {
               value={scriptTitle}
               onChange={(event) => setScriptTitle(event.target.value)}
               placeholder="예) 3분기 성과 발표 오프닝"
-              className="w-full rounded-[12px] bg-white px-4 py-3.5 text-[15px] leading-[22px] text-[#191f28] outline-none placeholder:text-[#b0b8c1] focus:ring-2 focus:ring-[#2f6bff]"
+              className="w-full rounded-[12px] bg-white px-4 py-3.5 text-[15px] leading-[22px] text-[#191f28] outline-none placeholder:text-[#b0b8c1] focus:ring-2 focus:ring-[#6346f6]"
             />
           </div>
           {SCRIPT_LIBRARY_AVAILABLE && (
@@ -890,7 +892,7 @@ export function MyScriptScreen() {
               전체 문장
             </p>
             <p className="ml-auto">
-              <strong className="text-[16px] leading-6 text-[#2f6bff]">
+              <strong className="text-[16px] leading-6 text-[#6346f6]">
                 {sentences.length}
               </strong>
               <span className="ml-0.5 text-[13px] leading-[18px] font-medium text-[#4e5968]">
@@ -917,7 +919,7 @@ export function MyScriptScreen() {
             type="button"
             disabled={!scriptTitle.trim() || !text.trim() || tooLong || saving}
             onClick={() => setStage("confirm")}
-            className="h-14 w-full rounded-full bg-[#2f6bff] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
+            className="h-14 w-full rounded-full bg-[#6346f6] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
           >
             문장 나누기
           </button>
@@ -941,7 +943,7 @@ export function MyScriptScreen() {
                 !scriptTitle.trim() || !text.trim() || tooLong || saving
               }
               onClick={() => void saveScript(true)}
-              className="h-14 min-w-0 flex-[3] rounded-full bg-[#2f6bff] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
+              className="h-14 min-w-0 flex-[3] rounded-full bg-[#6346f6] text-[16px] leading-6 font-bold text-white disabled:opacity-35"
             >
               바로 연습하기
             </button>

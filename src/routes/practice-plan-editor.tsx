@@ -31,7 +31,7 @@ const titles: Record<keyof PracticePlan, string> = {
   method: "어떤 방식으로 연습하고 싶나요?",
 };
 const cta =
-  "h-14 w-full shrink-0 rounded-full bg-[#2f6bff] text-base font-bold text-white disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]";
+  "h-14 w-full shrink-0 rounded-full bg-[#6346f6] text-base font-bold text-white disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]";
 
 export function PracticePlanEditor({
   plan,
@@ -171,7 +171,7 @@ export function PracticePlanEditor({
               return (
                 <label
                   key={option.value}
-                  className={`relative flex min-h-[74px] cursor-pointer items-center gap-3.5 rounded-2xl border-2 px-4 py-3.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#2f6bff] ${selected ? "border-[#2f6bff] bg-[#f1f5ff]" : "border-transparent bg-[#f7f8fa]"} ${atLimit ? "opacity-50" : ""}`}
+                  className={`relative flex min-h-[74px] cursor-pointer items-center gap-3.5 rounded-2xl border-2 px-4 py-3.5 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#6346f6] ${selected ? "border-[#6346f6] bg-[#f1edff]" : "border-transparent bg-[#f7f8fa]"} ${atLimit ? "opacity-50" : ""}`}
                 >
                   <input
                     className="sr-only"
@@ -212,7 +212,7 @@ export function PracticePlanEditor({
                     )}
                   </span>
                   {selected && (
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#2f6bff]">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#6346f6]">
                       <Image
                         src="/figma/onboarding/check.svg"
                         alt=""
@@ -255,7 +255,7 @@ export function PracticePlanEditor({
               계속 수정
             </AlertDialogCancel>
             <AlertDialogAction
-              className="min-h-12 rounded-full bg-[#2f6bff] text-white"
+              className="min-h-12 rounded-full bg-[#6346f6] text-white"
               onClick={onBack}
             >
               나가기

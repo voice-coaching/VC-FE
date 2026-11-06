@@ -1,0 +1,18 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="35.4422" height="48" viewBox="0 0 35.4422 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon &#194;&#183; &#235;&#167;&#136;&#236;&#157;&#180;&#237;&#129;&#172;">
+<path id="Microphone" d="M8.41619 9.37052C8.41619 4.20717 12.5596 0 17.723 0C22.8863 0 27.0297 4.20717 27.0297 9.37052V21.6096C27.0297 26.7729 22.8863 30.9163 17.723 30.9163C12.5596 30.9163 8.41619 26.7729 8.41619 21.6096V9.37052Z" fill="url(#paint0_linear_0_15)"/>
+<path id="Microphone stand" d="M0 22.4381C0 20.717 1.40239 19.3146 3.12351 19.3146C4.90837 19.3146 6.31076 20.717 6.31076 22.4381C6.31076 28.8126 11.4104 33.976 17.7211 33.976C24.0956 33.976 29.1315 28.8126 29.1315 22.4381C29.1315 20.717 30.5339 19.3146 32.3187 19.3146C34.0398 19.3146 35.4422 20.717 35.4422 22.4381C35.4422 31.2987 29.004 38.6294 20.5259 39.9043V45.0676C20.5259 46.6612 19.251 47.9999 17.7211 47.9999C16.1275 47.9999 14.8526 46.6612 14.8526 45.0676V39.9043C6.43825 38.5656 0 31.2349 0 22.4381Z" fill="url(#paint1_linear_0_15)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_15" x1="8.41619" y1="0" x2="34.2772" y2="17.2999" gradientUnits="userSpaceOnUse">
+<stop stop-color="#E3DDF9"/>
+<stop offset="0.48" stop-color="#AA95FA"/>
+<stop offset="1" stop-color="#5023F8"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_15" x1="2.83538" y1="19.3146" x2="21.3321" y2="50.3304" gradientUnits="userSpaceOnUse">
+<stop stop-color="#C6B7F8"/>
+<stop offset="0.45" stop-color="#9375FA"/>
+<stop offset="1" stop-color="#5024F8"/>
+</linearGradient>
+</defs>
+</svg>

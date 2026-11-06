@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Suspense, useEffect, useRef } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import type { Difficulty } from "@/lib/api";
@@ -13,7 +14,7 @@ type Props = {
 };
 
 const newsTriggerClass =
-  "flex h-[30px] shrink-0 items-center gap-0.5 rounded-full bg-[#e8eeff] pl-3 pr-2 text-[13px] leading-[18px] font-medium text-[#1276ff]";
+  "flex min-h-[30px] shrink-0 items-center gap-0.5 text-[13px] leading-[18px] font-medium text-[#4e5968]";
 
 function triggerLabel(
   value: Difficulty | "",
@@ -78,7 +79,12 @@ function DifficultyPicker({ value, options, onChange, variant }: Props) {
       >
         {triggerLabel(value, options, variant)}
         {variant === "news" ? (
-          <ChevronDown className="size-4" aria-hidden="true" />
+          <Image
+            src="/figma/news-screen7/down.svg"
+            alt=""
+            width={16}
+            height={16}
+          />
         ) : (
           <ChevronDown className="size-4" />
         )}
@@ -101,40 +107,99 @@ function DifficultyPicker({ value, options, onChange, variant }: Props) {
           )
             setPanel(null);
         }}
-        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain rounded-t-[28px] bg-white px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-black/35"
+        className={`fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain bg-white text-[#191f28] backdrop:bg-black/40 ${variant === "news" ? "rounded-t-[20px] px-4 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))]" : "rounded-t-[28px] px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom,0px))]"}`}
       >
-        <div className="flex items-center justify-between">
-          <h2 id="difficulty-title" className="text-lg font-bold">
-            난이도
-          </h2>
-          <button
-            type="button"
-            onClick={() => setPanel(null)}
-            aria-label="닫기"
-            className="flex size-11 items-center justify-center"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-        <div className="mt-2">
-          {options.map((option) => (
-            <button
-              key={option.value || "all"}
-              type="button"
-              aria-pressed={value === option.value}
-              onClick={() => {
-                onChange(option.value);
-                setPanel(null);
-              }}
-              className="flex min-h-14 w-full items-center justify-between gap-2 border-b border-[#f2f4f6] text-left text-[15px] font-medium [overflow-wrap:anywhere]"
+        {variant === "news" ? (
+          <>
+            <span className="mx-auto block h-1 w-9 rounded-full bg-[#d1d6db]" />
+            <h2
+              id="difficulty-title"
+              className="mt-4 mb-3 px-1 text-lg leading-[26px] font-bold"
             >
-              {option.label}
-              {value === option.value ? (
-                <Check className="size-5 shrink-0 text-primary" />
-              ) : null}
-            </button>
-          ))}
-        </div>
+              난이도 선택
+            </h2>
+            <div className="flex flex-col gap-1">
+              {options.map((option) => (
+                <button
+                  key={option.value || "all"}
+                  type="button"
+                  aria-pressed={value === option.value}
+                  onClick={() => {
+                    onChange(option.value);
+                    setPanel(null);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left ${value === option.value ? "bg-[#f2f4f6]" : "bg-white"}`}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span
+                      className={`text-[15px] leading-[22px] ${value === option.value ? "font-bold" : "font-medium"}`}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="text-[13px] leading-[18px] font-medium text-[#8b95a1]">
+                      {
+                        {
+                          "": "모든 뉴스를 보여줘요",
+                          BEGINNER: "짧고 쉬운 문장",
+                          INTERMEDIATE: "일상 뉴스 길이의 문장",
+                          ADVANCED: "전문 용어가 섞인 긴 문장",
+                        }[option.value]
+                      }
+                    </span>
+                  </span>
+                  <span
+                    className={`flex size-[26px] shrink-0 items-center justify-center rounded-full ${value === option.value ? "bg-[#6346f6]" : "border-[1.5px] border-[#d1d6db]"}`}
+                  >
+                    {value === option.value && (
+                      <Image
+                        src="/figma/news-screen7/check.svg"
+                        alt=""
+                        width={18}
+                        height={18}
+                      />
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            {" "}
+            <div className="flex items-center justify-between">
+              <h2 id="difficulty-title" className="text-lg font-bold">
+                난이도
+              </h2>
+              <button
+                type="button"
+                onClick={() => setPanel(null)}
+                aria-label="닫기"
+                className="flex size-11 items-center justify-center"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="mt-2">
+              {options.map((option) => (
+                <button
+                  key={option.value || "all"}
+                  type="button"
+                  aria-pressed={value === option.value}
+                  onClick={() => {
+                    onChange(option.value);
+                    setPanel(null);
+                  }}
+                  className="flex min-h-14 w-full items-center justify-between gap-2 border-b border-[#f2f4f6] text-left text-[15px] font-medium [overflow-wrap:anywhere]"
+                >
+                  {option.label}
+                  {value === option.value ? (
+                    <Check className="size-5 shrink-0 text-primary" />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </dialog>
     </>
   );

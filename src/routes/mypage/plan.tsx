@@ -85,35 +85,6 @@ export default function PracticePlan() {
   const [error, setError] = useState<string | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [retry, setRetry] = useState(0);
-  const [weeklyDays, setWeeklyDays] = useState<number | null>(null);
-  useEffect(() => {
-    let active = true;
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-    const localKey = (date: Date) =>
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    api.myPage
-      .listTrainingSessions({
-        status: "COMPLETED",
-        from: localKey(start),
-        to: localKey(today),
-        page: 0,
-        size: 100,
-      })
-      .then((history) => {
-        if (active)
-          setWeeklyDays(
-            new Set(
-              history.items.map((item) => localKey(new Date(item.completedAt))),
-            ).size,
-          );
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [retry]);
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -306,9 +277,9 @@ export default function PracticePlan() {
 
   return (
     <AppShell
-      chromeColor="#ccdbff"
+      chromeColor="#cdbfff"
       viewportLocked
-      className={`relative overflow-hidden bg-[#f2f4f6] ${layout.shell}`}
+      className={`relative overflow-hidden bg-white ${layout.shell}`}
     >
       <div className={layout.content}>
         <MyProfileBand
@@ -325,8 +296,8 @@ export default function PracticePlan() {
           examStarting={examStarting}
           onExam={() => void startTitleExam()}
         />
-        <div className="px-5 pt-3.5 pb-6">
-          <div className="mb-3 flex items-center justify-between pt-2 pl-1">
+        <div className="px-5 pt-1 pb-6">
+          <div className="mb-3 flex items-center justify-between pt-2">
             <h2 className="text-[17px] leading-6 font-bold">내 연습 계획</h2>
             <button
               disabled={!draft}
@@ -341,22 +312,22 @@ export default function PracticePlan() {
               계획을 불러오는 중…
             </p>
           ) : rows.length ? (
-            <div className="rounded-[20px] bg-white pr-4 pl-5">
+            <div className="rounded-[20px] bg-[#f7f8fa] py-1 pl-5 pr-4">
               {rows.map((row, index) => (
                 <button
                   key={row.key}
                   type="button"
                   onClick={() => open(row.key)}
-                  className={`flex min-h-[76px] w-full items-center gap-3 py-[18px] text-left ${index < rows.length - 1 ? "border-b border-[#f2f4f6]" : ""}`}
+                  className="flex min-h-[68px] w-full items-center gap-3 py-3.5 text-left"
                 >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[#eaf0ff] text-sm font-bold text-primary">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-white text-sm font-bold text-[#6346f6]">
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[12px] leading-4 font-medium text-[#8b95a1]">
                       {row.label}
                     </span>
-                    <strong className="mt-0.5 block truncate text-[15px] leading-[22px] font-bold text-[#191f28]">
+                    <strong className="mt-0.5 block break-words text-[15px] leading-[22px] font-bold text-[#191f28]">
                       {row.value || "선택해 주세요"}
                     </strong>
                   </span>
@@ -369,23 +340,6 @@ export default function PracticePlan() {
                 </button>
               ))}
             </div>
-          ) : null}
-          {profile && weeklyDays !== null ? (
-            <p className="mt-3 rounded-[16px] bg-[#eaf0ff] px-4 py-3.5 text-[13px] leading-[18px] text-[#2f4a8a]">
-              {!profile.weeklySessions ? (
-                "정해진 목표 없이 자유롭게 연습해요"
-              ) : weeklyDays >= profile.weeklySessions ? (
-                "이번 주 연습 계획을 달성했어요"
-              ) : (
-                <>
-                  이번 주{" "}
-                  <strong className="text-primary">
-                    {profile.weeklySessions - weeklyDays}일
-                  </strong>{" "}
-                  더 연습하면 계획 달성이에요
-                </>
-              )}
-            </p>
           ) : null}
           {error || canReload ? (
             <div className="mt-3 rounded-2xl bg-white p-4">

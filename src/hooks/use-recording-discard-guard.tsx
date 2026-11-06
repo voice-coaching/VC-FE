@@ -16,6 +16,7 @@ import {
 export function useRecordingDiscardGuard(
   hasRecording: boolean,
   guardNavigation = false,
+  sentenceCount?: number,
 ) {
   const [intent, setIntent] = useState<"exit" | "retry" | null>(null);
   const pending = useRef<(() => void) | null>(null);
@@ -125,11 +126,15 @@ export function useRecordingDiscardGuard(
       >
         <div className="space-y-2 text-center">
           <AlertDialogTitle className="text-[20px] leading-7 font-bold tracking-[-0.24px]">
-            {intent === "retry" ? "다시 녹음할까요?" : "연습을 그만둘까요?"}
+            {intent === "retry"
+              ? "처음부터 다시 녹음할까요?"
+              : "연습을 그만둘까요?"}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-[14px] leading-5 font-medium text-[#6b7684]">
             {intent === "retry"
-              ? "기존 녹음은 삭제되고 새로 녹음해요"
+              ? sentenceCount != null
+                ? `지금 녹음한 ${sentenceCount}문장은 지워져요`
+                : "지금 녹음한 내용은 지워져요"
               : "지금까지 녹음한 내용은 저장되지 않아요"}
           </AlertDialogDescription>
         </div>
@@ -145,8 +150,8 @@ export function useRecordingDiscardGuard(
           >
             {intent === "retry" ? "다시 녹음" : "그만두기"}
           </AlertDialogAction>
-          <AlertDialogCancel className="!mt-0 h-14 min-w-0 flex-1 rounded-full border-0 bg-[#2f6bff] px-3 text-[16px] leading-6 font-bold text-white shadow-none hover:bg-[#245be0] hover:text-white">
-            계속 연습
+          <AlertDialogCancel className="!mt-0 h-14 min-w-0 flex-1 rounded-full border-0 bg-[#6346f6] px-3 text-[16px] leading-6 font-bold text-white shadow-none hover:bg-[#5538e8] hover:text-white">
+            {intent === "retry" ? "취소" : "계속 연습"}
           </AlertDialogCancel>
         </div>
       </AlertDialogContent>

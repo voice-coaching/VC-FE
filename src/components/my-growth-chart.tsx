@@ -10,7 +10,7 @@ import styles from "./my-growth-chart.module.css";
 const periods = [
   { value: "week", label: "주간", detail: "최근 8주" },
   { value: "month", label: "월간", detail: "최근 6개월" },
-  { value: "all", label: "연간", detail: "최근 1년" },
+  { value: "all", label: "전체", detail: "조회 가능한 최근 1년" },
 ] as const;
 export function MyGrowthChart() {
   const [period, setPeriod] = useState<TrendPeriod>("week");
@@ -122,10 +122,26 @@ export function MyGrowthChart() {
           </button>
         </div>
       ) : !latest ? (
-        <div className="py-12 text-center text-sm leading-6 text-[#8b95a1]">
-          아직 분석된 발음 점수가 없어요.
-          <br />
-          연습을 마치면 성장 기록이 쌓여요.
+        <div
+          className="mt-[18px] flex flex-col items-center gap-3 py-7 text-center"
+          role="status"
+        >
+          <div className="flex size-14 items-center justify-center rounded-full bg-[#eeeaff]">
+            <Image
+              src="/figma/mypage-purple/empty-chart.svg"
+              alt=""
+              width={28}
+              height={28}
+            />
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[15px] leading-[1.5] font-bold text-[#4e5968]">
+              아직 분석된 발음 점수가 없어요
+            </p>
+            <p className="text-[13px] leading-[1.5] text-[#8b95a1]">
+              연습을 마치면 성장 기록이 쌓여요
+            </p>
+          </div>
         </div>
       ) : (
         <>
@@ -137,7 +153,7 @@ export function MyGrowthChart() {
               <b className="text-lg leading-[26px]">점</b>
             </p>
             {selected === null && delta !== null ? (
-              <p className="mb-0.5 rounded-full bg-[#eaf0ff] px-2 py-[3px] text-xs leading-4 text-[#4e5968]">
+              <p className="mb-0.5 rounded-full bg-[#eeeaff] px-2 py-[3px] text-xs leading-4 text-[#4e5968]">
                 <b className="text-primary">
                   {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"} {Math.abs(delta)}점
                 </b>{" "}

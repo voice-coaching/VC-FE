@@ -1,31 +1,47 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import styles from "./analysis-summary.module.css";
 
 export function AnalysisSummary({ text }: { text: string }) {
   const id = useId();
-  const probe = useRef<HTMLParagraphElement>(null);
+  const paragraphs = text
+    .replace(/\r\n/g, "\n")
+    .split(/\n+/)
+    .map((line) => {
+      const listed = /^\s*[*•·-]\s+/.test(line);
+      const clean = line
+        .replace(/^\s*[*•·-]\s+/, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .trim();
+      const match = clean.match(/^(.{1,30}?)\s*(?:→|->|:)\s*([\s\S]+)$/);
+      return { listed, title: match?.[1], body: match?.[2] || clean };
+    })
+    .filter((item) => item.body);
+  const content = paragraphs.map((item, index) => (
+    <div key={index} className={styles.paragraph}>
+      {item.listed && (
+        <Image
+          src="/figma/report-improved/coaching-bullet.svg"
+          alt=""
+          width={4}
+          height={22}
+        />
+      )}
+      <p>
+        {item.title && (
+          <>
+            <strong>{item.title}</strong>
+            {"  "}
+          </>
+        )}
+        {item.body}
+      </p>
+    </div>
+  ));
   const [expanded, setExpanded] = useState(false);
-  const [overflows, setOverflows] = useState(false);
-
-  useEffect(() => {
-    const element = probe.current;
-    if (!element) return;
-    const measure = () => {
-      const lineHeight = Number.parseFloat(
-        getComputedStyle(element).lineHeight,
-      );
-      const next = element.scrollHeight > lineHeight * 3 + 1;
-      setOverflows(next);
-      if (!next) setExpanded(false);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [text]);
+  const overflows = paragraphs.length > 1;
 
   return (
     <div className={styles.card}>
@@ -38,20 +54,20 @@ export function AnalysisSummary({ text }: { text: string }) {
         />
         <h2>AI 총평</h2>
       </div>
-      <div className={styles.body}>
-        <p
-          id={id}
-          className={`${styles.text} ${expanded ? "" : styles.collapsed}`}
+      <div id={id} className={styles.body}>
+        <div className={styles.text}>{content[0]}</div>
+        <div
+          className={styles.remainder}
+          data-expanded={expanded}
+          inert={!expanded}
+          aria-hidden={!expanded}
         >
-          {text}
-        </p>
-        <p
-          ref={probe}
-          aria-hidden="true"
-          className={`${styles.text} ${styles.probe}`}
-        >
-          {text}
-        </p>
+          <div className={styles.remainderClip}>
+            <div className={`${styles.text} ${styles.remainingText}`}>
+              {content.slice(1)}
+            </div>
+          </div>
+        </div>
       </div>
       {overflows && (
         <button

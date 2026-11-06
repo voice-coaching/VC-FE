@@ -334,7 +334,7 @@ function OnboardingFlow() {
               if (step < 5) goNext();
               else void finishOnboarding();
             }}
-            className="flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white transition-[transform,background-color,color,filter] duration-150 ease-out active:scale-[0.985] active:brightness-[0.97] disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1] disabled:active:scale-100 disabled:active:brightness-100"
+            className="flex h-14 w-full touch-manipulation items-center justify-center rounded-full bg-[#6346f6] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white transition-[transform,background-color,color,filter] duration-150 ease-out active:scale-[0.985] active:brightness-[0.97] disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1] disabled:active:scale-100 disabled:active:brightness-100"
           >
             {saving ? "저장 중…" : step === 5 ? "이대로 시작하기" : "다음"}
           </button>
@@ -386,7 +386,7 @@ function ProgressHeader({
         type="button"
         onClick={onBack}
         aria-label="이전 화면으로 돌아가기"
-        className="flex size-11 shrink-0 touch-manipulation items-center justify-center rounded transition-transform duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+        className="flex size-11 shrink-0 touch-manipulation items-center justify-center rounded transition-transform duration-150 ease-out active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
       >
         <NavigationIcon />
       </button>
@@ -398,12 +398,12 @@ function ProgressHeader({
           <span
             key={index}
             className={`h-2 min-w-0 flex-1 rounded transition-[background-color,transform] duration-300 ease-out ${
-              index < step ? "bg-[#2f6bff]" : "bg-[#e6e9ed]"
+              index < step ? "bg-[#6346f6]" : "bg-[#e6e9ed]"
             }`}
           />
         ))}
       </div>
-      <p className="h-5 w-9 shrink-0 text-right text-[13px] leading-[18px] font-bold tracking-[0.2522px] text-[#2f6bff]">
+      <p className="h-5 w-9 shrink-0 text-right text-[13px] leading-[18px] font-bold tracking-[0.2522px] text-[#6346f6]">
         {step}
         <span className="text-[12px] leading-4 font-medium tracking-[0.3024px] text-[#8b95a1]">
           /5
@@ -516,7 +516,7 @@ function PlanScreen({
             <button
               type="button"
               onClick={() => onEdit(section)}
-              className="group flex w-full touch-manipulation items-center gap-3 rounded-xl py-5 text-left transition-[transform,background-color] duration-150 ease-out active:scale-[0.985] active:bg-[#f7f8fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+              className="group flex w-full touch-manipulation items-center gap-3 rounded-xl py-5 text-left transition-[transform,background-color] duration-150 ease-out active:scale-[0.985] active:bg-[#f7f8fa] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
             >
               <span className="w-[84px] shrink-0 text-[14px] leading-5 tracking-[0.203px] text-[#4e5968]">
                 {label}
@@ -735,7 +735,7 @@ function EditBottomSheet({
             type="button"
             disabled={!canSave}
             onClick={onSave}
-            className="flex h-14 w-full shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white transition-[transform,filter,background-color,color] duration-150 ease-out active:scale-[0.985] active:brightness-[0.97] disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1] disabled:active:scale-100"
+            className="flex h-14 w-full shrink-0 touch-manipulation items-center justify-center rounded-full bg-[#6346f6] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white transition-[transform,filter,background-color,color] duration-150 ease-out active:scale-[0.985] active:brightness-[0.97] disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1] disabled:active:scale-100"
           >
             변경 저장
           </button>

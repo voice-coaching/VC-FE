@@ -1,0 +1,23 @@
+.button {
+  transition: background-color 260ms ease, color 220ms ease, transform 220ms cubic-bezier(.22,1,.36,1), box-shadow 260ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.button:active:not(:disabled) {
+  transform: scale(.96);
+}
+.button:focus-visible {
+  outline: 2px solid #a08dff;
+  outline-offset: 3px;
+}
+.button > svg, .button > img {
+  animation: iconEnter 220ms cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes iconEnter {
+  from { opacity: 0; transform: scale(.75); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+  .button:active:not(:disabled) { transform: none; }
+  .button > svg, .button > img { animation: none; }
+}

@@ -341,10 +341,10 @@ export default function HomeStreak() {
               <div className={styles.avatar}>
                 <div className={styles.mascotCrop}>
                   <Image
-                    src="/figma/streak-improved/mascot.png"
+                    src="/figma/streak-phase4/mascot-screen7.png"
                     alt="연습을 응원하는 Speak AI 캐릭터"
-                    width={78}
-                    height={84}
+                    width={76}
+                    height={87}
                     priority
                     className={styles.mascot}
                   />
@@ -352,13 +352,13 @@ export default function HomeStreak() {
               </div>
               <div className="min-w-0">
                 <p className="text-[22px] leading-[30px] font-bold tracking-[-0.44px] max-[360px]:text-[18px]">
-                  <span className="text-primary">
+                  <span className="text-[#6346f6]">
                     {allSessions ? currentRun.size : consecutiveDays}일
                   </span>{" "}
                   연속 연습 중
                 </p>
-                <p className="mt-0.5 text-sm leading-5 font-medium tracking-[-0.21px] text-[#8b95a1] max-[360px]:text-xs">
-                  <strong className="text-primary">오늘</strong>{" "}
+                <p className="mt-0.5 text-sm leading-5 font-medium tracking-[-0.21px] text-[#4e5968] max-[360px]:text-xs">
+                  <strong className="text-[#6346f6]">오늘</strong>{" "}
                   {practicedToday
                     ? "연습을 완료했어요"
                     : "연습이 아직 남았어요"}
@@ -410,7 +410,7 @@ export default function HomeStreak() {
                   이번 주 목표
                 </h2>
                 <p className="mt-0.5 flex items-baseline gap-0.5">
-                  <strong className="text-[26px] leading-[34px] tracking-[-0.52px] text-primary">
+                  <strong className="text-[26px] leading-[34px] tracking-[-0.52px] text-[#6346f6]">
                     {weeklyCompleted}
                   </strong>
                   <span className="text-[15px] leading-[22px] font-medium text-[#8b95a1]">
@@ -422,7 +422,7 @@ export default function HomeStreak() {
                 type="button"
                 onClick={openGoal}
                 aria-label="주간 연습 목표 변경"
-                className="flex items-center gap-0.5 rounded-full bg-[#f2f4f6] py-1.5 pr-1.5 pl-2.5 text-[13px] leading-[18px] font-medium text-[#4e5968]"
+                className="flex items-center gap-0.5 rounded-full bg-[#eeeaff] py-1.5 pr-1.5 pl-2.5 text-[13px] leading-[18px] font-medium text-[#6346f6]"
               >
                 {weeklyGoal ? `주 ${weeklyGoal}일` : "목표 설정"}
                 <StreakIcon name="goal-chevron" size={14} />
@@ -445,7 +445,7 @@ export default function HomeStreak() {
                     ) : null}
                   </span>
                   <span
-                    className={`text-xs leading-4 ${day.isToday ? "font-bold text-primary" : day.isFuture ? "text-[#b0b8c1]" : "text-[#4e5968]"}`}
+                    className={`text-xs leading-4 ${day.isToday ? "font-bold text-[#6346f6]" : day.isFuture ? "text-[#b0b8c1]" : "text-[#4e5968]"}`}
                   >
                     {day.isToday ? "오늘" : day.label}
                   </span>
@@ -541,7 +541,7 @@ export default function HomeStreak() {
                           />
                         ) : null}
                         <span
-                          className={`${styles.date} ${kind === "current" ? "font-bold text-white" : kind === "past" || cell.isToday ? "font-bold text-primary" : cell.key > dateKey(today) ? "text-[#c4cad1]" : "text-[#4e5968]"} ${cell.isToday ? styles.todayDate : ""}`}
+                          className={`${styles.date} ${kind === "current" ? "font-bold text-white" : kind === "past" || cell.isToday ? "font-bold text-[#6346f6]" : cell.key > dateKey(today) ? "text-[#c4cad1]" : "text-[#4e5968]"} ${cell.isToday ? styles.todayDate : ""}`}
                         >
                           {cell.isToday ? (
                             <StreakIcon
@@ -560,15 +560,15 @@ export default function HomeStreak() {
             </div>
             <div className="mt-3.5 flex items-center gap-3.5 text-[11px] leading-4 text-[#6b7684]">
               <span className="flex items-center gap-1.5">
-                <span className="h-3 w-5 rounded-full bg-primary" />
+                <span className="h-3 w-5 rounded-full bg-[#6346f6]" />
                 현재 연속
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-3 w-5 rounded-full bg-[#eaf0ff]" />
+                <span className="h-3 w-5 rounded-full bg-[#eeeaff]" />
                 연습한 날
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="size-3 rounded-full border-[1.5px] border-primary" />
+                <span className="size-3 rounded-full border-[1.5px] border-[#6346f6]" />
                 오늘
               </span>
             </div>
@@ -705,7 +705,7 @@ export default function HomeStreak() {
             {!profile && profileError ? (
               <button
                 onClick={reloadProfile}
-                className="mt-3 text-sm text-primary"
+                className="mt-3 text-sm text-[#6346f6]"
               >
                 목표 다시 불러오기
               </button>
@@ -738,7 +738,7 @@ function StreakIcon({
 }) {
   return (
     <Image
-      src={`/figma/streak-improved/${name}.svg`}
+      src={`/figma/${["today", "goal-chevron"].includes(name) ? "streak-phase4" : "streak-improved"}/${name}.svg`}
       alt=""
       width={size}
       height={size}
@@ -758,10 +758,10 @@ function SummaryStat({
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-      <span className="flex items-center gap-1 text-xs leading-4 font-medium tracking-[-0.18px] text-[#8b95a1]">
+      <span className="flex items-center gap-1 text-xs leading-4 font-medium tracking-[-0.18px] text-[#4e5968]">
         <span className="flex size-4 items-center justify-center">
           <Image
-            src={`/figma/streak-improved/${icon}.svg`}
+            src={`/figma/streak-phase4/${icon}.svg`}
             alt=""
             width={icon === "total" ? 16.2652 : icon === "month" ? 13.5243 : 16}
             height={icon === "total" ? 16.0243 : 16}

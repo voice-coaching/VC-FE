@@ -17,7 +17,7 @@ import {
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import styles from "./home.module.css";
-import { PopularNewsCarousel } from "@/components/popular-news-carousel";
+import { HomePopularNews } from "@/components/home-popular-news";
 import {
   updateHomeHeader,
   type HeaderScrollState,
@@ -65,7 +65,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
         소리 내어 읽어요
       </>
     ),
-    icon: "/figma/home-before/practice-news.svg",
+    icon: "/figma/home-phase4/practice-news.svg",
     iconWidth: 32.0002,
     iconHeight: 36.8005,
   },
@@ -79,7 +79,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
         반복해 교정해요
       </>
     ),
-    icon: "/figma/home-before/practice-sentence.svg",
+    icon: "/figma/home-phase4/practice-sentence.svg",
     iconWidth: 38.7998,
     iconHeight: 37.2006,
   },
@@ -93,7 +93,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
         듣고 따라 해요
       </>
     ),
-    icon: "/figma/home-before/practice-follow.svg",
+    icon: "/figma/home-phase4/practice-follow.svg",
     iconWidth: 20,
     iconHeight: 41.0008,
   },
@@ -107,7 +107,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
         붙여 넣고 연습해요
       </>
     ),
-    icon: "/figma/home-before/practice-custom.svg",
+    icon: "/figma/home-phase4/practice-custom.svg",
     iconWidth: 35.2005,
     iconHeight: 33.6,
   },
@@ -393,12 +393,6 @@ export default function Home() {
     [now, weekRange],
   );
   const streakDays = statistics?.consecutiveLearningDays ?? 0;
-  const recentTraining = dashboard?.recentTraining;
-  const ongoingTraining =
-    recentTraining &&
-    ["RECORDING", "UPLOADING", "ANALYZING"].includes(recentTraining.status)
-      ? recentTraining
-      : null;
   const ongoingCourses = recentCourses.filter(
     (course) => course.progress?.status === "IN_PROGRESS",
   );
@@ -406,8 +400,8 @@ export default function Home() {
     <AppShell
       animateRoute={false}
       viewportLocked
-      className="relative"
-      chromeColor={headerCollapsed ? "#f2f4f6" : "#2f6bff"}
+      className={`relative ${styles.homeTheme}`}
+      chromeColor={headerCollapsed ? "#f2f4f6" : "#5f55f8"}
     >
       <header
         className={`${styles.homeHeader} z-20`}
@@ -478,7 +472,7 @@ export default function Home() {
                         <Image src={dot} alt="" width={20} height={20} />
                         {completed ? (
                           <Image
-                            src="/figma/home-before/day-check.svg"
+                            src="/figma/home-phase4/day-check.svg"
                             alt=""
                             width={14}
                             height={14}
@@ -579,25 +573,25 @@ export default function Home() {
                   </h1>
                   <Link
                     href={dailyDone ? "/mypage/history" : todayHref}
-                    className="absolute bottom-5 left-5 z-10 flex h-12 w-[150px] items-center justify-center rounded-full bg-primary text-base leading-6 font-bold text-white active:bg-[#1f55e0]"
+                    className="absolute bottom-5 left-5 z-10 flex h-12 w-[min(150px,calc((100%-56px)/2))] items-center justify-center rounded-full bg-linear-to-r from-[#6346f6] to-[#775ef8] text-base leading-6 font-bold text-white active:brightness-95"
                   >
                     {dailyDone ? "기록 보기" : "시작하기"}
                   </Link>
-                  <span className="absolute right-4 bottom-[-37px] h-[185px] w-[154px] overflow-hidden">
+                  <span className="absolute right-4 bottom-0 aspect-[154/148] w-[min(154px,calc((100%-56px)/2))] overflow-hidden">
                     <Image
-                      src="/figma/home/news-character.png"
+                      src="/figma/home-phase4/news-character.png"
                       unoptimized
                       alt="뉴스를 읽는 Speak AI 캐릭터"
-                      width={217}
-                      height={216}
+                      width={154}
+                      height={148}
                       priority
-                      className="absolute top-[-8.21%] left-[-20.36%] h-[116.76%] w-[140.85%] max-w-none"
+                      className="absolute inset-0 h-full w-full object-contain"
                     />
                   </span>
                 </section>
               )}
 
-              <PopularNewsCarousel compact returnTo="/home" />
+              <HomePopularNews />
 
               <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
@@ -613,18 +607,18 @@ export default function Home() {
                   className={`${styles.lipCard} mt-2 flex h-[76px] items-center gap-[14px] rounded-[18px] p-4 shadow-[0_2px_6px_rgba(26,33,48,0.05)]`}
                 >
                   <Image
-                    src="/figma/home-before/lip-practice.svg"
+                    src="/figma/home-phase4/lip-practice.svg"
                     alt=""
                     width={44}
                     height={44}
                     className="shrink-0"
                   />
                   <span className="min-w-0 flex-1 overflow-hidden">
-                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="flex flex-wrap items-center gap-1.5">
                       <strong className="text-[15px] leading-[22px]">
                         입 모양을 보며 연습
                       </strong>
-                      <span className="shrink-0 rounded-full bg-white/85 px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6b7684] max-[360px]:hidden">
+                      <span className="shrink-0 rounded-full bg-[#f0edff] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6346f6]">
                         카메라 사용
                       </span>
                     </span>
@@ -644,23 +638,9 @@ export default function Home() {
 
               <section className="mt-7">
                 <h2 className="text-[17px] leading-6 font-bold tracking-[0.012em]">
-                  진행 중인 연습
+                  진행 중인 클래스
                 </h2>
                 <div className="mt-3 space-y-2">
-                  {ongoingTraining ? (
-                    <ContinueCard
-                      href={`/practice/${ongoingTraining.contentId}?sessionId=${ongoingTraining.sessionId}&resumeType=${ongoingTraining.status === "ANALYZING" ? "ANALYSIS_STATUS" : "RECORDING"}&returnTo=%2Fhome`}
-                      title={ongoingTraining.title}
-                      detail="멈춘 지점부터 이어서 시작해요"
-                      badge="최근"
-                      ring="/figma/home-before/progress-announcer-ring.svg"
-                      icon="/figma/home-before/progress-announcer.svg"
-                      iconWidth={10.4626}
-                      iconHeight={23.5385}
-                      badgeColor="#eaf0ff"
-                      count="계속"
-                    />
-                  ) : null}
                   {ongoingCourses.map((course) => (
                     <ContinueCard
                       key={String(course.id)}
@@ -673,13 +653,13 @@ export default function Home() {
                       detail={course.title}
                       ring={
                         course.courseType === "INTONATION"
-                          ? "/figma/home-before/progress-intonation-ring.svg"
-                          : "/figma/home-before/progress-pronunciation-ring.svg"
+                          ? "/figma/home-phase4/class-ring.svg"
+                          : "/figma/home-phase4/class-ring.svg"
                       }
                       icon={
                         course.courseType === "INTONATION"
-                          ? "/figma/home-before/progress-intonation.svg"
-                          : "/figma/home-before/progress-pronunciation.svg"
+                          ? "/figma/home-phase4/class-intonation.svg"
+                          : "/figma/home-phase4/class-pronunciation.svg"
                       }
                       iconWidth={
                         course.courseType === "INTONATION" ? 28.3341 : 20.7783
@@ -687,7 +667,12 @@ export default function Home() {
                       iconHeight={
                         course.courseType === "INTONATION" ? 17.0023 : 17.0005
                       }
-                      badgeColor="#eaf0ff"
+                      ringArc={
+                        course.courseType === "INTONATION"
+                          ? "intonation"
+                          : "pronunciation"
+                      }
+                      badgeColor="#f5f6f8"
                       chevron={
                         course.courseType === "INTONATION"
                           ? "/figma/home-before/chevron-intonation.svg"
@@ -696,14 +681,14 @@ export default function Home() {
                       count={`${Math.round(course.progress.progressPercent)}%`}
                     />
                   ))}
-                  {!ongoingTraining && ongoingCourses.length === 0 ? (
+                  {ongoingCourses.length === 0 ? (
                     <div
                       className="rounded-[18px] bg-white px-5 py-6 text-center text-sm leading-6 text-[#6b7684]"
                       role="status"
                     >
                       {error || coursesUnavailable ? (
                         <>
-                          <p>진행 중인 연습을 확인하지 못했어요.</p>
+                          <p>진행 중인 클래스를 확인하지 못했어요.</p>
                           <button
                             type="button"
                             onClick={() => setReloadKey((value) => value + 1)}
@@ -713,13 +698,16 @@ export default function Home() {
                           </button>
                         </>
                       ) : !dashboard || coursesLoading ? (
-                        <p>진행 중인 연습을 불러오고 있어요.</p>
+                        <p>진행 중인 클래스를 불러오고 있어요.</p>
                       ) : (
                         <>
-                          <p>진행 중인 연습이 없어요.</p>
-                          <p className="mt-1">
-                            위에서 원하는 연습을 시작해 보세요.
-                          </p>
+                          <p>진행 중인 클래스가 없어요.</p>
+                          <Link
+                            href="/class"
+                            className="mt-1 inline-flex min-h-11 items-center font-bold text-primary"
+                          >
+                            클래스 둘러보기
+                          </Link>
                         </>
                       )}
                     </div>
@@ -764,6 +752,7 @@ function ContinueCard({
   detail,
   badge,
   ring,
+  ringArc,
   icon,
   iconWidth,
   iconHeight,
@@ -776,6 +765,7 @@ function ContinueCard({
   detail: string;
   badge?: string;
   ring: string;
+  ringArc: "intonation" | "pronunciation";
   icon: string;
   iconWidth: number;
   iconHeight: number;
@@ -790,6 +780,13 @@ function ContinueCard({
     >
       <span className="relative size-12 shrink-0">
         <Image src={ring} alt="" width={48} height={48} />
+        <Image
+          src={`/figma/home-phase4/class-${ringArc}-arc.png`}
+          alt=""
+          width={ringArc === "intonation" ? 22.825 : 24}
+          height={ringArc === "intonation" ? 17.474 : 36}
+          className="absolute top-0 left-6"
+        />
         <span
           className="absolute top-[7px] left-[7px] flex size-[34px] items-center justify-center overflow-hidden rounded-[17px]"
           style={{ backgroundColor: badgeColor }}
@@ -801,7 +798,7 @@ function ContinueCard({
         <span className="flex items-center gap-1.5">
           <strong className="truncate text-sm leading-5">{title}</strong>
           {badge ? (
-            <span className="shrink-0 rounded-full bg-[#edf2ff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+            <span className="shrink-0 rounded-full bg-[#f0edff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
               {badge}
             </span>
           ) : null}

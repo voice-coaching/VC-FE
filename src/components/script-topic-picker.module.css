@@ -99,8 +99,8 @@
   place-items: center;
 }
 .option[aria-pressed="true"] .check {
-  background: #2f6bff;
-  border-color: #2f6bff;
+  background: #6346f6;
+  border-color: #6346f6;
 }
 .add {
   display: flex;
@@ -108,9 +108,9 @@
   gap: 12px;
   width: 100%;
   border-radius: 12px;
-  background: #eaf1ff;
+  background: #f0edff;
   padding: 14px 16px;
-  color: #2f6bff;
+  color: #6346f6;
   font-size: 15px;
   line-height: 22px;
   font-weight: 700;
@@ -119,11 +119,11 @@
 .addIcon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   border-radius: 14px;
-  background: #3478ff;
+  background: transparent;
 }
 .modal {
   left: 50%;
@@ -160,7 +160,7 @@
   margin-top: 24px;
 }
 .inputWrap:focus-within {
-  outline: 2px solid #2f6bff;
+  outline: 2px solid #6346f6;
   outline-offset: 2px;
 }
 .inputWrap input {
@@ -200,7 +200,7 @@
 }
 .actions button[type="submit"] {
   flex: 1.45;
-  background: #2f6bff;
+  background: #6346f6;
   color: white;
   border: 0;
 }

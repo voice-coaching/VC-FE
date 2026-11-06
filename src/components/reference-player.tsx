@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import motion from "./audio-button-motion.module.css";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Pause, Play, Repeat2, Volume2 } from "lucide-react";
 import { api, type Id, type ReferenceAudio } from "@/lib/api";
@@ -212,10 +213,15 @@ function ReferencePlayerSession({
           onClick={() => void toggle()}
           aria-label={playing ? `${title} 일시 정지` : title}
           aria-busy={loading}
-          className={`flex size-[26px] items-center justify-center rounded-full disabled:opacity-40 ${buttonTone === "primary" ? "bg-primary text-white" : "border border-[#e4ebfa] bg-white text-[#8b95a1]"}`}
+          className={`flex size-[26px] items-center justify-center rounded-full disabled:opacity-40 ${buttonTone === "primary" ? "bg-primary text-white" : "border border-[#e8e4fa] bg-white text-[#8b95a1]"}`}
         >
           {playing ? (
-            <Pause className="size-3" aria-hidden="true" />
+            <Pause
+              fill="currentColor"
+              strokeWidth={0}
+              className="size-3"
+              aria-hidden="true"
+            />
           ) : (
             <Image
               src={
@@ -261,7 +267,11 @@ function ReferencePlayerSession({
           className="flex size-14 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(26,33,48,0.06)] disabled:opacity-45"
         >
           {playing ? (
-            <Pause className="size-[22px] text-[#4e5968]" />
+            <Pause
+              fill="currentColor"
+              strokeWidth={0}
+              className="size-[22px] text-[#4e5968]"
+            />
           ) : (
             <Image
               src="/figma/practice/headphones.svg"
@@ -303,10 +313,14 @@ function ReferencePlayerSession({
             disabled={disabled || loading || playbackBlocked}
             onClick={() => void toggle()}
             aria-label={playing ? "전체 녹음 일시 정지" : "전체 녹음 재생"}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#2f6bff] disabled:opacity-45"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#6346f6] disabled:opacity-45"
           >
             {playing ? (
-              <Pause className="size-4 text-white" />
+              <Pause
+                fill="currentColor"
+                strokeWidth={0}
+                className="size-4 text-white"
+              />
             ) : (
               <Image
                 src="/figma/practice/play-white.svg"
@@ -323,7 +337,7 @@ function ReferencePlayerSession({
             </div>
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#dfe3e8]">
               <div
-                className="h-full rounded-full bg-[#2f6bff]"
+                className="h-full rounded-full bg-[#6346f6]"
                 style={{
                   width: `${duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0}%`,
                 }}
@@ -381,21 +395,28 @@ function ReferencePlayerSession({
           type="button"
           disabled={disabled || loading || playbackBlocked}
           onClick={() => void toggle()}
-          className={`flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2 leading-5 font-bold disabled:opacity-60 ${dense ? "text-[13px]" : "text-[14px]"} ${
-            buttonTone === "primary"
-              ? "bg-[#edf2ff] text-primary"
-              : "bg-[#f2f4f6] text-[#4e5968]"
+          className={`${motion.button} flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2 leading-5 font-bold disabled:opacity-60 ${dense ? "text-[13px]" : "text-[14px]"} ${
+            playing
+              ? buttonTone === "primary"
+                ? "bg-[#6346f6] text-white"
+                : "bg-[#191f28] text-white"
+              : buttonTone === "primary"
+                ? "bg-[var(--report-soft,#edf2ff)] text-primary"
+                : "bg-[#f2f4f6] text-[#4e5968]"
           }`}
         >
           {playing ? (
-            <Pause className="size-[18px]" aria-hidden="true" />
+            <Pause
+              fill="currentColor"
+              strokeWidth={0}
+              className="size-[18px]"
+              aria-hidden="true"
+            />
           ) : (
             <Image
               src={
                 buttonTone === "primary"
-                  ? dense
-                    ? "/figma/report-improved/play.svg"
-                    : "/figma/report/play.svg"
+                  ? "/figma/report-improved/play.svg"
                   : dense
                     ? "/figma/report-improved/headphones.svg"
                     : "/figma/report/headphones.svg"
@@ -414,10 +435,10 @@ function ReferencePlayerSession({
             aria-label={playing ? "내 녹음 일시 정지" : "내 녹음 재생"}
             disabled={disabled || loading || playbackBlocked}
             onClick={() => void toggle()}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#2f6bff]"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-[#6346f6]"
           >
             {playing ? (
-              <Pause className="size-4" />
+              <Pause fill="currentColor" strokeWidth={0} className="size-4" />
             ) : (
               <Play className="size-4" fill="currentColor" />
             )}
@@ -463,7 +484,7 @@ function ReferencePlayerSession({
               className="design-action !min-h-12 !rounded-xl !text-sm"
             >
               {playing ? (
-                <Pause className="size-4" />
+                <Pause fill="currentColor" strokeWidth={0} className="size-4" />
               ) : (
                 <Play className="size-4" fill="currentColor" />
               )}

@@ -47,6 +47,7 @@ function TabPending({ label }: { label: string }) {
 export function PrototypeBottomNav() {
   const pathname = usePathname();
   const matchesTab = (href: string) => {
+    if (href === "/home" && pathname === "/news") return true;
     if (
       href === "/mypage" &&
       (pathname === "/mypage/history" ||
@@ -68,6 +69,7 @@ export function PrototypeBottomNav() {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={styles.link}
+                style={active ? { color: "#6346f6" } : undefined}
                 onNavigate={() =>
                   setTabTransitionDirection(
                     activeTabIndex >= 0 && tabIndex < activeTabIndex
@@ -81,6 +83,7 @@ export function PrototypeBottomNav() {
                   aria-hidden="true"
                   className={styles.icon}
                   style={{
+                    backgroundColor: active ? "#6346f6" : "#8b95a1",
                     maskImage: `url(${icon})`,
                     WebkitMaskImage: `url(${icon})`,
                   }}

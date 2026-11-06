@@ -14,7 +14,7 @@
   transition: background-color 240ms ease-out;
 }
 .waveform[data-active="true"] .bar {
-  background: #3186f5;
+  background: #6346f6;
 }
 @media (prefers-reduced-motion: reduce) {
   .bar {

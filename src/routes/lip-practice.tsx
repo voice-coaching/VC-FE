@@ -1,4 +1,10 @@
 "use client";
+import { LipCapture } from "@/components/lip-capture";
+import {
+  LipPermissionDialog,
+  LipFaceAlignment,
+  type LipPermission,
+} from "@/components/lip-flow-overlays";
 import { LipQuickStart } from "@/components/lip-quick-start";
 import {
   LIP_PRACTICE_SETS,
@@ -19,7 +25,6 @@ import {
   CircleAlert,
   RotateCcw,
   ShieldCheck,
-  Square,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -33,7 +38,7 @@ import {
   type ReactNode,
 } from "react";
 import { AnalysisView } from "@/components/analysis-view";
-import { AnalysisLoadingMessage } from "@/components/analysis-loading-message";
+import { PracticeAnalysisLoading } from "@/components/practice-analysis-loading";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
 import { requireAnalysisScope } from "@/lib/api/analysis-capabilities";
@@ -91,6 +96,8 @@ type LipAnalysisBundle = {
 
 export default function LipPractice() {
   const router = useRouter();
+  const [permission, setPermission] = useState<LipPermission | null>(null);
+  const [requestingMedia, setRequestingMedia] = useState(false);
   const [saveReportOpen, setSaveReportOpen] = useState(false);
   const [practiceSet, setPracticeSet] = useState<LipPracticeSet>(
     LIP_PRACTICE_SETS[1],
@@ -130,6 +137,9 @@ export default function LipPractice() {
   const stopTimerRef = useRef<number | null>(null);
   const clipsRef = useRef<LipClip[]>([]);
   const recordingStartedAtRef = useRef(0);
+  const advanceAfterStop = useRef(false);
+  const [advancing, setAdvancing] = useState(false);
+  const [captureStartedAt, setCaptureStartedAt] = useState(0);
   const contentByPromptRef = useRef(new Map<number, PracticeContent>());
   const mounted = useRef(false);
   const mediaRequest = useRef(0);
@@ -303,12 +313,24 @@ export default function LipPractice() {
         setSelectedClip(promptIndex);
         setAnalysisPhase("idle");
         setAnalysisError(null);
-        setStep("review");
+        if (advanceAfterStop.current) {
+          advanceAfterStop.current = false;
+          setAdvancing(false);
+          if (promptIndex < prompts.length - 1) {
+            setPromptIndex(promptIndex + 1);
+          } else {
+            streamRef.current?.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+            setSelectedClip(0);
+            setStep("complete");
+          }
+        } else setStep("review");
       };
       recorderRef.current = recorder;
       await prepareRecordingAudio(context);
       if (!mounted.current) return;
       recordingStartedAtRef.current = Date.now();
+      setCaptureStartedAt(recordingStartedAtRef.current);
       // Safari/iOS의 MP4는 timeslice로 조각내면 첫 조각만 재생되는 파일이
       // 만들어질 수 있으므로 stop 시점에 완성된 파일 하나를 받는다.
       recorder.start();
@@ -321,7 +343,15 @@ export default function LipPractice() {
       setError("이 기기에서 영상 녹화를 시작하지 못했어요.");
       setStep("align");
     }
-  }, [promptIndex, stopRecording]);
+  }, [promptIndex, prompts.length, stopRecording]);
+
+  useEffect(() => {
+    if (step === "recording") void startRecording();
+    if (step === "align") {
+      advanceAfterStop.current = false;
+      setAdvancing(false);
+    }
+  }, [step, startRecording]);
 
   useEffect(() => {
     if (step !== "countdown") return;
@@ -346,11 +376,13 @@ export default function LipPractice() {
     if (mediaBusy.current || !mounted.current) return;
     mediaBusy.current = true;
     const request = ++mediaRequest.current;
-    setStep("permission");
+    setRequestingMedia(true);
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia) {
       mediaBusy.current = false;
       setError("이 브라우저에서는 카메라와 마이크를 사용할 수 없어요.");
+      setPermission("both");
+      setRequestingMedia(false);
       return;
     }
     try {
@@ -373,21 +405,39 @@ export default function LipPractice() {
         return;
       }
       streamRef.current = stream;
+      setPermission(null);
       setStep("align");
     } catch (reason) {
       if (!mounted.current || request !== mediaRequest.current) return;
+      let blocked: LipPermission = "both";
+      try {
+        const [camera, microphone] = await Promise.all([
+          navigator.permissions.query({ name: "camera" as PermissionName }),
+          navigator.permissions.query({ name: "microphone" as PermissionName }),
+        ]);
+        if (camera.state === "denied" && microphone.state !== "denied")
+          blocked = "camera";
+        if (microphone.state === "denied" && camera.state !== "denied")
+          blocked = "microphone";
+      } catch {
+        /* Some browsers do not expose media permission queries. */
+      }
+      setPermission(blocked);
       const denied =
         reason instanceof DOMException &&
         (reason.name === "NotAllowedError" || reason.name === "SecurityError");
       setError(
         denied
-          ? "카메라와 마이크 권한이 필요해요. iPhone 설정의 SPEAK AI에서 권한을 허용해 주세요."
+          ? "사이트 설정에서 카메라와 마이크 권한을 허용해 주세요."
           : reason instanceof Error
             ? reason.message
             : "카메라와 마이크를 시작하지 못했어요.",
       );
     } finally {
-      if (request === mediaRequest.current) mediaBusy.current = false;
+      if (request === mediaRequest.current) {
+        mediaBusy.current = false;
+        setRequestingMedia(false);
+      }
     }
   }
 
@@ -754,8 +804,180 @@ export default function LipPractice() {
         <LipQuickStart
           selected={practiceSet}
           onSelect={setPracticeSet}
-          onStart={() => void requestMedia()}
-          onSettings={() => setStep("setup")}
+          onStart={() => setPermission("request")}
+        />
+        <LipPermissionDialog
+          state={permission}
+          busy={requestingMedia}
+          onClose={() => setPermission(null)}
+          onAllow={() => void requestMedia()}
+        />
+      </AppShell>
+    );
+
+  if (step === "align")
+    return (
+      <AppShell
+        nav={false}
+        viewportLocked
+        animateRoute={false}
+        chromeColor="#12161f"
+        bottomChromeColor="#12161f"
+      >
+        <LipFaceAlignment
+          videoRef={previewRef}
+          mirrored={mirrored}
+          onReady={() => beginPrompt()}
+          onClose={() => {
+            releaseLipResources(streamRef.current, []);
+            streamRef.current = null;
+            setStep("guide");
+          }}
+        />
+      </AppShell>
+    );
+
+  if (step === "complete" && analysisBusy)
+    return (
+      <AppShell
+        nav={false}
+        viewportLocked
+        animateRoute={false}
+        chromeColor="#f2f4f6"
+        bottomChromeColor="#e1d9ff"
+      >
+        <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#f2f4f6_35%,#e1d9ff_100%)]">
+          <header className="flex h-12 shrink-0 items-center justify-center text-[17px] font-bold">
+            분석 중
+          </header>
+          <PracticeAnalysisLoading
+            uploading={
+              analysisPhase === "preparing" || analysisPhase === "uploading"
+            }
+            stepProgress={
+              analysisPhase === "uploading"
+                ? Math.min(32, uploadProgress * 0.32)
+                : analysisProgress
+            }
+          />
+        </div>
+      </AppShell>
+    );
+
+  if (
+    step === "complete" &&
+    analysisPhase === "result" &&
+    (selectedAnalysis || selectedDirectResult)
+  )
+    return (
+      <AppShell
+        nav={false}
+        animateRoute={false}
+        chromeColor="#f2f4f6"
+        bottomChromeColor="#ffffff"
+      >
+        <div className="min-h-full bg-[#f2f4f6]">
+          <header className="flex h-12 items-center px-2">
+            <button
+              type="button"
+              onClick={() => setAnalysisPhase("idle")}
+              aria-label="촬영 확인으로 돌아가기"
+              className="grid size-10 place-items-center"
+            >
+              <Image
+                src="/figma/lip-quick-start/back.svg"
+                width={24}
+                height={24}
+                alt=""
+              />
+            </button>
+            <h1 className="flex-1 text-center text-[17px] font-bold">피드백</h1>
+            <span className="size-10" />
+          </header>
+          <div className="flex items-center justify-center gap-2 px-5 text-[13px]">
+            <strong className="text-[#6346f6]">입모양 따라 하기</strong>
+            <span className="text-[#8b95a1]">{practiceSet.title}</span>
+          </div>
+          {analysisError && (
+            <p role="status" className="px-5 pt-3 text-sm">
+              {analysisError}
+            </p>
+          )}
+          {selectedAnalysis ? (
+            <AnalysisView
+              analysis={selectedAnalysis.analysis}
+              segments={selectedAnalysis.segments}
+              content={selectedAnalysis.content}
+              recordingUrl={reportClip?.url}
+              isCameraPractice
+            />
+          ) : selectedDirectResult ? (
+            <DirectAnalysisResult
+              result={selectedDirectResult}
+              isCameraPractice
+              content={{
+                id: `lip-${selectedClip}`,
+                contentType: "SENTENCE",
+                title: practiceSet.title,
+                scriptText: prompts[selectedClip],
+                referenceAudioAvailable: false,
+              }}
+              recordingUrl={reportClip?.url}
+            />
+          ) : null}
+          <footer className="bg-white px-5 py-3">
+            <button
+              className="design-action"
+              onClick={() => setSaveReportOpen(true)}
+            >
+              완료하기
+            </button>
+          </footer>
+          <ReportSaveDialog
+            open={saveReportOpen}
+            onOpenChange={setSaveReportOpen}
+            onConfirm={async (saved) => {
+              for (const bundle of Object.values(analyses))
+                if (bundle)
+                  await reportSaves.set("SESSION", bundle.sessionId, saved);
+              for (const view of Object.values(directResults))
+                if (view?.result)
+                  await reportSaves.set("DIRECT", view.jobId, saved);
+              router.push("/home");
+            }}
+          />
+        </div>
+      </AppShell>
+    );
+
+  if (step === "countdown" || step === "recording")
+    return (
+      <AppShell
+        nav={false}
+        viewportLocked
+        animateRoute={false}
+        chromeColor="#0b0d10"
+        bottomChromeColor="#0b0d10"
+      >
+        {discardGuard.dialog}
+        <LipCapture
+          videoRef={previewRef}
+          mirrored={mirrored}
+          prompts={prompts}
+          index={promptIndex}
+          countdown={step === "countdown" ? countdown : null}
+          startedAt={captureStartedAt}
+          busy={advancing}
+          onNext={() => {
+            if (
+              advanceAfterStop.current ||
+              recorderRef.current?.state !== "recording"
+            )
+              return;
+            advanceAfterStop.current = true;
+            setAdvancing(true);
+            stopRecording();
+          }}
         />
       </AppShell>
     );
@@ -833,7 +1055,7 @@ export default function LipPractice() {
                   type="checkbox"
                   checked={mirrored}
                   onChange={(event) => setMirrored(event.target.checked)}
-                  className="size-6 accent-[#2f6bff]"
+                  className="size-6 accent-[#6346f6]"
                 />
               </label>
               <label className="mt-3 flex min-h-14 items-start gap-3 border-t border-border pt-4">
@@ -841,7 +1063,7 @@ export default function LipPractice() {
                   type="checkbox"
                   checked={videoConsentAccepted}
                   onChange={(event) => updateConsent(event.target.checked)}
-                  className="mt-0.5 size-6 shrink-0 accent-[#2f6bff]"
+                  className="mt-0.5 size-6 shrink-0 accent-[#6346f6]"
                 />
                 <span>
                   <strong className="block text-sm">
@@ -859,7 +1081,7 @@ export default function LipPractice() {
           </div>
         ) : step === "permission" ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-6 text-center">
-            <span className="mx-auto mt-auto flex size-24 shrink-0 items-center justify-center rounded-[32px] bg-[#eaf4ff] text-primary">
+            <span className="mx-auto mt-auto flex size-24 shrink-0 items-center justify-center rounded-[32px] bg-[#f1edff] text-primary">
               <ShieldCheck className="size-11" />
             </span>
             <h1 className="mt-7 text-2xl font-bold">
@@ -946,7 +1168,7 @@ export default function LipPractice() {
                   type="checkbox"
                   checked={videoConsentAccepted}
                   onChange={(event) => updateConsent(event.target.checked)}
-                  className="mt-0.5 size-6 shrink-0 accent-[#2f6bff]"
+                  className="mt-0.5 size-6 shrink-0 accent-[#6346f6]"
                 />
                 <span>
                   음성 AI 분석 및 처리 동의 (선택)
@@ -959,32 +1181,14 @@ export default function LipPractice() {
             ) : null}
 
             {analysisTarget === selectedClip && analysisBusy ? (
-              <section className="mt-4 rounded-[20px] bg-[#f4f9ff] p-5 text-center">
-                <Image
-                  src="/newsBird.webp"
-                  alt=""
-                  width={96}
-                  height={96}
-                  className="mx-auto size-24 object-contain"
-                />
-                <strong className="mt-3 block min-h-16 text-sm">
-                  {analysisPhase === "preparing" ? (
-                    <span role="status">음성을 분석할 준비를 하고 있어요</span>
-                  ) : analysisPhase === "uploading" ? (
-                    <span role="status">
-                      음성을 보내고 있어요 {uploadProgress}%
-                    </span>
-                  ) : (
-                    <>
-                      <AnalysisLoadingMessage />
-                      <span className="mt-1 block">{analysisProgress}%</span>
-                    </>
-                  )}
-                </strong>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  화면을 닫지 말고 잠시 기다려 주세요.
-                </p>
-              </section>
+              <PracticeAnalysisLoading
+                stepProgress={
+                  analysisPhase === "uploading"
+                    ? Math.min(32, uploadProgress * 0.32)
+                    : analysisProgress
+                }
+                uploading={analysisPhase === "uploading"}
+              />
             ) : analysisPhase === "error" && analysisError ? (
               <section
                 role="alert"
@@ -1138,57 +1342,6 @@ export default function LipPractice() {
           </div>
         ) : (
           <CameraStage mirrored={mirrored} videoRef={previewRef}>
-            {step === "align" ? (
-              <div className="absolute inset-x-5 bottom-3 z-10 max-h-[calc(100%_-_24px)] overflow-y-auto overscroll-contain rounded-[24px] bg-white/94 p-5 text-center shadow-xl backdrop-blur">
-                <p className="text-xs font-bold text-primary">
-                  문장 {promptIndex + 1}
-                </p>
-                <h1 className="mt-2 text-lg leading-7 font-bold">
-                  {prompts[promptIndex]}
-                </h1>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  얼굴을 가이드 안에 맞춰 주세요.
-                </p>
-                {error ? (
-                  <p role="alert" className="mt-2 text-sm text-red-600">
-                    {error}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => beginPrompt()}
-                  className="design-action mt-4"
-                >
-                  촬영 시작
-                </button>
-              </div>
-            ) : null}
-            {step === "countdown" ? (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20">
-                <span className="flex size-28 items-center justify-center rounded-full bg-white/92 text-5xl font-extrabold text-primary shadow-2xl">
-                  {countdown || "·"}
-                </span>
-              </div>
-            ) : null}
-            {step === "recording" ? (
-              <div className="absolute inset-x-5 bottom-3 z-10 max-h-[calc(100%_-_24px)] overflow-y-auto overscroll-contain rounded-[24px] bg-black/70 p-5 text-center text-white backdrop-blur">
-                <span className="inline-flex items-center gap-2 text-xs font-bold">
-                  <span className="size-2 animate-pulse rounded-full bg-red-500" />
-                  촬영 중
-                </span>
-                <p className="mt-3 text-lg leading-7 font-bold">
-                  {prompts[promptIndex]}
-                </p>
-                <button
-                  type="button"
-                  onClick={stopRecording}
-                  className="mx-auto mt-5 flex size-14 items-center justify-center rounded-full bg-white text-red-500"
-                  aria-label="촬영 종료"
-                >
-                  <Square className="size-6 fill-current" />
-                </button>
-              </div>
-            ) : null}
             {step === "review" && currentClip ? (
               <div className="absolute inset-0 z-20 flex flex-col bg-[#f7f8fa] px-5 pb-6">
                 <video
@@ -1279,7 +1432,7 @@ function InfoStep({
       <ol className="mt-7 space-y-3">
         {items.map(([heading, body], index) => (
           <li key={heading} className="design-card flex gap-4 !p-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#eaf4ff] text-sm font-bold text-primary">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#f1edff] text-sm font-bold text-primary">
               {index + 1}
             </span>
             <span>

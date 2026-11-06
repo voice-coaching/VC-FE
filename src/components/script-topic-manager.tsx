@@ -73,7 +73,7 @@ export function ScriptTopicManager({
       nav={false}
       viewportLocked
       chromeColor="#f2f4f6"
-      className="flex flex-col !bg-[#f2f4f6]"
+      className="flex flex-col !bg-[#f2f4f6] [--primary:#6346f6]"
     >
       <TopBar
         to="/my-script"

@@ -54,7 +54,7 @@ export function MyProfileBand({
           className="flex size-10 -translate-x-2 items-center justify-center"
         >
           <Image
-            src="/figma/mypage-improved/settings.svg"
+            src="/figma/mypage-purple/settings.svg"
             alt=""
             width={24}
             height={24}
@@ -63,9 +63,9 @@ export function MyProfileBand({
       </header>
       <section className={styles.profile} aria-label="내 프로필">
         <div className={styles.avatar}>
-          <ProfileWings level={level} />
+          {level > 1 ? <ProfileWings level={level} /> : null}
           <Image
-            src={`/figma/mypage-improved/disc-${level}.svg`}
+            src={`/figma/mypage-purple/disc-${level}.svg`}
             alt=""
             width={104}
             height={104}
@@ -73,7 +73,7 @@ export function MyProfileBand({
           />
           {level > 1 ? (
             <Image
-              src={`/figma/mypage-improved/track-${level}.svg`}
+              src={`/figma/mypage-purple/track-${level}.svg`}
               alt=""
               width={104}
               height={104}
@@ -81,7 +81,7 @@ export function MyProfileBand({
             />
           ) : null}
           <Image
-            src={`/figma/mypage-improved/ring-${level}.svg`}
+            src={`/figma/mypage-purple/ring-${level}.svg`}
             alt=""
             width={104}
             height={104}
@@ -90,10 +90,10 @@ export function MyProfileBand({
           <span className={styles.avatarInner}>
             <span className={styles.avatarCrop}>
               <Image
-                src="/figma/mypage-improved/avatar.png"
+                src={`/figma/mypage-purple/avatar-${level}.png`}
                 alt="Speak AI 캐릭터"
-                width={130}
-                height={131}
+                width={117}
+                height={117}
                 priority
                 className={styles.character}
               />
@@ -126,14 +126,30 @@ export function MyProfileBand({
 // Figma Wings variants sit behind the 104px ring in a 168 × 71px slot.
 const wings = [
   { left: 24.0072, right: 105, top: 30.9986, width: 38.9991, height: 36.3744 },
-  { left: 14.2464, right: 105, top: 21.4349, width: 48.7495, height: 45.9429 },
-  { left: 5.4768, right: 105, top: 13.1634, width: 57.5244, height: 54.2132 },
+  {
+    left: 14.2464,
+    right: 105,
+    top: 21.4349,
+    width: 48.7495,
+    rightHeight: 45.9433,
+    height: 45.9429,
+  },
+  {
+    left: 5.4768,
+    right: 105,
+    top: 13.1634,
+    width: 57.5244,
+    rightWidth: 57.5248,
+    rightHeight: 54.2123,
+    height: 54.2132,
+  },
   {
     left: 4.5024,
     right: 105,
     top: 11.4736,
     width: 58.5,
-    rightWidth: 58.5001,
+    rightWidth: 58.4994,
+    rightHeight: 55.9034,
     height: 55.9025,
   },
   { left: 0.8064, right: 91.0056, top: 0, width: 76.2002, height: 70.3219 },
@@ -144,17 +160,17 @@ function ProfileWings({ level }: { level: number }) {
   return (
     <span className={styles.wings} aria-hidden="true">
       <Image
-        src={`/figma/mypage-improved/wing-${level}-left.svg`}
+        src={`/figma/mypage-purple/wing-${level}-left.svg`}
         alt=""
         width={wing.width}
         height={wing.height}
         style={{ left: wing.left, top: wing.top }}
       />
       <Image
-        src={`/figma/mypage-improved/wing-${level}-right.svg`}
+        src={`/figma/mypage-purple/wing-${level}-right.svg`}
         alt=""
         width={wing.rightWidth ?? wing.width}
-        height={wing.height}
+        height={wing.rightHeight ?? wing.height}
         className={styles.wingRight}
         style={{ left: wing.right, top: wing.top }}
       />
@@ -189,6 +205,13 @@ export function MyPageHead({
           >
             <div className="min-w-0 flex-1">
               <h2 className="text-[15px] leading-[22px] font-bold">
+                {
+                  titleLabels[
+                    USER_TITLE_LEVELS.findIndex(
+                      (item) => item.code === next.code,
+                    )
+                  ]
+                }{" "}
                 승급 시험
               </h2>
               <p className="mt-[3px] text-xs leading-4 font-medium text-[#4e5968]">
@@ -201,7 +224,7 @@ export function MyPageHead({
               type="button"
               onClick={onExam}
               disabled={!next.eligible || examStarting}
-              className={`flex shrink-0 items-center gap-0.5 rounded-full px-3.5 py-2.5 text-sm leading-5 font-bold disabled:opacity-45 ${showMembership ? "bg-[#eaf0ff] text-primary" : "bg-primary text-white"}`}
+              className={`flex shrink-0 items-center gap-0.5 rounded-full px-3.5 py-2.5 text-sm leading-5 font-bold disabled:opacity-45 ${showMembership ? "bg-[#eeeaff] text-primary" : "bg-primary text-white"}`}
             >
               {examStarting ? "준비 중" : "시험 보기"}
               <Image

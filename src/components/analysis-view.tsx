@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { PhoneDifference } from "./phone-difference";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useMemo, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
@@ -50,6 +51,14 @@ export type AnalysisViewContent = Pick<
   "id" | "contentType" | "title" | "scriptText" | "referenceAudioAvailable"
 >;
 
+export type PronunciationDetail = {
+  word: string;
+  observed: string;
+  expected: string;
+  feedback: string;
+  tip?: string;
+};
+
 export function AnalysisView({
   analysis,
   segments,
@@ -62,6 +71,7 @@ export function AnalysisView({
   practiceResult,
   practiceDecisionStatus,
   sentenceMode = false,
+  pronunciationDetails = {},
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -75,6 +85,7 @@ export function AnalysisView({
   practiceResult?: DirectResult["practiceResult"];
   practiceDecisionStatus?: string;
   sentenceMode?: boolean;
+  pronunciationDetails?: Record<string, PronunciationDetail[]>;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const reviewItems =
@@ -177,34 +188,43 @@ export function AnalysisView({
         <div className="space-y-2.5 px-5 pt-3 pb-6">
           {scoreRows.length ? (
             scoreRows.map((row) => (
-              <details key={row.id} className={styles.criterion}>
-                <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2.5 px-[18px] py-4 marker:hidden">
-                  <strong className="min-w-0 flex-1 text-[16px] leading-6">
-                    {row.label}
-                  </strong>
-                  <span className="shrink-0 text-[16px] leading-6">
-                    {row.available && row.score != null ? (
-                      <>
-                        <b>{formatPoints(row.score)}</b>
-                        <span className="font-medium text-[#8b95a1]">
-                          {row.maxScore == null
-                            ? "점"
-                            : ` / ${formatPoints(row.maxScore)}점`}
+              <ScoreAccordion
+                key={row.id}
+                header={
+                  <>
+                    <strong className="min-w-0 flex-1 text-[16px] leading-6">
+                      {row.label}
+                      {row.label === "대본과 음성의 대응" && (
+                        <span className="mt-0.5 block text-xs leading-4 font-normal text-[#8b95a1]">
+                          기대한 소리와 녹음 소리의 대응 정도
                         </span>
-                      </>
-                    ) : (
-                      <span className="text-[13px] text-[#8b95a1]">
-                        {row.available ? "점수 미제공" : "평가 대상 없음"}
-                      </span>
-                    )}
-                  </span>
-                  <Image
-                    src="/figma/report/chevron.svg"
-                    alt=""
-                    width={18}
-                    height={18}
-                  />
-                </summary>
+                      )}
+                    </strong>
+                    <span className="shrink-0 text-[16px] leading-6">
+                      {row.available && row.score != null ? (
+                        <>
+                          <b>{formatPoints(row.score)}</b>
+                          <span className="font-medium text-[#8b95a1]">
+                            {row.maxScore == null
+                              ? "점"
+                              : ` / ${formatPoints(row.maxScore)}점`}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[13px] text-[#8b95a1]">
+                          {row.available ? "점수 미제공" : "평가 대상 없음"}
+                        </span>
+                      )}
+                    </span>
+                    <Image
+                      src="/figma/report/chevron.svg"
+                      alt=""
+                      width={18}
+                      height={18}
+                    />
+                  </>
+                }
+              >
                 <div className={styles.criterionBody}>
                   {row.phones.length > 0 && (
                     <>
@@ -213,7 +233,12 @@ export function AnalysisView({
                       </p>
                       <div className={styles.phones}>
                         {row.phones.map((phone, index) => (
-                          <span key={`${phone}-${index}`}>{phone}</span>
+                          <span
+                            key={`${phone}-${index}`}
+                            style={{ transitionDelay: `${80 + index * 60}ms` }}
+                          >
+                            {phone}
+                          </span>
                         ))}
                       </div>
                     </>
@@ -226,7 +251,7 @@ export function AnalysisView({
                     </p>
                   )}
                 </div>
-              </details>
+              </ScoreAccordion>
             ))
           ) : (
             <section className="rounded-2xl bg-white px-5 py-8 text-center">
@@ -311,11 +336,20 @@ export function AnalysisView({
             <div className="mt-2.5">
               <CorrectionCard
                 segment={selected}
+                details={pronunciationDetails[String(selected.id)]}
                 recordingUrl={recordingUrl}
                 recordingId={recordingId}
                 content={content}
               />
             </div>
+            {pronunciationDetails[String(selected.id)]
+              ?.filter((item) => item.tip)
+              .map((item, index) => (
+                <div key={index} className={styles.tip}>
+                  <strong>TIP</strong>
+                  <p>{item.tip}</p>
+                </div>
+              ))}
             <h3 className="mt-[18px] text-[15px] leading-[22px] font-bold">
               소리 비교
             </h3>
@@ -450,19 +484,13 @@ export function AnalysisView({
       <div
         inert={overlay != null}
         aria-hidden={overlay != null}
-        className={`min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
+        className={`${styles.report} ${styles.reportEntrance} min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
         <section className="flex flex-col items-center gap-4 pt-2">
           <AnalysisSummary key={summary} text={summary} />
         </section>
-        {analysis.canonical && (
-          <CanonicalLipResult
-            view={analysis.canonical}
-            isCameraPractice={isCameraPractice}
-          />
-        )}
 
-        <section className="rounded-2xl bg-gradient-to-b from-white to-[#f6f8ff] p-4">
+        <section className="rounded-2xl bg-white p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
             연습 문장
           </h2>
@@ -505,6 +533,13 @@ export function AnalysisView({
             />
           </div>
         </section>
+
+        {analysis.canonical && (
+          <CanonicalLipResult
+            view={analysis.canonical}
+            isCameraPractice={isCameraPractice}
+          />
+        )}
 
         <button
           type="button"
@@ -571,10 +606,12 @@ export function AnalysisView({
           <div className="space-y-3">
             <SegmentSection
               title="다시 확인해 보세요"
+              pronunciationDetails={pronunciationDetails}
               renderCorrection={(segment) => (
                 <CorrectionCard
                   key={overlay ? "hidden" : "visible"}
                   segment={segment}
+                  details={pronunciationDetails[String(segment.id)]}
                   recordingUrl={overlay ? undefined : recordingUrl}
                   recordingId={overlay ? undefined : recordingId}
                   content={content}
@@ -691,6 +728,7 @@ function SegmentSection({
   onSelect,
   defaultOpen = true,
   renderCorrection,
+  pronunciationDetails = {},
 }: {
   title: string;
   items: AnalysisSegment[];
@@ -699,15 +737,24 @@ function SegmentSection({
   onSelect: (segment: AnalysisSegment) => void;
   defaultOpen?: boolean;
   renderCorrection?: (segment: AnalysisSegment) => ReactNode;
+  pronunciationDetails?: Record<string, PronunciationDetail[]>;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
   const toneText = {
     warning: "text-[#f04f5f]",
     check: "text-[#10a87b]",
     info: "text-[#8b95a1]",
   }[tone];
   return (
-    <details open={defaultOpen} className="rounded-[20px] bg-white px-5 py-0.5">
-      <summary className="flex min-h-[54px] cursor-pointer list-none items-center gap-2 marker:hidden">
+    <section className="rounded-[20px] bg-white px-5 py-0.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-[54px] w-full cursor-pointer items-center gap-2 text-left"
+      >
         <ReportIcon name={icon} />
         <strong className="min-w-0 flex-1 text-[17px] leading-6">
           {title}
@@ -720,48 +767,63 @@ function SegmentSection({
           alt=""
           width={18}
           height={18}
-          className="rotate-90"
+          className={styles.sectionChevron}
+          data-open={open}
         />
-      </summary>
-      {items.map((segment) => (
-        <div key={String(segment.id)}>
-          <button
-            type="button"
-            onClick={() => onSelect(segment)}
-            className="flex min-h-[56px] w-full items-start gap-3 pb-4 pt-1 text-left"
-          >
-            <span className="shrink-0 pt-0.5 text-[13px] leading-6 text-[#8b95a1]">
-              {String(segment.sequenceNo).padStart(2, "0")}
-            </span>
-            <span className="min-w-0 flex-1 text-[16px] leading-6 font-medium">
-              <HighlightedText
-                text={segmentText(segment)}
-                targets={
-                  tone === "warning" && segment.targetUnit
-                    ? [segment.targetUnit]
-                    : []
-                }
-              />
-            </span>
-            <Image
-              src="/figma/report/chevron.svg"
-              alt=""
-              width={16}
-              height={16}
-              className="mt-1"
-            />
-          </button>
-          {renderCorrection && (
-            <div className="pb-4">{renderCorrection(segment)}</div>
-          )}
+      </button>
+      <div
+        id={contentId}
+        className={styles.sectionCollapse}
+        data-open={open}
+        inert={!open}
+      >
+        <div className={styles.sectionContent}>
+          {items.map((segment) => (
+            <div key={String(segment.id)}>
+              <button
+                type="button"
+                onClick={() => onSelect(segment)}
+                className="flex min-h-[56px] w-full items-start gap-3 pb-4 pt-1 text-left"
+              >
+                <span className="shrink-0 pt-0.5 text-[13px] leading-6 text-[#8b95a1]">
+                  {String(segment.sequenceNo).padStart(2, "0")}
+                </span>
+                <span className="min-w-0 flex-1 text-[16px] leading-6 font-medium">
+                  <HighlightedText
+                    text={segmentText(segment)}
+                    targets={
+                      tone === "warning"
+                        ? [
+                            ...(segment.targetUnit ? [segment.targetUnit] : []),
+                            ...(
+                              pronunciationDetails[String(segment.id)] || []
+                            ).map((item) => item.word),
+                          ]
+                        : []
+                    }
+                  />
+                </span>
+                <Image
+                  src="/figma/report/chevron.svg"
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="mt-1"
+                />
+              </button>
+              {renderCorrection && (
+                <div className="pb-4">{renderCorrection(segment)}</div>
+              )}
+            </div>
+          ))}
+          {items.length === 0 ? (
+            <p className="pb-4 text-[13px] text-[#8b95a1]">
+              해당하는 문장이 없어요.
+            </p>
+          ) : null}
         </div>
-      ))}
-      {items.length === 0 ? (
-        <p className="pb-4 text-[13px] text-[#8b95a1]">
-          해당하는 문장이 없어요.
-        </p>
-      ) : null}
-    </details>
+      </div>
+    </section>
   );
 }
 
@@ -775,7 +837,7 @@ function UnavailableAudio({
   return (
     <span
       aria-disabled="true"
-      className={`flex h-12 items-center justify-center rounded-2xl px-2 text-center text-[12px] font-bold ${primary ? "bg-[#edf2ff] text-[#8fa9e8]" : "bg-[#f2f4f6] text-[#8b95a1]"}`}
+      className={`flex h-12 items-center justify-center rounded-2xl px-2 text-center text-[12px] font-bold ${primary ? "bg-[#f0edff] text-[#b5a8eb]" : "bg-[#f2f4f6] text-[#8b95a1]"}`}
     >
       {label}
     </span>
@@ -805,7 +867,7 @@ function ReportOverlay({
       <Dialog.Portal>
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col overflow-x-clip bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28] outline-none [touch-action:pan-y_pinch-zoom]"
+          className={`${styles.report} fixed inset-0 z-[70] mx-auto flex h-dvh w-full max-w-[402px] flex-col overflow-x-clip bg-[#f2f4f6] pt-[env(safe-area-inset-top,0px)] text-[#191f28] outline-none [touch-action:pan-y_pinch-zoom]`}
         >
           <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
             <button
@@ -900,55 +962,114 @@ function HighlightedText({
 
 function CorrectionCard({
   segment,
+  details,
   recordingUrl,
   recordingId,
   content,
   disabled = false,
 }: {
   segment: AnalysisSegment;
+  details?: PronunciationDetail[];
   recordingUrl?: string;
   recordingId?: Id;
   content: AnalysisViewContent;
   disabled?: boolean;
 }) {
+  const entries = details?.length
+    ? details
+    : [
+        {
+          word: segment.targetUnit || "",
+          observed: segment.recognizedText || "",
+          expected: segment.expectedText || "",
+          feedback: segment.feedback || "",
+        },
+      ];
   return (
-    <div className={styles.correction}>
-      <div className={styles.comparisonLine}>
-        <span className={styles.chip}>인식된 말</span>
-        <strong>{segment.recognizedText || "데이터 미제공"}</strong>
-        <ReferencePlayer
-          source={recordingUrl}
-          recordingId={recordingId}
-          {...recordingRange(segment)}
-          title="내 음성 듣기"
-          variant="comparison"
-          disabled={disabled || (!recordingUrl && recordingId == null)}
-        />
-      </div>
-      <div className={styles.comparisonLine}>
-        <span className={styles.chip} data-tone="correct">
-          원문
-        </span>
-        <strong>{segment.expectedText || "데이터 미제공"}</strong>
-        <GuidePlayer
-          contentId={content.id}
-          available={content.referenceAudioAvailable}
-          text={segment.expectedText || content.scriptText}
-          title="가이드 전체 듣기"
-          variant="comparison"
-          buttonTone="primary"
-          disabled={disabled}
-        />
-      </div>
-      <div className={styles.feedbackLine}>
-        <span className={styles.chip} data-tone="feedback">
-          피드백
-        </span>
-        <p>
-          {segment.feedback?.trim() ||
-            "이 문장의 세부 피드백이 제공되지 않았어요."}
-        </p>
-      </div>
+    <div className="space-y-3">
+      {entries.map((entry, index) => (
+        <div className={styles.correction} key={index}>
+          {entries.length > 1 && (
+            <strong className="text-base">{entry.word}</strong>
+          )}
+          <div className={styles.comparisonLine}>
+            <span className={styles.chip}>내 발음</span>
+            <strong>
+              <PhoneDifference text={entry.observed} other={entry.expected} />
+            </strong>
+            <ReferencePlayer
+              source={recordingUrl}
+              recordingId={recordingId}
+              {...recordingRange(segment)}
+              title="내 음성 듣기"
+              variant="comparison"
+              disabled={disabled || (!recordingUrl && recordingId == null)}
+            />
+          </div>
+          <div className={styles.comparisonLine}>
+            <span className={styles.chip} data-tone="correct">
+              바른 발음
+            </span>
+            <strong>
+              <PhoneDifference
+                text={entry.expected}
+                other={entry.observed}
+                correct
+              />
+            </strong>
+            <GuidePlayer
+              contentId={content.id}
+              available={content.referenceAudioAvailable}
+              text={entry.expected || content.scriptText}
+              title="가이드 전체 듣기"
+              variant="comparison"
+              buttonTone="primary"
+              disabled={disabled}
+            />
+          </div>
+          <div className={styles.feedbackLine}>
+            <span className={styles.chip} data-tone="feedback">
+              피드백
+            </span>
+            <p>
+              {entry.feedback.trim() ||
+                "이 문장의 세부 피드백이 제공되지 않았어요."}
+            </p>
+          </div>
+        </div>
+      ))}
     </div>
+  );
+}
+
+function ScoreAccordion({
+  header,
+  children,
+}: {
+  header: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <section className={styles.criterion} data-open={open}>
+      <button
+        type="button"
+        className={styles.criterionToggle}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {header}
+      </button>
+      <div
+        id={id}
+        className={styles.sectionCollapse}
+        data-open={open}
+        inert={!open}
+      >
+        <div className={styles.sectionContent}>{children}</div>
+      </div>
+    </section>
   );
 }

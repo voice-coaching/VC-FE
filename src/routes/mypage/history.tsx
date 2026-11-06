@@ -3,7 +3,6 @@
 import { DirectHistory } from "@/components/direct-history";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -286,19 +285,21 @@ export default function LearningHistory() {
   return (
     <AppShell
       mainRef={mainScroll}
-      chromeColor="#f2f4f6"
+      chromeColor="#ffffff"
       viewportLocked
-      className="relative flex flex-col overflow-hidden bg-[#f2f4f6]"
+      className="relative flex flex-col overflow-hidden bg-white [--primary:#6346f6]"
     >
       <header className="flex h-[52px] shrink-0 items-center px-5 py-2">
-        <h1 className="text-[22px] leading-6 font-bold text-[#191f28]">기록</h1>
+        <h1 className="w-full text-center text-[17px] leading-6 font-bold text-[#191f28]">
+          기록
+        </h1>
       </header>
       <div
         ref={listScroll}
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
       >
-        <div className="overflow-hidden px-5 pt-2 pb-6">
-          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="overflow-hidden px-5 pb-6">
+          <div className="-mx-5 flex gap-5 overflow-x-auto border-b border-[#f2f4f6] px-5 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {FILTERS.map((filter) => (
               <button
                 key={filter.label}
@@ -306,10 +307,10 @@ export default function LearningHistory() {
                 onClick={() => setKind(filter.value)}
                 aria-pressed={filterValue === filter.value}
                 className={cn(
-                  "shrink-0 rounded-full px-3.5 py-2 text-[13px] leading-[18px] font-medium",
+                  "shrink-0 border-b-2 pb-2.5 text-[15px] leading-[18px] tracking-[-0.225px] font-medium transition-colors",
                   filterValue === filter.value
-                    ? "bg-[#191f28] font-bold text-white"
-                    : "bg-white text-[#4e5968]",
+                    ? "border-[#191f28] font-bold text-[#191f28]"
+                    : "border-transparent text-[#8b95a1]",
                 )}
               >
                 {filter.label}
@@ -338,26 +339,29 @@ export default function LearningHistory() {
           {loadingList || originsPending ? (
             <HistoryListSkeleton />
           ) : error ? null : groups.length ? (
-            <div className="mt-6 space-y-6">
+            <div className="mt-5 space-y-7">
               {groups.map((group) => (
                 <section key={group.label}>
-                  <h2 className="mb-2.5 flex items-center gap-1.5 px-1 text-[16px] leading-[18px] font-bold text-[#191f28]">
+                  <h2 className="mb-1 flex items-center gap-1 text-[14px] leading-[18px] font-bold text-[#191f28]">
                     {group.label}
-                    <span className="text-sm font-medium text-[#8b95a1]">
-                      {group.items.length}개
+                    <span className="text-sm font-bold text-primary">
+                      {group.items.length}
                     </span>
                   </h2>
-                  <div className="divide-y divide-[#f2f4f6] rounded-[20px] bg-white pr-3.5 pl-[18px]">
+                  <div className="divide-y divide-[#f2f4f6] bg-white">
                     {group.items.map((item) => (
                       <Link
                         key={String(item.sessionId)}
                         href={`/mypage/history/${item.sessionId}`}
-                        className="flex min-h-[82px] items-center gap-3 py-[18px]"
+                        className="flex min-h-[86px] items-center gap-3 py-[18px]"
                       >
                         <span className="min-w-0 flex-1">
+                          <strong className="mb-2 block break-words text-[16px] leading-[22px] font-bold tracking-[-0.24px] text-[#191f28]">
+                            {item.title}
+                          </strong>
                           <span className="flex min-w-0 items-center gap-1.5">
                             <span
-                              className={`shrink-0 rounded-[6px] px-1.5 py-0.5 text-[11px] leading-4 font-bold ${origins[String(item.contentId)] === "custom" ? "bg-[#e6f7ee] text-[#0e7a47]" : item.contentType === "CLASS_PRACTICE" ? "bg-[#f1edff] text-[#6a4ce0]" : item.contentType === "ANNOUNCER" ? "bg-[#ffedef] text-[#f04452]" : item.contentType === "SENTENCE" ? "bg-[#fff3e0] text-[#e58000]" : "bg-[#eaf0ff] text-primary"}`}
+                              className={`shrink-0 rounded-[6px] px-1.5 py-0.5 text-[11px] leading-4 font-bold ${origins[String(item.contentId)] === "custom" ? "bg-[#e6f7ee] text-[#0e7a47]" : item.contentType === "CLASS_PRACTICE" ? "bg-[#f1edff] text-[#6a4ce0]" : item.contentType === "ANNOUNCER" ? "bg-[#ffedee] text-[#c9303d]" : item.contentType === "SENTENCE" ? "bg-[#fff3e0] text-[#c26a00]" : "bg-[#edeaff] text-primary"}`}
                             >
                               {origins[String(item.contentId)] === "custom"
                                 ? "내 문장"
@@ -367,9 +371,6 @@ export default function LearningHistory() {
                               {relativeDateLabel(item.completedAt)}
                             </span>
                           </span>
-                          <strong className="mt-1 block truncate text-[15px] leading-[22px] font-bold text-[#191f28]">
-                            {item.title}
-                          </strong>
                         </span>
                         <span className="shrink-0 leading-[22px] text-primary">
                           <strong className="text-[20px]">
@@ -381,12 +382,6 @@ export default function LearningHistory() {
                             <span className="text-[13px] font-medium">점</span>
                           )}
                         </span>
-                        <Image
-                          src="/figma/history-tab/chevron.svg"
-                          alt=""
-                          width={16}
-                          height={16}
-                        />
                       </Link>
                     ))}
                   </div>

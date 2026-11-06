@@ -6,6 +6,7 @@ import {
   RecordingPracticeSession,
   type PracticeSessionProps,
 } from "./recording-practice-session";
+import { NewsRecordingPreview } from "./news-recording-preview";
 import { TitleExamSession } from "./title-exam-session";
 import { SentencePracticeSequence } from "./sentence-practice-sequence";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
@@ -27,6 +28,14 @@ export function PracticeSession(props: PracticeSessionProps) {
     params.get("courseStepId"),
     titleExamId,
   ]);
+
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_RECORDING_UI_PREVIEW === "1" &&
+    !titleExamId
+  ) {
+    return <NewsRecordingPreview key={identity} {...props} />;
+  }
 
   if (titleExamId) {
     return <TitleExamSession key={identity} {...props} examId={titleExamId} />;

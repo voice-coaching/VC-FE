@@ -1,0 +1,70 @@
+.controls { position: relative; isolation: isolate; margin-top: auto; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 40px 64px; }
+.glow { position:absolute; z-index:-1; pointer-events:none; left:50%; bottom:-80px; transform:translateX(-50%); width:140%; height:640px; background:linear-gradient(180deg,rgba(233,230,255,0) 0%,rgba(230,227,255,.55) 45%,#d9dcff 100%); }
+.buttons { display:flex; align-items:flex-start; justify-content:center; gap:28px; width:100%; }
+.small, .primary { display:flex; flex:none; flex-direction:column; align-items:center; gap:6px; padding:0; background:transparent; font-size:12px; line-height:1.3; white-space:nowrap; }
+.small { padding-top:8px; color:#4e5968; font-weight:500; }
+.smallCircle { display:flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%; background:white; color:#191f28; box-shadow:0 2px 8px rgb(0 0 0 / 6%); }
+.stopIcon { display:block; width:18px; height:18px; border-radius:5px; background:currentColor; }
+.primary { color:#6346f6; font-weight:700; }
+.primaryCircle { display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:#6346f6; color:white; box-shadow:0 6px 16px -4px rgb(99 70 246 / 25%); }
+.controls[data-recording="false"] .primary { padding-top:8px; }
+.controls[data-recording="false"] .primaryCircle { width:56px; height:56px; }
+.primary:disabled { color:#b0b8c1; }
+.primary:disabled .primaryCircle { background:#e5e8eb; box-shadow:none; }
+.primary:disabled img { opacity:.4; }
+.small:disabled .smallCircle { color:#c9ced4; }
+.guide { position:relative; flex:none; padding-top:8px; width:56px; }
+.guide > section { display:flex; align-items:center; }
+.guide > section > button { width:56px; height:56px; border-radius:50%; padding:0; }
+.guide > section > button img, .guide > section > button svg { width:22px; height:22px; }
+.guide > section > span:not([class*="sr-only"]) { display:none; }
+.guideLabel { display:block; margin-top:6px; text-align:center; white-space:nowrap; font-size:12px; line-height:1.3; color:#4e5968; }
+.meter { display:grid; gap:16px; }
+.meter > div { height:48px; gap:4px; }
+.controls .meter [data-active="true"] > span { background:#6346f6; }
+.controls .meter [data-active="false"] > span { background:#d1d6db; }
+@media(max-width:360px) { .controls { padding-inline:20px; } }
+
+.guide[data-playing="true"] > section > button { background:#191f28; color:white; box-shadow:0 4px 12px -2px rgb(25 31 40 / 18%); }
+.guide[data-playing="true"] .guideLabel { color:#4e5968; }
+.small > span:first-child { color:#191f28; }
+.small:disabled > span:first-child { color:#c9ced4; }
+.controls[data-playing="true"] .meter [data-active] > span { height:4px !important; background:#d1d6db; }
+.guide[data-playing="true"] > section > button svg { fill:currentColor; stroke-width:0; }
+
+.glowLayer { position:absolute; left:0; right:0; bottom:0; height:560px; overflow:hidden; z-index:-1; pointer-events:none; opacity:0; transform:translateY(28px) scale(.94); transform-origin:50% 100%; transition:opacity 650ms ease,transform 850ms cubic-bezier(.22,1,.36,1); }
+.controls[data-capturing="true"] .glowLayer { opacity:1; transform:translateY(0) scale(1); }
+.glowLayer .glow { transform-origin:50% 65%; animation:recording-glow-spread 3.8s ease-in-out infinite; animation-play-state:paused; }
+.controls[data-capturing="true"] .glow { animation-play-state:running; }
+@keyframes recording-glow-spread {
+  0%,100% { transform:translateX(-50%) translateY(0) scale(.98); opacity:.78; }
+  50% { transform:translateX(-50%) translateY(-18px) scale(1.12); opacity:1; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .glowLayer { transition:none; }
+  .glowLayer .glow { animation:none; }
+}
+
+.previewWave { display:flex; align-items:center; justify-content:center; }
+.previewWave > span { width:4px; height:4px; border-radius:2px; }
+.previewWave[data-active="true"] > span { animation:preview-speaking 850ms ease-in-out infinite alternate; }
+@keyframes preview-speaking { from { height:8px; } to { height:44px; } }
+@media(prefers-reduced-motion:reduce) { .previewWave[data-active="true"] > span { animation:none; height:24px; } }
+
+.sentenceRow { position:relative; isolation:isolate; display:flex; align-items:flex-start; gap:8px; border-radius:12px; padding:10px 12px 10px 23px; }
+.sentenceRow::before { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit; background:linear-gradient(90deg,#eee9ff,#edf2ff); opacity:0; transition:opacity 320ms ease; }
+.sentenceRow[data-active="true"]::before { opacity:1; }
+.sentenceIndicator { position:absolute; left:12px; top:10px; bottom:10px; width:3px; border-radius:2px; background:linear-gradient(180deg,#7347f2,#5b7bfa); opacity:0; transform:scaleY(.65); transition:opacity 260ms ease,transform 360ms cubic-bezier(.22,1,.36,1); }
+.sentenceRow[data-active="true"] .sentenceIndicator { opacity:1; transform:scaleY(1); }
+.sentenceText { min-width:0; flex:1; font-size:16px; line-height:24px; font-weight:500; color:#191f28; overflow-wrap:anywhere; transition:color 300ms ease; }
+.sentenceRow[data-active="true"] .sentenceText { font-weight:700; color:#111318; }
+.sentenceRow[data-upcoming="true"] .sentenceText { color:#b0b8c1; }
+.sentenceRow[data-complete="true"] .sentenceText { color:#4e5968; }
+.sentenceCheck { flex:none; width:20px; height:20px; opacity:0; transform:scale(.7); transition:opacity 240ms ease,transform 360ms cubic-bezier(.22,1,.36,1); }
+.sentenceRow[data-complete="true"] .sentenceCheck { opacity:1; transform:scale(1); }
+@media(prefers-reduced-motion:reduce) { .sentenceRow::before,.sentenceIndicator,.sentenceText,.sentenceCheck { transition:none; } }
+
+.smallCircle { transition:background-color 220ms ease,color 220ms ease,box-shadow 220ms ease,transform 180ms ease; }
+.small[data-active="true"] .smallCircle { background:#191f28; color:white; box-shadow:0 4px 12px -2px rgb(25 31 40 / 18%); }
+.small:active .smallCircle { transform:scale(.94); }
+@media(prefers-reduced-motion:reduce) { .smallCircle { transition:none; } }

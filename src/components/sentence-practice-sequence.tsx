@@ -8,12 +8,10 @@ import {
 } from "./recording-practice-session";
 import { AnalysisView } from "./analysis-view";
 import { LoadingOverlay } from "./loading-overlay";
-import { SentenceReader } from "./sentence-reader";
+import { NewsRecordingControls, NewsRecordingReader } from "./news-recording";
 import { PracticeAnalysisLoading } from "./practice-analysis-loading";
-import { CoachingUsageSummary } from "./coaching-usage-summary";
 import { coachingLimitNotice } from "@/lib/coaching-usage";
 import Link from "next/link";
-import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
@@ -51,6 +49,7 @@ type SentenceResult = {
 
 export function SentencePracticeSequence(props: PracticeSessionProps) {
   const { content, courseExamples, courseExampleIndex, onTitleChange } = props;
+  const RecordingControls = NewsRecordingControls;
   const router = useRouter();
   const params = useSearchParams();
   const [resumeRequested] = useState(() => sentenceResumeRequested(params));
@@ -247,7 +246,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   const currentIndex = admissions.length;
   const current = items[currentIndex];
   useEffect(() => {
-    onTitleChange?.(waiting ? "문장별 분석 결과" : "문장 연습");
+    onTitleChange?.(waiting ? "문장별 분석 결과" : "연습하기");
   }, [waiting, onTitleChange]);
 
   if ((!ready || !capture.ready) && !recording && capture.recordedCount === 0)
@@ -305,29 +304,20 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         {worker}
         {guard.dialog}
         {!waiting && (
-          <header className="px-5 py-5">
-            <h2 className="text-lg font-bold">
-              {`${active + 1} / ${items.length} 문장`}
-            </h2>
-            <p className="mt-2 text-sm text-[#6b7684]">
-              다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요.
-            </p>
-            <CoachingUsageSummary compact />
-          </header>
-        )}
-        {!waiting && (
-          <SentenceReader
+          <NewsRecordingReader
+            label={
+              content.contentType === "NEWS"
+                ? "뉴스 읽기"
+                : content.contentType === "ANNOUNCER"
+                  ? "따라 읽기"
+                  : content.origin === "USER_INPUT"
+                    ? "내 문장 연습"
+                    : "문장 연습"
+            }
             sentences={items.map((item) => item.text)}
-            pageIndex={active}
-            activeIndex={recording ? active : undefined}
-            variant={recording ? "recording" : "reader"}
-            className="mx-5 max-h-[45dvh]"
+            active={active}
+            recording={recording}
           />
-        )}
-        {!waiting && (
-          <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
-            {`녹음 완료 ${capture.recordedCount}/${items.length} 문장`}
-          </p>
         )}
         {waiting && (
           <PracticeAnalysisLoading stepProgress={allAdmitted ? 66 : 0} />
@@ -342,7 +332,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         )}
         {capture.recorder.status === "denied" && <MicrophonePermissionNotice />}
         {!waiting && (
-          <SentenceRecordingControls
+          <RecordingControls
             paused={capture.recorder.paused}
             onTogglePause={capture.recorder.togglePause}
             contentId={items[active]?.contentId ?? content.id}

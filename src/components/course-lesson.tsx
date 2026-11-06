@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleAlert, X } from "lucide-react";
+import styles from "./course-lesson.module.css";
+import { ArrowLeft, CircleAlert, X } from "lucide-react";
 import {
   api,
   type CourseStepDetail,
@@ -36,14 +37,12 @@ function selectionKey(scope: string) {
 export function CourseLesson({
   course,
   step,
-  stepCount,
   description,
   onClose,
   onPractice,
 }: {
   course: CourseSummary;
   step: CourseStep;
-  stepCount: number;
   description?: string;
   onClose: () => void;
   onPractice: (example: PracticeExample, revision: number) => void;
@@ -55,6 +54,10 @@ export function CourseLesson({
   );
   const [panel, setPanel] = useHistoryPanel("examples", ["open"] as const);
   const example = panel === "open";
+  const [visitedExamples, setVisitedExamples] = useState(false);
+  useEffect(() => {
+    if (example) setVisitedExamples(true);
+  }, [example]);
   const selectionScope = `${userId}:${course.id}:${step.id}`;
   const [selectedExampleIndex, setSelectedExampleIndex] = useState(
     () => exampleSelections.get(selectionKey(selectionScope)) ?? 0,
@@ -180,7 +183,7 @@ export function CourseLesson({
   return (
     <div
       ref={scrollRef}
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
+      className="[--primary:#6346f6] bg-white flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-wrap:anywhere]"
     >
       <header className="flex h-12 shrink-0 items-center justify-between px-2 py-1">
         <button
@@ -189,22 +192,40 @@ export function CourseLesson({
           aria-label={example ? "학습 내용으로 돌아가기" : "학습 닫기"}
           onClick={() => (example ? setPanel(null) : onClose())}
         >
-          <X className="size-5" />
+          {example ? (
+            <ArrowLeft className="size-5" />
+          ) : (
+            <X className="size-5" />
+          )}
         </button>
-        <h1 className="text-lg font-bold">{step.stepOrder}단계</h1>
-        <span className="text-xs text-muted-foreground">
-          {step.stepOrder}/{stepCount}
-        </span>
+        <h1 className="text-[17px] font-bold">
+          {example ? "예문 듣기" : "학습 안내"}
+        </h1>
+        <span className="size-11" aria-hidden="true" />
       </header>
-      <div className="mx-5 h-1 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{
-            width: `${Math.min(100, (step.stepOrder / Math.max(1, stepCount)) * 100)}%`,
-          }}
-        />
-      </div>
-      <div className="space-y-5 px-5 py-6">
+      <ol
+        aria-label="연습 순서"
+        className="mx-5 mt-3 flex items-center gap-2 rounded-2xl bg-[#f7f8fa] p-3 text-xs"
+      >
+        {["학습 안내", "예문 듣기", "녹음 연습"].map((label, index) => (
+          <li
+            key={label}
+            aria-current={index === (example ? 1 : 0) ? "step" : undefined}
+            className={`flex flex-1 items-center justify-center gap-1.5 ${index === (example ? 1 : 0) ? "font-bold text-[#6346f6]" : "text-[#8b95a1]"}`}
+          >
+            <span
+              className={`flex size-5 shrink-0 items-center justify-center rounded-full ${index === (example ? 1 : 0) ? "bg-[#6346f6] text-white" : "bg-white"}`}
+            >
+              {index + 1}
+            </span>
+            {label}
+          </li>
+        ))}
+      </ol>
+      <div
+        key={example ? "examples" : "lesson"}
+        className={`space-y-5 px-5 py-6 ${example ? styles.enterForward : visitedExamples ? styles.enterBack : ""}`}
+      >
         <div>
           <h2 className="text-[23px] font-bold">
             {example
@@ -254,14 +275,7 @@ export function CourseLesson({
                 <h3 className="text-base font-semibold">
                   연습 문제 {examples?.items.length ?? 0}개
                 </h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  한 문장을 골라 음성을 듣고 따라 읽어 보세요.
-                </p>
               </div>
-              <span className="shrink-0 text-xs font-semibold text-primary">
-                {selectedExample ? safeIndex + 1 : 0}/
-                {examples?.items.length ?? 0}
-              </span>
             </div>
             {exampleError ? (
               <div role="alert">
@@ -281,12 +295,11 @@ export function CourseLesson({
             ) : null}
             <ol className="space-y-2.5">
               {examples?.items.map((practiceExample, index) => {
-                const selected = index === safeIndex;
                 return (
                   <li key={practiceExample.id}>
                     <button
                       type="button"
-                      aria-pressed={selected}
+                      aria-label={`${index + 1}번 문장 가이드 확인`}
                       onClick={() => {
                         const key = selectionKey(selectionScope);
                         exampleSelections.delete(key);
@@ -297,11 +310,9 @@ export function CourseLesson({
                           );
                         setSelectedExampleIndex(index);
                       }}
-                      className={`flex w-full gap-3 rounded-2xl border p-4 text-left ${selected ? "border-primary bg-[#edf2ff]" : "border-border bg-white"}`}
+                      className="flex w-full gap-3 rounded-2xl border border-border bg-white p-4 text-left"
                     >
-                      <span
-                        className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${selected ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}
-                      >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#f1edff] text-xs font-bold text-primary">
                         {index + 1}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -329,6 +340,13 @@ export function CourseLesson({
             {stepDetail ? (
               <div className="space-y-3">
                 {stepDetail.blocks.map((block, index) => {
+                  if (
+                    block.type === "TEXT" &&
+                    /^문장을 직접 녹음하며 연습합니다[.!。]?$/u.test(
+                      block.body.trim(),
+                    )
+                  )
+                    return null;
                   if (block.type === "TEXT")
                     return (
                       <section key={index} className="design-card">
@@ -359,7 +377,7 @@ export function CourseLesson({
                     return (
                       <figure
                         key={index}
-                        className="overflow-hidden rounded-[20px] bg-[#f4f9ff]"
+                        className="overflow-hidden rounded-[20px] bg-[#f7f7f9]"
                       >
                         {/* The API returns versioned CDN URLs that cannot be known at build time. */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -381,7 +399,7 @@ export function CourseLesson({
                     return (
                       <section
                         key={index}
-                        className="rounded-[20px] border border-[#bfdcff] bg-[#f4f9ff] p-6 text-center"
+                        className="rounded-[20px] border border-[#e5deff] bg-[#f7f7f9] p-6 text-center"
                       >
                         <CircleAlert
                           className="mx-auto size-10 text-primary"
@@ -392,23 +410,16 @@ export function CourseLesson({
                         </p>
                       </section>
                     );
-                  return (
-                    <p
-                      key={index}
-                      className="rounded-2xl bg-[#edf2ff] p-4 text-sm text-primary"
-                    >
-                      이어지는 예문으로 직접 연습해 보세요.
-                    </p>
-                  );
+                  return null;
                 })}
               </div>
             ) : !stepDetailError ? (
-              <section className="flex min-h-52 items-center justify-center rounded-[20px] bg-[#f4f9ff] text-sm text-muted-foreground">
+              <section className="flex min-h-52 items-center justify-center rounded-[20px] bg-[#f7f7f9] text-sm text-muted-foreground">
                 단계별 교육 내용을 불러오는 중…
               </section>
             ) : null}
             <section className="design-card">
-              <h3 className="mb-3 text-sm font-semibold">학습 안내</h3>
+              <h3 className="mb-3 text-sm font-semibold">이번 연습의 목표</h3>
               <p className="text-sm leading-7">
                 {content?.description ??
                   description ??
@@ -421,17 +432,19 @@ export function CourseLesson({
       <div className="design-dock">
         <button
           type="button"
-          disabled={example && !selectedExample}
+          disabled={example && !examples?.items.length}
           onClick={() =>
             example
-              ? selectedExample &&
-                examples &&
-                onPractice(selectedExample, examples.revision)
+              ? examples?.items.length &&
+                onPractice(
+                  [...examples.items].sort((a, b) => a.order - b.order)[0],
+                  examples.revision,
+                )
               : setPanel("open")
           }
           className="design-action"
         >
-          {example ? "선택한 문제 따라 읽기" : "예시 들어 보기"}
+          {example ? "전체 문장 연습하기" : "예문 확인하기"}
         </button>
       </div>
     </div>
@@ -475,7 +488,7 @@ function CourseAudioBlock({
           type="button"
           disabled={loading}
           onClick={() => void loadAudio()}
-          className="h-10 rounded-full bg-[#edf2ff] px-4 text-sm font-medium text-primary disabled:opacity-60"
+          className="h-10 rounded-full bg-[#f1edff] px-4 text-sm font-medium text-primary disabled:opacity-60"
         >
           {loading ? "불러오는 중…" : "기준 음성 듣기"}
         </button>

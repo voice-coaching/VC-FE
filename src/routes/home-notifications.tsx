@@ -88,7 +88,9 @@ export function NotificationList({
           {group.items.map((item) => {
             const content = (
               <span className="flex min-w-0 flex-col gap-1.5 break-words">
-                <span className="text-[13px] leading-[18px] font-medium text-[#6b7684]">
+                <span
+                  className={`text-[13px] leading-[18px] font-medium ${item.read ? "text-[#6b7684]" : "text-[#6346f6]"}`}
+                >
                   {item.title}
                 </span>
                 <span className="text-[15px] leading-[22px] font-medium text-[#191f28]">
@@ -105,7 +107,7 @@ export function NotificationList({
                 href={item.href}
                 key={item.id}
                 onClick={() => onRead?.(item.id)}
-                className={`block px-5 py-3.5 ${item.read ? "bg-white" : "bg-[#f7f9ff]"}`}
+                className={`block px-5 py-3.5 ${item.read ? "bg-white" : "bg-[#f8f6ff]"}`}
               >
                 {content}
               </Link>
@@ -114,7 +116,7 @@ export function NotificationList({
                 type="button"
                 key={item.id}
                 onClick={() => onRead?.(item.id)}
-                className={`block w-full px-5 py-3.5 text-left ${item.read ? "bg-white" : "bg-[#f7f9ff]"}`}
+                className={`block w-full px-5 py-3.5 text-left ${item.read ? "bg-white" : "bg-[#f8f6ff]"}`}
               >
                 {content}
               </button>
@@ -276,7 +278,7 @@ export default function HomeNotifications() {
           <button
             type="button"
             onClick={() => void markAllRead()}
-            className="ml-auto min-w-10 px-2 text-[13px] font-medium text-primary"
+            className="ml-auto min-w-10 px-2 text-[13px] font-medium text-[#6346f6]"
           >
             모두 읽음
           </button>

@@ -12,7 +12,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  --font-sans: Pretendard, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-pretendard), ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -60,9 +60,9 @@
   --app-shell-width: 402px;
   --app-design-height: 874px;
   --app-chrome-background: #eef1f5;
-  --color-brand-blue: #2f6bff;
-  --color-brand-blue-pressed: #1f55e0;
-  --color-brand-blue-soft: #edf2ff;
+  --color-brand-blue: #6346f6;
+  --color-brand-blue-pressed: #5134d9;
+  --color-brand-blue-soft: #eeeaff;
   --color-canvas: #f7f8fa;
   --color-text-primary: #191f28;
   --color-text-secondary: #4e5968;
@@ -80,7 +80,7 @@
   --card-foreground: oklch(0.16 0.005 285);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.16 0.005 285);
-  --primary: #2f6bff;
+  --primary: #6346f6;
   --primary-foreground: #fff;
   --secondary: oklch(0.962 0 0);
   --secondary-foreground: oklch(0.19 0.006 285);
@@ -94,13 +94,13 @@
   --success-foreground: oklch(0.16 0.03 150);
   --warning: oklch(0.85 0.16 92);
   --warning-foreground: oklch(0.22 0.05 80);
-  --brand: #2f6bff;
+  --brand: #6346f6;
   --brand-foreground: #fff;
   --surface: oklch(0.955 0 0);
   --surface-foreground: oklch(0.19 0.006 285);
   --border: oklch(0.918 0 0);
   --input: oklch(0.918 0 0);
-  --ring: #2f6bff;
+  --ring: #6346f6;
   --chart-1: oklch(0.19 0.006 285);
   --chart-2: oklch(0.74 0.19 148);
   --chart-3: oklch(0.85 0.16 92);
