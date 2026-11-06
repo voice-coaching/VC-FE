@@ -1,0 +1,12 @@
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
+import dgram from 'node:dgram';
+import { syncBuiltinESMExports } from 'node:module';
+const blocked = () => { throw new Error('REPORT_OFFLINE_GUARD: real network calls are disabled for report verification'); };
+globalThis.fetch = async () => blocked();
+http.request = http.get = https.request = https.get = blocked;
+net.connect = net.createConnection = tls.connect = dgram.createSocket = blocked;
+net.Socket.prototype.connect = blocked;
+syncBuiltinESMExports();

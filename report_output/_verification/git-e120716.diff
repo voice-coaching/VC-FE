@@ -1,0 +1,85 @@
+diff --git a/src/lib/canonical-score.ts b/src/lib/canonical-score.ts
+index b150029..0275e90 100644
+--- a/src/lib/canonical-score.ts
++++ b/src/lib/canonical-score.ts
+@@ -17,24 +17,9 @@ const computedScore = z
+     overallScore: z.number().finite().min(0).max(100),
+     validity: z.literal("RUBRIC_COMPUTED"),
+     reason: z.literal("EVIDENCE_BOUND_PRACTICE_SCORE"),
+-    rubricRevision: z.enum([
+-      "phone-rubric-20261003-v1",
+-      "phone-rubric-native-v1",
+-      "phone-rubric-gop-ctc-af-sd-v1",
+-    ]),
+-    criteria: z
+-      .array(
+-        z
+-          .object({
+-            criterionId: z.string(),
+-            level: z.number().int().min(0).max(4).nullable(),
+-          })
+-          .strict(),
+-      )
+-      .length(9)
+-      .refine((rows) =>
+-        rows.every((row, i) => row.criterionId === scoreCriteria[i][0]),
+-      ),
++    // AI owns grading. Historical details never gate the overall score.
++    rubricRevision: z.unknown().optional(),
++    criteria: z.unknown().optional(),
+   })
+   .strict();
+ 
+@@ -81,23 +66,39 @@ export type CanonicalCriterionPoints = {
+   maxPoints: number;
+ };
+ 
+-/** Display the validated server level in its versioned rubric's point units.
+- * Source: intelligentAI phone_rubric.py, phone-rubric-20261003-v1.
+- * Never re-grade evidence or replace the server's overallScore.
++/** Optional historical detail presentation; never a result-acceptance gate.
++ * Unknown/missing details leave the AI's overallScore available unchanged.
++ * No worksheet reconstruction, revision approval or total recalculation occurs.
+  */
+ export function canonicalCriterionPoints(
+   score: z.infer<typeof canonicalScoreSchema>,
+ ): CanonicalCriterionPoints[] {
+-  if (score.validity !== "RUBRIC_COMPUTED") return [];
++  if (score.validity !== "RUBRIC_COMPUTED" || !Array.isArray(score.criteria))
++    return [];
+ 
+-  return score.criteria.map((row, index) => {
+-    const [, label, maxPoints] = scoreCriteria[index];
+-    return {
+-      criterionId: row.criterionId,
+-      label,
+-      // Quarter-point units are exact; null is excluded, while level 0 is 0 points.
+-      points: row.level == null ? null : (maxPoints * row.level) / 4,
+-      maxPoints,
+-    };
++  return score.criteria.flatMap((value: unknown) => {
++    if (!value || typeof value !== "object") return [];
++    const row = value as Record<string, unknown>;
++    const definition = scoreCriteria.find(([id]) => id === row.criterionId);
++    if (!definition) return [];
++    const level = row.level;
++    if (
++      level !== null &&
++      (typeof level !== "number" ||
++        !Number.isInteger(level) ||
++        level < 0 ||
++        level > 4)
++    )
++      return [];
++    const [criterionId, label, maxPoints] = definition;
++    return [
++      {
++        criterionId,
++        label,
++        // Quarter-point units are exact; null is excluded, while level 0 is 0 points.
++        points: level === null ? null : (maxPoints * level) / 4,
++        maxPoints,
++      },
++    ];
+   });
+ }

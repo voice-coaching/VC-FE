@@ -1,0 +1,80 @@
+[
+  {
+    "line": 495,
+    "test": "not ok 83 - actual sentence filter renders server labels, emits values, and has no selectable fallback while loading",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\content-category.test.ts:4:333'",
+    "error": "  error: 'SentenceGlyph is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 835,
+    "test": "not ok 137 - local camera practice opens even when server video analysis is unavailable",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\lip-camera.test.ts:1:1717'",
+    "error": "  error: \"Unexpected token ':'\"\n  code: 'ERR_TEST_FAILURE'\n  name: 'SyntaxError'"
+  },
+  {
+    "line": 854,
+    "test": "not ok 138 - camera permission denial remains retryable and shows an error",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\lip-camera.test.ts:1:2244'",
+    "error": "  error: \"Unexpected token ':'\"\n  code: 'ERR_TEST_FAILURE'\n  name: 'SyntaxError'"
+  },
+  {
+    "line": 1103,
+    "test": "not ok 177 - home and news catalog share ranking without the old five-row pseudo ranking",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\popular-news.test.ts:2:3492'",
+    "error": "  error: |-\n    The input did not match the regular expression /<PopularNewsCarousel\\b/. Input:\n    "
+  },
+  {
+    "line": 2796,
+    "test": "not ok 262 - active SENTENCE practice displays one sentence per page before and during capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:3869'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2817,
+    "test": "not ok 263 - active NEWS practice displays one sentence per page before and during capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:3869'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2838,
+    "test": "not ok 264 - active ANNOUNCER practice displays one sentence per page before and during capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:3869'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2859,
+    "test": "not ok 265 - active CUSTOM practice displays one sentence per page before and during capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:3869'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2880,
+    "test": "not ok 266 - pronunciation and intonation class pages preserve their example order",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:4108'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2901,
+    "test": "not ok 267 - the final analysis wait does not re-display the first sentence as another practice page",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:4445'",
+    "error": "  error: 'NewsRecordingControls is not defined'\n  code: 'ERR_TEST_FAILURE'\n  name: 'ReferenceError'"
+  },
+  {
+    "line": 2922,
+    "test": "not ok 268 - recording-practice-session uses the same single-sentence pages for resumed, local and exam capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:4931'",
+    "error": "  error: |-\n    The expression evaluated to a falsy value:\n    "
+  },
+  {
+    "line": 2948,
+    "test": "not ok 269 - sentence-batch-practice-session uses the same single-sentence pages for resumed, local and exam capture",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\sentence-practice-pages.test.ts:2:4931'",
+    "error": "  error: |-\n    The expression evaluated to a falsy value:\n    "
+  },
+  {
+    "line": 3142,
+    "test": "not ok 298 - camera practice may render the video feedback supplied by the server",
+    "location": "location: 'C:\\\\Users\\\\lyw01\\\\Documents\\\\GitHub\\\\VC-FE\\\\scripts\\\\video-feedback-visibility.test.tsx:1:863'",
+    "error": "  error: 'Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.'\n  code: 'ERR_TEST_FAILURE'\n  stack: |-"
+  }
+]
