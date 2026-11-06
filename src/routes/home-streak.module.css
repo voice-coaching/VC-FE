@@ -5,8 +5,8 @@
   padding: 20px 20px 18px;
   border-radius: 20px;
   background:
-    radial-gradient(ellipse 60% 100% at 90% 10%, #4f86ff0f, transparent),
-    linear-gradient(160.18deg, #f2f6ff 14.286%, #ebf1ff 85.714%);
+    radial-gradient(ellipse 60% 100% at 90% 10%, #9c7bff1f, transparent),
+    linear-gradient(160.18deg, #dce7ff 14.286%, #eaddff 85.714%);
 }
 .avatar {
   position: relative;
@@ -15,22 +15,22 @@
   height: 72px;
   overflow: hidden;
   border-radius: 36px;
-  background: linear-gradient(#eef3ff, #dce6ff);
+  background: white;
 }
 .mascotCrop {
   position: absolute;
-  top: 8px;
-  left: 1px;
-  width: 69px;
-  height: 78px;
+  top: 0;
+  left: 0;
+  width: 76px;
+  height: 87px;
   overflow: hidden;
 }
 .mascot {
   position: absolute;
-  top: -2.44%;
-  left: -7.46%;
-  width: 111.95%;
-  height: 106.92%;
+  inset: 0;
+  width: 76px;
+  height: 87px;
+  object-fit: cover;
   max-width: none;
 }
 .stats {
@@ -47,7 +47,7 @@
   top: 7px;
   width: 1px;
   height: 32px;
-  background: #2f6bff1f;
+  background: #6346f61f;
 }
 .weekDot {
   display: flex;
@@ -59,15 +59,15 @@
   background: #f2f4f6;
   font-size: 13px;
   font-weight: 700;
-  color: #2f6bff;
+  color: #6346f6;
 }
 .completed {
-  background: linear-gradient(143.13deg, #5b8dff 14.286%, #2f6bff 85.714%);
+  background: linear-gradient(143.13deg, #5f55f8 14.286%, #6e44f2 85.714%);
   color: white;
 }
 .today {
-  border: 1.5px solid #2f6bff;
-  background: #eaf0ff;
+  border: 1.5px solid #6346f6;
+  background: #eeeaff;
 }
 .monthArrow {
   display: flex;
@@ -99,10 +99,10 @@
   inset: 2px 0;
 }
 .currentRun {
-  background: #3f77ff;
+  background: linear-gradient(to right, #5f55f8, #6e44f2);
 }
 .pastRun {
-  background: #eaf0ff;
+  background: #eeeaff;
 }
 .runStart {
   left: 4px;
@@ -173,10 +173,10 @@
   color: #c4cad1;
 }
 .selectedMonth {
-  outline: 1.5px solid #2f6bff;
+  outline: 1.5px solid #6346f6;
   outline-offset: 0;
-  background: #edf2ff;
-  color: #2f6bff;
+  background: #eeeaff;
+  color: #6346f6;
   font-weight: 700;
 }
 .action {
@@ -186,7 +186,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #2f6bff;
+  background: #6346f6;
   color: white;
   font-size: 16px;
   line-height: 24px;
@@ -207,10 +207,10 @@
   background: #f7f8fa;
 }
 .goalOption.completed {
-  background: linear-gradient(132.4deg, #5b8dff 14.286%, #2f6bff 85.714%);
+  background: linear-gradient(132.4deg, #5f55f8 14.286%, #6e44f2 85.714%);
 }
 .sheet button:focus-visible {
-  outline: 2px solid #2f6bff;
+  outline: 2px solid #6346f6;
   outline-offset: 3px;
 }
 @media (max-width: 360px) {

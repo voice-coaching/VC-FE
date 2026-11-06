@@ -1,5 +1,6 @@
 "use client";
 
+import { CourseLesson } from "./course-lesson";
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,6 +21,7 @@ import {
   ApiError,
   api,
   type CourseDetail,
+  type CourseStep,
   type PracticeExamples,
   type CourseSummary,
   type CourseType,
@@ -122,6 +124,24 @@ function CourseCatalogView({
   const [items, setItems] = useState<CourseSummary[]>(
     initialCache?.items ?? [],
   );
+  const [listSteps, setListSteps] = useState<Record<string, CourseStep[]>>({});
+  useEffect(() => {
+    let active = true;
+    setListSteps({});
+    void Promise.allSettled(
+      items.map(async (course) => {
+        const value = await api.courses.getSteps(course.id);
+        if (active)
+          setListSteps((current) => ({
+            ...current,
+            [String(course.id)]: value,
+          }));
+      }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [items]);
   const [loading, setLoading] = useState(initialCache === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,13 +158,35 @@ function CourseCatalogView({
     "course",
     items.map((item) => String(item.id)),
   );
+  const [detailRetry, setDetailRetry] = useState(0);
+  const [steps, setSteps] = useState<CourseStep[]>([]);
+  const [stepsError, setStepsError] = useState(false);
+  const [lesson, setLesson] = useState<CourseStep | null>(null);
+  useEffect(() => {
+    let active = true;
+    setSteps([]);
+    setStepsError(false);
+    setLesson(null);
+    if (expandedId)
+      void api.courses
+        .getSteps(expandedId)
+        .then((value) => {
+          if (active)
+            setSteps([...value].sort((a, b) => a.stepOrder - b.stepOrder));
+        })
+        .catch(() => {
+          if (active) setStepsError(true);
+        });
+    return () => {
+      active = false;
+    };
+  }, [expandedId, detailRetry]);
   const [detailsByCourse, setDetailsByCourse] = useState<
     Record<string, CourseDetail>
   >(initialCache?.detailsByCourse ?? {});
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailRetry, setDetailRetry] = useState(0);
   const startBusy = useRef(false);
   const lifecycle = useRef(0);
   const materials = useMemo(
@@ -517,13 +559,59 @@ function CourseCatalogView({
   const level = (value: CourseSummary["difficulty"]) =>
     ({ BEGINNER: "초급", INTERMEDIATE: "중급", ADVANCED: "고급" })[value];
 
+  if (lesson && selectedCourse)
+    return (
+      <AppShell
+        nav={false}
+        viewportLocked
+        chromeColor="#ffffff"
+        className="flex min-h-0 flex-col bg-white [--primary:#6346f6]"
+      >
+        <CourseLesson
+          course={selectedCourse}
+          step={lesson}
+          description={detail?.description}
+          onClose={() => setLesson(null)}
+          onPractice={(example, revision) => {
+            const params = new URLSearchParams({
+              courseId: String(selectedCourse.id),
+              courseStepId: String(lesson.id),
+              exampleId: example.id,
+              exampleRevision: String(revision),
+              returnTo: window.location.pathname + window.location.search,
+            });
+            if (startBusy.current) return;
+            startBusy.current = true;
+            void (async () => {
+              try {
+                try {
+                  await api.courses.start(selectedCourse.id);
+                } catch (reason) {
+                  if (!(reason instanceof ApiError && reason.status === 409))
+                    throw reason;
+                  await api.courses.getProgress(selectedCourse.id);
+                }
+                router.push(
+                  `/practice/${encodeURIComponent(String(example.practiceContentId))}?${params}`,
+                );
+              } catch (reason) {
+                setLesson(null);
+                setError(classExamplesErrorMessage(reason));
+              } finally {
+                startBusy.current = false;
+              }
+            })();
+          }}
+        />
+      </AppShell>
+    );
   return (
     <AppShell
       nav={!selectedCourse}
       animateRoute={false}
       viewportLocked
-      chromeColor="#f2f4f6"
-      className="flex min-h-0 flex-col bg-[#f2f4f6]"
+      chromeColor="#ffffff"
+      className="flex min-h-0 flex-col bg-white [--primary:#6346f6]"
     >
       <header className="relative flex h-12 shrink-0 items-center px-2 py-1">
         {selectedCourse ? (
@@ -657,67 +745,86 @@ function CourseCatalogView({
             {selectedCourse ? (
               <>
                 <div className="flex gap-3 pt-2 text-xs font-medium">
-                  <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-primary">
+                  <span className="rounded-full bg-[#f1edff] px-2.5 py-1 text-primary">
                     {level(selectedCourse.difficulty)}
                   </span>
-                  {courseExamples ? (
-                    <span className="px-0 py-1 text-[#6b7684]">
-                      {courseExamples.items.length}문장
-                    </span>
-                  ) : null}
                 </div>
-                <h2 className="mt-3 text-[22px] leading-8 font-bold tracking-[-0.02em]">
+                <h2 className="mt-3 text-[18px] leading-7 font-bold tracking-[-0.02em]">
                   {courseIntroduction(selectedCourse, detail)}
                 </h2>
                 <p className="mt-1 text-sm leading-5 text-[#6b7684]">
                   문장을 하나씩 녹음하고 평가를 확인하며 연습해요
                 </p>
-                <section className="mt-4 rounded-2xl bg-white p-4 shadow-[0_2px_6px_rgba(23,23,23,0.05)]">
-                  <strong className="block text-[15px] leading-[22px]">
-                    이 클래스를 마치면
-                  </strong>
-                  <p className="mt-1 text-[13px] leading-[18px] text-[#4e5968]">
-                    {courseIntroduction(selectedCourse, detail)}
-                  </p>
-                </section>
                 <div className="mt-5 mb-3 flex justify-between">
-                  <h3 className="text-[17px] leading-6 font-bold">진행 방식</h3>
-                  <span className="text-[13px] leading-[18px] text-[#8b95a1]">
-                    {courseExamples
-                      ? `총 ${courseExamples.items.length}문장`
-                      : "문장별 연습"}
-                  </span>
+                  <h3 className="text-[17px] leading-6 font-bold">연습 내용</h3>
                 </div>
-                <ol className="divide-y divide-[#e5e8eb] rounded-2xl bg-white px-4">
-                  {[
-                    "현재 문장 녹음",
-                    "분석 접수 후 다음 문장",
-                    "마지막에 문장별 결과 확인",
-                  ].map((label, index) => (
-                    <li
-                      key={label}
-                      className="flex min-h-[57px] items-center gap-3"
-                    >
-                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-primary text-[13px] font-medium text-primary">
-                        {index + 1}
-                      </span>
-                      <span className="text-[15px] leading-[22px] font-medium text-[#333d4b]">
-                        {label}
-                      </span>
-                    </li>
-                  ))}
+                <ol className="divide-y divide-[#f2f4f6]">
+                  {steps.map((step, index) => {
+                    const current =
+                      index === steps.findIndex((entry) => !entry.completed);
+                    return (
+                      <li key={String(step.id)}>
+                        <button
+                          type="button"
+                          onClick={() => setLesson(step)}
+                          className="flex min-h-[57px] w-full items-center gap-3 text-left"
+                        >
+                          {steps.length > 1 && (
+                            <span
+                              className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[13px] ${step.completed ? "bg-[#6346f6] text-white" : current ? "border-2 border-[#6346f6] text-[#6346f6]" : "bg-[#f2f4f6] text-[#b0b8c1]"}`}
+                            >
+                              {step.completed ? "✓" : index + 1}
+                            </span>
+                          )}
+                          <span
+                            className={`min-w-0 flex-1 text-[15px] leading-[22px] font-medium ${step.completed || current ? "text-[#191f28]" : "text-[#8b95a1]"}`}
+                          >
+                            <span className="block">{step.title}</span>
+                            {steps.length === 1 &&
+                              courseExamples &&
+                              courseExamples.items.length > 0 && (
+                                <span className="mt-1 block text-[13px] font-normal text-[#8b95a1]">
+                                  {courseExamples.items.length}개 문장으로
+                                  연습해요
+                                </span>
+                              )}
+                            {steps.length === 1 && step.completed && (
+                              <span className="mt-1 block text-xs text-[#6346f6]">
+                                ✓ 연습 완료
+                              </span>
+                            )}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className="mr-1 size-2 rotate-[-45deg] border-r border-b border-[#b0b8c1]"
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ol>
+                {stepsError && (
+                  <button
+                    className="py-4 text-sm text-primary"
+                    onClick={() => setDetailRetry((value) => value + 1)}
+                  >
+                    단계 다시 불러오기
+                  </button>
+                )}
               </>
             ) : loading || loadedType !== activeType ? (
               <CourseListSkeleton />
             ) : (
-              <div className="space-y-3 px-5">
+              <div className="divide-y divide-[#f2f4f6] px-5">
                 {items.map((course) => {
                   const detail = detailsByCourse[String(course.id)];
-                  const progress = Math.max(
-                    0,
-                    Math.min(100, course.progressPercent),
-                  );
+                  const courseSteps = listSteps[String(course.id)];
+                  const completedCount = courseSteps?.filter(
+                    (step) => step.completed,
+                  ).length;
+                  const progress = courseSteps?.length
+                    ? ((completedCount ?? 0) / courseSteps.length) * 100
+                    : Math.max(0, Math.min(100, course.progressPercent));
                   return (
                     <button
                       key={String(course.id)}
@@ -729,23 +836,12 @@ function CourseCatalogView({
                         if (event.pointerType === "touch")
                           prefetchCourse(course);
                       }}
-                      className="flex min-h-[118px] w-full items-start gap-3.5 rounded-2xl bg-white p-[18px] text-left"
+                      className="flex min-h-[118px] w-full items-start gap-3.5 bg-white py-5 text-left"
                     >
-                      <span
-                        className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${activeType === "PRONUNCIATION" ? "bg-[#ccddff]" : "bg-[#edf2ff]"}`}
-                      >
-                        <Image
-                          src={
-                            activeType === "PRONUNCIATION"
-                              ? "/figma/class/icon.svg"
-                              : "/figma/class/falling.svg"
-                          }
-                          alt=""
-                          width={28}
-                          height={28}
-                          className="size-7"
-                        />
-                      </span>
+                      <CourseIcon
+                        title={course.title}
+                        pronunciation={activeType === "PRONUNCIATION"}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <h2 className="text-[15px] leading-[22px] font-bold">
@@ -754,7 +850,16 @@ function CourseCatalogView({
                           <span
                             className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
                           >
-                            {Math.round(progress)}%
+                            {courseSteps ? (
+                              <>
+                                {completedCount}
+                                <span className="text-[#8b95a1]">
+                                  /{courseSteps.length}
+                                </span>
+                              </>
+                            ) : (
+                              `${Math.round(progress)}%`
+                            )}
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
@@ -767,7 +872,9 @@ function CourseCatalogView({
                           />
                         </div>
                         <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
-                          문장별 녹음 · 평가
+                          {(courseSteps?.length ?? detail?.stepCount)
+                            ? `${courseSteps?.length ?? detail?.stepCount}단계`
+                            : "단계별 연습"}
                         </p>
                       </div>
                     </button>
@@ -809,7 +916,11 @@ function CourseCatalogView({
             <button
               type="button"
               disabled={startingId === String(selectedCourse.id)}
-              onClick={() => void start(selectedCourse)}
+              onClick={() => {
+                const next = steps.find((step) => !step.completed) ?? steps[0];
+                if (next) setLesson(next);
+                else void start(selectedCourse);
+              }}
               className="design-action"
             >
               {startingId
@@ -817,8 +928,8 @@ function CourseCatalogView({
                 : selectedCourse.progressPercent >= 100
                   ? "다시 학습하기"
                   : selectedCourse.progressPercent > 0
-                    ? "이어서 학습하기"
-                    : "학습 시작하기"}
+                    ? "이어서 연습하기"
+                    : "연습 시작하기"}
             </button>
           </div>
         )}
@@ -829,7 +940,11 @@ function CourseCatalogView({
 
 function CourseListSkeleton() {
   return (
-    <div role="status" aria-busy="true" className="space-y-3 px-5">
+    <div
+      role="status"
+      aria-busy="true"
+      className="divide-y divide-[#f2f4f6] px-5"
+    >
       <span className="sr-only">클래스를 불러오는 중</span>
       {[0, 1, 2].map((index) => (
         <div
@@ -849,5 +964,54 @@ function CourseListSkeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+function CourseIcon({
+  title,
+  pronunciation,
+}: {
+  title: string;
+  pronunciation: boolean;
+}) {
+  const kind = /받침/.test(title)
+    ? "final"
+    : /된소리/.test(title)
+      ? "tense"
+      : /모음/.test(title)
+        ? "vowel"
+        : "consonant";
+  return (
+    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#f1edff]">
+      {pronunciation ? (
+        kind === "final" ? (
+          <span className="relative h-[17.643px] w-[26px]">
+            <Image
+              src="/figma/class-purple/final-left.svg"
+              alt=""
+              width={15.1504}
+              height={17.6432}
+              className="absolute left-0 top-0"
+            />
+            <Image
+              src="/figma/class-purple/final-right.svg"
+              alt=""
+              width={12.6105}
+              height={17.5037}
+              className="absolute right-0 top-0"
+            />
+          </span>
+        ) : (
+          <Image
+            src={`/figma/class-purple/${kind}.svg`}
+            alt=""
+            width={kind === "vowel" ? 17.4474 : 26}
+            height={kind === "vowel" ? 26 : kind === "tense" ? 15.6 : 21.84}
+          />
+        )
+      ) : (
+        <span className="size-7 bg-[#6346f6] [mask:url('/figma/class/falling.svg')_center/contain_no-repeat]" />
+      )}
+    </span>
   );
 }

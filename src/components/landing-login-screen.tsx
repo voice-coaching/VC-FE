@@ -110,11 +110,15 @@ export function LandingLoginScreen() {
 
   if (entryPhase !== "login") {
     return (
-      <IPhoneFrame backgroundColor="#336fff">
+      <IPhoneFrame backgroundColor="#5f55f8">
         <div
           role="status"
           aria-label="Speak AI 시작 화면"
-          className="flex h-full w-full flex-col bg-[#336fff]"
+          className="flex h-full w-full flex-col"
+          style={{
+            backgroundImage:
+              "linear-gradient(121.51963594881519deg, #5f55f8 14.286%, #6e44f2 85.714%)",
+          }}
         >
           <div className="h-11 shrink-0" aria-hidden="true" />
           <div className="flex min-h-0 flex-1 items-center justify-center px-6">
@@ -144,7 +148,7 @@ export function LandingLoginScreen() {
           <div className="min-h-0 flex-1" aria-hidden="true" />
           <h1 className="flex shrink-0 flex-col items-center gap-4">
             <Image
-              src="/figma/brand/s-symbol.svg"
+              src="/figma/auth/s-symbol-screen7.svg"
               alt=""
               width={38.6}
               height={54}

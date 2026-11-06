@@ -1,5 +1,7 @@
 "use client";
 
+import { PhoneDifference } from "./phone-difference";
+import { GuidePlayer } from "./guide-player";
 import { ReferencePlayer } from "@/components/reference-player";
 import type { Id } from "@/lib/api";
 import type { DirectResult } from "@/lib/direct-analysis";
@@ -32,9 +34,12 @@ export function CorrectionComparison({
     <>
       <div className={styles.correction}>
         <div className={styles.comparisonLine}>
-          <span className={styles.chip}>관측 소리</span>
-          <strong className="text-[#e5404e]">
-            {candidate.observedCandidate}
+          <span className={styles.chip}>내 발음</span>
+          <strong>
+            <PhoneDifference
+              text={candidate.observedCandidate}
+              other={candidate.expectedPhone}
+            />
           </strong>
           <ReferencePlayer
             source={recordingUrl}
@@ -47,9 +52,24 @@ export function CorrectionComparison({
         </div>
         <div className={styles.comparisonLine}>
           <span className={styles.chip} data-tone="correct">
-            목표 소리
+            바른 발음
           </span>
-          <strong className="text-primary">{candidate.expectedPhone}</strong>
+          <strong>
+            <PhoneDifference
+              text={candidate.expectedPhone}
+              other={candidate.observedCandidate}
+              correct
+            />
+          </strong>
+          <GuidePlayer
+            contentId={candidate.candidateId}
+            available={false}
+            text={candidate.expectedPhone}
+            title="바른 발음 듣기"
+            variant="comparison"
+            buttonTone="primary"
+            disabled={disabled}
+          />
         </div>
         <div className={styles.feedbackLine}>
           <span className={styles.chip} data-tone="feedback">

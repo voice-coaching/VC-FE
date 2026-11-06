@@ -22,8 +22,7 @@ import {
   type VoiceRecording,
   type CourseDetail,
 } from "@/lib/api";
-import { SentenceRecordingControls } from "./sentence-recording-controls";
-import { SentenceReader } from "@/components/sentence-reader";
+import { NewsRecordingControls, NewsRecordingReader } from "./news-recording";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { PracticeAnalysisLoading } from "./practice-analysis-loading";
@@ -257,7 +256,11 @@ export function RecordingPracticeSession({
       recorder.status === "requesting" ||
       recorder.blob != null ||
       recordingAttempts.length > 0);
-  const discardGuard = useRecordingDiscardGuard(shouldConfirmExit, !background);
+  const discardGuard = useRecordingDiscardGuard(
+    shouldConfirmExit,
+    !background,
+    sentences.length,
+  );
   const confirmDiscard = discardGuard.request;
 
   const courseId = searchParams.get("courseId");
@@ -1458,6 +1461,7 @@ export function RecordingPracticeSession({
       ? Math.min(32, Math.round(uploadProgress / 3))
       : Math.max(34, analysisProgress);
 
+  const RecordingControls = NewsRecordingControls;
   return (
     <div className="flex min-h-full flex-col bg-[#f2f4f6]">
       {discardGuard.dialog}
@@ -1467,49 +1471,24 @@ export function RecordingPracticeSession({
           등록된 연습 콘텐츠에서 이용할 수 있습니다.
         </p>
       )}
-      {!localOnly && phase === "idle" && (
+      {!localOnly && content.contentType !== "NEWS" && phase === "idle" && (
         <div className="px-5">
           <CoachingUsageSummary compact />
         </div>
       )}
       {(phase === "idle" || phase === "recording") && (
-        <>
-          <div className="flex shrink-0 items-center px-5 pt-3 pb-4">
-            <span className="rounded-full bg-[#edf2ff] px-2.5 py-[5px] text-[12px] leading-4 font-medium text-[#1f55e0]">
-              {contentTypeLabel}
-            </span>
-            <span className="ml-auto text-[13px] leading-[18px] text-[#8b95a1]">
-              {courseSentenceCount != null && courseExampleIndex != null && (
-                <span className="mr-2">
-                  예문 {courseExampleIndex + 1}/{courseSentenceCount}
-                </span>
-              )}
-              <strong className="font-bold text-[#2f6bff]">
-                {activeSentence + 1}
-              </strong>
-              /{sentences.length} 문장
-              {phase !== "recording" && (
-                <>
-                  <span className="mx-2 inline-block h-2.5 w-px bg-[#dfe3e8]" />
-                  약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
-                </>
-              )}
-            </span>
-          </div>
-          <SentenceReader
-            variant={phase === "recording" ? "recording" : "reader"}
-            sentences={sentences}
-            pageIndex={activeSentence}
-            activeIndex={phase === "recording" ? activeSentence : undefined}
-            className={`mx-5 max-h-[clamp(80px,calc(100dvh-380px),400px)] shadow-[0_2px_6px_rgba(23,23,23,0.05)]`}
-          />
-        </>
+        <NewsRecordingReader
+          label={contentTypeLabel}
+          sentences={sentences}
+          active={activeSentence}
+          recording={phase === "recording"}
+        />
       )}
 
       {phase !== "result" ? (
         <div className="flex min-h-0 flex-1 flex-col">
           {(phase === "idle" || phase === "recording") && (
-            <SentenceRecordingControls
+            <RecordingControls
               paused={recorder.paused}
               onTogglePause={recorder.togglePause}
               recording={phase === "recording"}
@@ -1593,15 +1572,17 @@ export function RecordingPracticeSession({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setResumedRecording(null);
-                      setResultAudioUrl(undefined);
-                      recorder.reset();
-                      setActiveSentence(0);
-                      setRequestError(null);
-                      setRequestFailure(null);
-                      setPhase("idle");
-                    }}
+                    onClick={() =>
+                      confirmDiscard("retry", () => {
+                        setResumedRecording(null);
+                        setResultAudioUrl(undefined);
+                        recorder.reset();
+                        setActiveSentence(0);
+                        setRequestError(null);
+                        setRequestFailure(null);
+                        setPhase("idle");
+                      })
+                    }
                     className="flex h-[52px] items-center justify-center gap-1.5 rounded-full border border-[#e5e8eb] bg-white text-[15px] leading-[22px] font-bold text-[#191f28]"
                   >
                     <Image
@@ -1615,7 +1596,7 @@ export function RecordingPracticeSession({
                   <button
                     type="button"
                     onClick={() => void analyze()}
-                    className="h-[52px] rounded-full bg-[#2f6bff] text-[15px] leading-[22px] font-bold text-white"
+                    className="h-[52px] rounded-full bg-[#6346f6] text-[15px] leading-[22px] font-bold text-white"
                   >
                     분석 요청
                   </button>
@@ -1667,7 +1648,7 @@ export function RecordingPracticeSession({
           {savingResult(analysis) && (
             <p
               role="status"
-              className="mx-5 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-900"
+              className="mx-5 rounded-2xl bg-violet-50 px-4 py-3 text-sm text-violet-900"
             >
               {analysis?.canonical?.persistenceStatus === "RETRYING"
                 ? "분석 결과는 준비됐습니다. 기록 저장을 다시 시도하고 있습니다."
@@ -1741,7 +1722,7 @@ export function RecordingPracticeSession({
                 (Boolean(courseId) && !completedRef.current)
               }
               onClick={() => setSaveReportOpen(true)}
-              className="h-14 w-full rounded-full bg-primary text-[16px] leading-6 font-bold text-white disabled:opacity-50"
+              className="h-14 w-full rounded-full bg-[#6346f6] text-[16px] leading-6 font-bold text-white disabled:opacity-50"
             >
               {loadingNext
                 ? "이동 중…"

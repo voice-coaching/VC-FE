@@ -1,7 +1,7 @@
 .card {
   padding: 20px 20px 18px;
   border-radius: 20px;
-  background: white;
+  background: #f7f8fa;
 }
 .period {
   display: flex;
@@ -15,11 +15,12 @@
   line-height: 16px;
 }
 .period[data-state="open"] {
-  color: #2f6bff;
-  background: #eaf0ff;
-  outline: 1px solid #2f6bff;
+  color: #6346f6;
+  background: #eeeaff;
+  outline: 1px solid #6346f6;
 }
 .menu {
+  --primary: #6346f6;
   z-index: 50;
   width: 170px;
   padding: 6px;
@@ -48,8 +49,8 @@
 }
 .menuItem[data-state="checked"],
 .menuItem[data-highlighted] {
-  background: #f2f6ff;
-  color: #2f6bff;
+  background: #f5f2ff;
+  color: #6346f6;
 }
 .chart {
   display: flex;
@@ -76,21 +77,21 @@
   display: block;
   width: 100%;
   border-radius: 6px;
-  background: #e5ecff;
+  background: #e8e4ff;
   transition: background-color 160ms ease;
 }
 .bar[data-recent="true"] {
-  background: #c9d9ff;
+  background: #cfc6ff;
 }
 .bar[data-active="true"] {
-  background: linear-gradient(#5b8dff, #2f6bff);
+  background: linear-gradient(#6346f6, #6e44f2);
 }
 .tooltip {
   margin-bottom: 6px;
   flex-shrink: 0;
   padding: 2px 6px;
   border-radius: 6px;
-  background: #2f6bff;
+  background: #6346f6;
   color: white;
   font-size: 11px;
   line-height: 15px;

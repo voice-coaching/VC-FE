@@ -149,7 +149,7 @@ export function TermsScreen({
               signupFlow && onBack ? onBack() : router.replace("/")
             }
             aria-label="이전 화면으로 돌아가기"
-            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
           >
             <NavigationIcon />
           </button>
@@ -172,11 +172,11 @@ export function TermsScreen({
             type="button"
             onClick={toggleAll}
             aria-pressed={allChecked}
-            className="terms-content-reveal mt-[26px] flex w-full touch-manipulation items-center gap-3 rounded-[14px] bg-[#fafbfc] p-4 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] [animation-delay:220ms]"
+            className="terms-content-reveal mt-[26px] flex w-full touch-manipulation items-center gap-3 rounded-[14px] bg-[#fafbfc] p-4 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] [animation-delay:220ms]"
           >
             <span
               className={`flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-lg ${
-                allChecked ? "bg-[#2f6bff]" : "bg-[#f2f4f6]"
+                allChecked ? "bg-[#6346f6]" : "bg-[#f2f4f6]"
               }`}
             >
               <Image
@@ -203,12 +203,12 @@ export function TermsScreen({
                   type="button"
                   onClick={() => toggleTerm(item.key)}
                   aria-pressed={terms[item.key]}
-                  className="flex min-h-[52px] min-w-0 flex-1 touch-manipulation items-center gap-3 px-1 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                  className="flex min-h-[52px] min-w-0 flex-1 touch-manipulation items-center gap-3 px-1 text-left transition-transform duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
                 >
                   <Image
                     src={
                       terms[item.key]
-                        ? "/figma/auth/terms-row-check-selected.svg"
+                        ? "/figma/auth/terms-row-check-selected-screen7.svg"
                         : "/figma/auth/terms-row-check-unselected.svg"
                     }
                     alt=""
@@ -229,7 +229,7 @@ export function TermsScreen({
                       setDetailKey(item.key);
                     }}
                     aria-label={`${item.label} 내용 보기`}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                    className="flex size-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
                   >
                     <Image
                       src="/figma/auth/chevron-right.svg"
@@ -258,7 +258,7 @@ export function TermsScreen({
             type="button"
             onClick={() => void handleNext()}
             disabled={!requiredChecked || submitting}
-            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
+            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#6346f6] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
           >
             {submitting ? "처리 중…" : "다음"}
           </button>

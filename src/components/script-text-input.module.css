@@ -7,7 +7,7 @@
   overflow: hidden;
 }
 .field:focus-within {
-  outline: 2px solid #2f6bff;
+  outline: 2px solid #6346f6;
   outline-offset: 1px;
 }
 .field[data-invalid="true"] {

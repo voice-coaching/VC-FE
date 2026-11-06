@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { CanonicalAnalysisView } from "@/lib/canonical-analysis";
 
 const states: Record<string, string> = {
@@ -28,7 +29,15 @@ export function CanonicalLipResult({
   if (!visual || visual.status === "NOT_CONNECTED") return null;
   return (
     <section className="rounded-2xl bg-white p-5" aria-label="입술 움직임 분석">
-      <h2 className="text-base font-bold">입술 움직임</h2>
+      <h2 className="flex items-center gap-2 text-[17px] font-bold">
+        <Image
+          src="/figma/lip-quick-start/report-camera.svg"
+          width={18}
+          height={18}
+          alt=""
+        />
+        입모양 피드백
+      </h2>
       <p className="mt-2 text-sm">{states[visual.status]}</p>
       <p className="mt-2 text-lg font-bold">
         {visual.scoreKind === "CALIBRATED" && visual.score !== null

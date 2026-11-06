@@ -1,0 +1,46 @@
+.card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #f8f7ff;
+  color: #191f28;
+  transform: scale(0.92);
+  transform-origin: left center;
+  transition: transform 300ms ease, color 300ms ease, box-shadow 300ms ease;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(144.7436deg, #5b6bfa 14.286%, #7347f2 85.714%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.rank {
+  color: #6346f6;
+  transition: color 300ms ease;
+}
+.meta {
+  color: #8b95a1;
+  transition: color 300ms ease;
+}
+.card[data-active="true"] {
+  transform: scale(1);
+  color: white;
+  box-shadow: 0 8px 20px -6px rgb(99 70 246 / 22%);
+}
+.card[data-active="true"]::before {
+  opacity: 1;
+}
+.card[data-active="true"] .rank {
+  color: white;
+}
+.card[data-active="true"] .meta {
+  color: rgb(255 255 255 / 80%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .card::before, .rank, .meta {
+    transition: none;
+  }
+}

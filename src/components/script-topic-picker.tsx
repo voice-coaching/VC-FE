@@ -106,7 +106,7 @@ export function ScriptTopicPicker({
                       }}
                     >
                       <Image
-                        src={`/figma/my-script/folder${topic === value ? "-active" : ""}.svg`}
+                        src={`/figma/my-script/folder${topic === value ? "-active-purple" : ""}.svg`}
                         alt=""
                         width={22}
                         height={22}
@@ -139,10 +139,10 @@ export function ScriptTopicPicker({
                 >
                   <span className={styles.addIcon}>
                     <Image
-                      src="/figma/my-script/topic-plus.svg"
+                      src="/figma/my-script/topic-plus-purple.svg"
                       alt=""
-                      width={16}
-                      height={16}
+                      width={20}
+                      height={20}
                     />
                   </span>
                   새 주제 만들기

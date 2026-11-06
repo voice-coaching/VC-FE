@@ -87,14 +87,7 @@ export function PracticeDetail({
                 <span className="mr-2 rounded-full bg-[#edf2ff] px-3 py-1 text-primary">
                   {difficulty}
                 </span>
-                {sentences.length}문장　|　
-                {Math.floor(content.estimatedSeconds / 60)
-                  .toString()
-                  .padStart(2, "0")}
-                :
-                {Math.round(content.estimatedSeconds % 60)
-                  .toString()
-                  .padStart(2, "0")}
+                {sentences.length}문장
               </p>
               <h2 className="text-2xl font-bold">{content.title}</h2>
             </div>
@@ -134,9 +127,6 @@ export function PracticeDetail({
                 </article>
                 <div className="flex justify-between rounded-xl bg-primary/5 p-4 text-xs">
                   <span>이 기사에서 {sentences.length}문장을 연습해요</span>
-                  <span className="text-primary">
-                    약 {Math.max(1, Math.ceil(content.estimatedSeconds / 60))}분
-                  </span>
                 </div>
               </>
             ) : (

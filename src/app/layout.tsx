@@ -6,9 +6,10 @@ import { Providers } from "./providers";
 import { NativeOAuthBridge } from "@/components/native-oauth-bridge";
 import { NativeSessionBridge } from "@/components/native-session-bridge";
 
-const designFont = localFont({
-  src: "../assets/fonts/NotoSansKR.woff2",
+const pretendard = localFont({
+  src: "../assets/fonts/PretendardVariable.woff2",
   display: "swap",
+  variable: "--font-pretendard",
   weight: "100 900",
 });
 
@@ -45,13 +46,13 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
-  themeColor: "#2f6bff",
+  themeColor: "#6346f6",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko">
-      <body className={designFont.className}>
+    <html lang="ko" className={pretendard.variable}>
+      <body className={pretendard.className}>
         <Providers>
           <NativeOAuthBridge />
           <NativeSessionBridge />

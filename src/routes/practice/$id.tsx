@@ -47,6 +47,11 @@ export default function Practice({ contentId }: { contentId: string }) {
       : null,
   );
   const content = selection?.content ?? null;
+  const showSession =
+    started ||
+    Boolean(sessionId) ||
+    content?.contentType === "NEWS" ||
+    content?.contentType === "ANNOUNCER";
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,7 +112,7 @@ export default function Practice({ contentId }: { contentId: string }) {
       <TopBar
         to={returnTo}
         title={
-          started || searchParams.get("sessionId")
+          showSession
             ? sessionTitle
             : content?.contentType === "NEWS"
               ? "뉴스 읽기"
@@ -125,7 +130,7 @@ export default function Practice({ contentId }: { contentId: string }) {
             {error}
           </p>
         ) : content ? (
-          started || searchParams.get("sessionId") ? (
+          showSession ? (
             <PracticeSession
               key={String(content.id)}
               content={content}

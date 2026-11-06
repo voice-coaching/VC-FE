@@ -22,7 +22,7 @@
   flex-shrink: 0;
   border-radius: 8px;
   padding: 4px 10px;
-  background: linear-gradient(90deg, #2f6bff, #7fa6ff);
+  background: linear-gradient(90deg, #6346f6, #a99aff);
   color: white;
   font-size: 12px;
   line-height: 16px;
@@ -36,7 +36,7 @@
   margin-top: 4px;
 }
 .membershipValue strong {
-  background: linear-gradient(90deg, #2459f0, #5b8dff);
+  background: linear-gradient(90deg, #2459f0, #8d75ff);
   background-clip: text;
   color: transparent;
   font-size: 28px;
@@ -71,7 +71,7 @@
 }
 .gradientButton {
   color: white;
-  background: linear-gradient(90deg, #2f6bff, #5b8dff);
+  background: linear-gradient(90deg, #6346f6, #8d75ff);
 }
 .softButton {
   color: var(--primary);

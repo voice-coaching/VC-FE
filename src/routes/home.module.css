@@ -1,3 +1,7 @@
+.homeTheme {
+  --primary: #6346f6;
+}
+
 .homeHeader {
   position: absolute;
   top: 0;
@@ -5,9 +9,17 @@
   right: 0;
   height: 187px;
   background:
-    radial-gradient(ellipse 50% 60% at 5% 95%, #8e8bff2e, transparent),
-    radial-gradient(ellipse 55% 75% at 92% 5%, #6fb8ff59, transparent),
-    linear-gradient(180deg, #2f6bff, #3d78ff);
+    radial-gradient(
+      ellipse 50% 60% at 5% 95%,
+      rgba(194, 166, 255, 0.2),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 55% 75% at 92% 5%,
+      rgba(166, 160, 255, 0.25),
+      transparent
+    ),
+    linear-gradient(156.6854deg, #5f55f8 14.286%, #6e44f2 85.714%);
   flex-shrink: 0;
   overflow: hidden;
   transform: translate3d(0, 0, 0);
@@ -17,19 +29,23 @@
 
 .todayCard {
   background:
-    radial-gradient(ellipse 55% 95% at 88% 35%, #4f86ff24, transparent),
-    linear-gradient(157.49deg, #edf2ff 14.286%, #e3ebff 85.714%);
+    radial-gradient(
+      ellipse 55% 95% at 88% 35%,
+      rgba(156, 123, 255, 0.16),
+      transparent
+    ),
+    linear-gradient(157.49deg, #dce7ff 14.286%, #eaddff 85.714%);
 }
 
 .practiceTile {
   background:
-    radial-gradient(ellipse 65% 60% at 100% 100%, #2f6bff12, transparent),
+    radial-gradient(ellipse 65% 60% at 100% 100%, #6346f612, transparent),
     linear-gradient(150.05deg, #fff 14.286%, #f7f9ff 85.714%);
 }
 
 .lipCard {
   background:
-    radial-gradient(ellipse 28% 110% at 6% 50%, #2f6bff0f, transparent),
+    radial-gradient(ellipse 28% 110% at 6% 50%, #6346f60f, transparent),
     linear-gradient(171.05deg, #fff 14.286%, #f7f9ff 85.714%);
 }
 

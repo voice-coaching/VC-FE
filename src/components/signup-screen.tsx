@@ -159,7 +159,7 @@ export function SignupScreen() {
             type="button"
             onClick={() => router.back()}
             aria-label="이전 화면으로 돌아가기"
-            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
           >
             <NavigationIcon />
           </button>
@@ -312,7 +312,7 @@ export function SignupScreen() {
           <button
             type="submit"
             disabled={!formValid}
-            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
+            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#6346f6] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
           >
             회원 가입
           </button>
@@ -464,7 +464,7 @@ function PasswordField({
           aria-label={visible ? `${label} 숨기기` : `${label} 보기`}
           aria-pressed={visible}
           onClick={onVisibleChange}
-          className="relative z-20 flex size-5 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+          className="relative z-20 flex size-5 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
         >
           <Image
             src={
@@ -532,7 +532,7 @@ function FieldUnderline({ status }: { status: FieldStatus }) {
       : status === "success"
         ? "h-0.5 bg-[#028450]"
         : status === "focused"
-          ? "h-0.5 bg-[#2f6bff]"
+          ? "h-0.5 bg-[#6346f6]"
           : "h-px bg-[#e5e8eb]";
 
   return <span className={`w-full transition-colors ${className}`} />;

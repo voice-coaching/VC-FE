@@ -14,7 +14,9 @@ function SelectionMark({
   assetSet = "onboarding",
 }: Pick<ChoiceProps, "assetSet">) {
   return (
-    <span className="onboarding-check-pop flex size-6 shrink-0 items-center justify-center rounded-full bg-[#2f6bff]">
+    <span
+      className={`onboarding-check-pop flex size-6 shrink-0 items-center justify-center rounded-full bg-[#6346f6]`}
+    >
       <Image
         src={`/figma/${assetSet}/check.svg`}
         alt=""
@@ -26,8 +28,11 @@ function SelectionMark({
   );
 }
 
-const choiceClass = (selected: boolean) =>
-  `flex w-full touch-manipulation items-center gap-3.5 rounded-2xl border-2 px-[18px] py-3.5 text-left transition-[transform,background-color,border-color] duration-200 ease-out active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] disabled:opacity-60 ${selected ? "border-[#2f6bff] bg-[#f1f5ff]" : "border-transparent bg-[#f7f8fa]"}`;
+const choiceClass = (selected: boolean) => {
+  const focus = "focus-visible:ring-[#6346f6]";
+  const active = "border-[#6346f6] bg-[#f3f1ff]";
+  return `flex w-full touch-manipulation items-center gap-3.5 rounded-2xl border-2 px-[18px] py-3.5 text-left transition-[transform,background-color,border-color] duration-200 ease-out active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 ${focus} disabled:opacity-60 ${selected ? active : "border-transparent bg-[#f7f8fa]"}`;
+};
 
 export function DetailedCard<T extends string>({
   option,

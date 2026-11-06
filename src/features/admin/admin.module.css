@@ -457,7 +457,7 @@
   font-size: 12px;
 }
 .mono {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 11px;
   overflow-wrap: anywhere;
   white-space: normal;

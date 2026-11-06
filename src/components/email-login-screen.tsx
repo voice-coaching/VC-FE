@@ -71,7 +71,7 @@ export function EmailLoginScreen() {
             type="button"
             onClick={() => router.back()}
             aria-label="이전 화면으로 돌아가기"
-            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+            className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
           >
             <NavigationIcon />
           </button>
@@ -141,7 +141,7 @@ export function EmailLoginScreen() {
                 emailFormatInvalid
                   ? "h-0.5 bg-[#d22030]"
                   : focusedField === "email"
-                    ? "h-0.5 bg-[#2f6bff]"
+                    ? "h-0.5 bg-[#6346f6]"
                     : "h-px bg-[#e5e8eb]"
               }`}
             />
@@ -196,7 +196,7 @@ export function EmailLoginScreen() {
                 }
                 aria-pressed={passwordVisible}
                 onClick={() => setPasswordVisible((visible) => !visible)}
-                className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff]"
+                className="flex size-6 shrink-0 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
               >
                 <Image
                   src={
@@ -216,7 +216,7 @@ export function EmailLoginScreen() {
                 error
                   ? "h-0.5 bg-[#d22030]"
                   : focusedField === "password"
-                    ? "h-0.5 bg-[#2f6bff]"
+                    ? "h-0.5 bg-[#6346f6]"
                     : "h-px bg-[#e5e8eb]"
               }`}
             />
@@ -254,7 +254,7 @@ export function EmailLoginScreen() {
           <button
             type="submit"
             disabled={!credentialsEntered || submitting}
-            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
+            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#6346f6] px-7 text-[17px] leading-6 font-bold text-white transition-colors disabled:bg-[#f2f4f6] disabled:text-[#b0b8c1]"
           >
             {submitting ? "로그인 중…" : "로그인"}
           </button>

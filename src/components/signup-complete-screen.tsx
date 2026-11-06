@@ -25,13 +25,13 @@ export function SignupCompleteScreen() {
 
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
             <Image
-              src="/figma/auth/signup-complete-character.png"
+              src="/figma/auth/signup-complete-character-screen7.png"
               alt=""
-              width={280}
-              height={280}
+              width={250}
+              height={250}
               priority
               aria-hidden="true"
-              className="size-[280px] shrink-0 object-cover"
+              className="size-[250px] shrink-0 object-cover"
             />
           </div>
         </div>
@@ -40,7 +40,7 @@ export function SignupCompleteScreen() {
           <button
             type="button"
             onClick={() => router.replace("/home")}
-            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#2f6bff] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bff] focus-visible:ring-offset-2"
+            className="flex h-14 w-full shrink-0 items-center justify-center rounded-full bg-[#6346f6] px-7 text-[16px] leading-6 font-bold tracking-[0.0912px] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
           >
             시작하기
           </button>

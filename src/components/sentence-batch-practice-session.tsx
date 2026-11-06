@@ -8,7 +8,7 @@ import { reportSaves } from "@/lib/report-saves";
 import { useSentenceRecorder } from "@/hooks/use-sentence-recorder";
 import { useSentenceBatch } from "@/hooks/use-sentence-batch";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
-import { SentenceReader } from "./sentence-reader";
+import { NewsRecordingReader } from "./news-recording";
 import { PracticeAnalysisLoading } from "./practice-analysis-loading";
 import { SentenceRecordingControls } from "./sentence-recording-controls";
 import { DirectAnalysisResult } from "./direct-analysis-result";
@@ -159,30 +159,18 @@ export function SentenceBatchPracticeSession({
     <div className="flex min-h-full flex-col bg-[#f2f4f6]">
       {guard.dialog}
       {!waiting && (
-        <header className="px-5 pt-5 pb-4">
-          <h2 className="text-lg font-bold">
-            {batch.view?.status === "CANCELLED"
-              ? "취소한 연습"
-              : `${active + 1} / ${sentences.length} 문장`}
-          </h2>
-          <p className="mt-2 text-sm text-[#6b7684]">
-            다 읽으면 다음 문장을 눌러 이어서 녹음해 주세요. 피드백은 모든 문장을 마친 뒤 보여 드려요.
-          </p>
-        </header>
-      )}
-      {!waiting && (
-        <SentenceReader
+        <NewsRecordingReader
+          label={
+            content.origin === "USER_INPUT"
+              ? "내 문장 연습"
+              : content.contentType === "ANNOUNCER"
+                ? "따라 읽기"
+                : "문장 연습"
+          }
           sentences={sentences}
-          pageIndex={active}
-          activeIndex={recording ? active : undefined}
-          variant={recording ? "recording" : "reader"}
-          className="mx-5 max-h-[45dvh]"
+          active={active}
+          recording={recording}
         />
-      )}
-      {!waiting && (
-        <p role="status" className="px-5 py-4 text-sm text-[#6b7684]">
-          {`녹음 완료 ${batch.capturedCount} / ${sentences.length} 문장`}
-        </p>
       )}
       {waiting && <PracticeAnalysisLoading uploading={batch.uploading} />}
       {message && (

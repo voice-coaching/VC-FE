@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play, Volume2 } from "lucide-react";
+import { LoaderCircle, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type PracticeExample } from "@/lib/api";
 
@@ -68,7 +68,7 @@ export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
   }
 
   return (
-    <div className="rounded-2xl bg-[#edf2ff] p-4">
+    <div>
       <audio
         ref={audio}
         onEnded={() => setStatus("idle")}
@@ -81,15 +81,31 @@ export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
         type="button"
         disabled={status === "loading"}
         onClick={() => void play()}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white disabled:opacity-60"
+        aria-busy={status === "loading"}
+        className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6346f6] disabled:cursor-wait ${status === "playing" ? "bg-[#191f28] text-white" : "bg-[#f2f4f6] text-[#4e5968]"}`}
       >
-        {status === "playing" ? (
-          <Pause className="size-4" />
-        ) : status === "loading" ? (
-          <Volume2 className="size-4" />
-        ) : (
-          <Play className="size-4" fill="currentColor" />
-        )}
+        <span className="flex size-5 shrink-0 items-center justify-center">
+          {status === "playing" ? (
+            <Pause
+              className="size-[18px]"
+              fill="currentColor"
+              strokeWidth={0}
+              aria-hidden="true"
+            />
+          ) : status === "loading" ? (
+            <LoaderCircle
+              className="size-[18px] animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+          ) : (
+            <Play
+              className="size-[18px]"
+              fill="currentColor"
+              strokeWidth={0}
+              aria-hidden="true"
+            />
+          )}
+        </span>
         {status === "loading"
           ? "예시 음성 준비 중…"
           : status === "playing"

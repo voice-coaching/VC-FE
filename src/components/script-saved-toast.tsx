@@ -42,7 +42,7 @@ export function ScriptSavedToast({
         type="button"
         disabled={busy}
         onClick={onPractice}
-        className="shrink-0 py-1 text-[14px] leading-5 font-bold text-[#7da3ff] disabled:opacity-50"
+        className="shrink-0 py-1 text-[14px] leading-5 font-bold text-[#937dff] disabled:opacity-50"
       >
         바로 연습
       </button>

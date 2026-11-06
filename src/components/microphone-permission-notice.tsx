@@ -9,7 +9,24 @@ const settings = registerPlugin<{ open(): Promise<void> }>(
 
 export function MicrophonePermissionNotice() {
   const [error, setError] = useState<string | null>(null);
-  if (Capacitor.getPlatform() !== "android") return null;
+  if (Capacitor.getPlatform() !== "android") {
+    return (
+      <div role="status" className="mx-5 my-3 rounded-2xl bg-white p-4">
+        <p className="text-sm font-bold text-[#191f28]">
+          브라우저에서 마이크 사용을 허용해 주세요
+        </p>
+        <p className="mt-2 text-sm leading-6 text-[#4e5968]">
+          주소창 왼쪽의 사이트 설정에서 마이크를 허용한 뒤, 녹음 시작을 다시
+          눌러 주세요. 앱 안의 미리보기에서 권한 창이 뜨지 않으면 같은 주소를
+          Chrome이나 Safari에서 열어 주세요.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-[#6b7684]">
+          Mac에서도 차단되어 있다면 시스템 설정 → 개인정보 보호 및 보안 →
+          마이크에서 사용 중인 브라우저나 앱을 허용해 주세요.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mx-5 my-3 rounded-2xl bg-white p-4 text-center">
       <p className="text-sm leading-5 text-[#4e5968]">

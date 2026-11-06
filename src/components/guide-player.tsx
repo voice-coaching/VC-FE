@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import motion from "./audio-button-motion.module.css";
 import { Pause } from "lucide-react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Id } from "@/lib/api";
@@ -64,7 +65,13 @@ function DeviceGuide({
   const comparison = variant === "comparison";
   return (
     <section
-      className={compact ? "flex flex-col items-center gap-1.5" : "w-full"}
+      className={
+        compact
+          ? "flex flex-col items-center gap-1.5"
+          : comparison
+            ? "shrink-0"
+            : "w-full"
+      }
     >
       <button
         type="button"
@@ -79,12 +86,14 @@ function DeviceGuide({
           compact
             ? "flex size-14 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(26,33,48,0.06)] disabled:opacity-45"
             : comparison
-              ? "flex size-[26px] items-center justify-center rounded-full border border-[#e4ebfa] bg-white text-[#8b95a1] disabled:opacity-40"
-              : `flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2 leading-5 font-bold disabled:opacity-60 ${dense ? "text-[13px]" : "text-[14px]"} ${buttonTone === "primary" ? "bg-[#edf2ff] text-primary" : "bg-[#f2f4f6] text-[#4e5968]"}`
+              ? `flex size-[26px] items-center justify-center rounded-full disabled:opacity-40 ${buttonTone === "primary" ? "bg-primary text-white" : "border border-[#e8e4fa] bg-white text-[#8b95a1]"}`
+              : `${motion.button} flex min-h-12 w-full items-center justify-center gap-1.5 rounded-2xl px-2 py-2 leading-5 font-bold disabled:opacity-60 ${dense ? "text-[13px]" : "text-[14px]"} ${playing ? "bg-[#191f28] text-white" : buttonTone === "primary" ? "bg-[var(--report-soft,#edf2ff)] text-primary" : "bg-[#f2f4f6] text-[#4e5968]"}`
         }
       >
         {playing ? (
           <Pause
+            fill="currentColor"
+            strokeWidth={0}
             className={comparison ? "size-3" : "size-[22px]"}
             aria-hidden="true"
           />
@@ -92,9 +101,11 @@ function DeviceGuide({
           <Image
             src={
               compact
-                ? "/figma/practice/headphones.svg"
+                ? "/figma/record-controls/headphones.svg"
                 : comparison
-                  ? "/figma/report-improved/play-muted.svg"
+                  ? buttonTone === "primary"
+                    ? "/figma/report-improved/play-white.svg"
+                    : "/figma/report-improved/play-muted.svg"
                   : dense
                     ? "/figma/report-improved/headphones.svg"
                     : "/figma/report/headphones.svg"
