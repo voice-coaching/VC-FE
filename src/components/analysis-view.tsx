@@ -8,6 +8,7 @@ import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
+import { AnalysisScoreDetails } from "@/components/analysis-score-details";
 import { CanonicalLipResult } from "@/components/canonical-lip-result";
 import { visibleAnalysisScoreGroups } from "@/lib/analysis-feedback";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
@@ -88,6 +89,10 @@ export function AnalysisView({
   pronunciationDetails?: Record<string, PronunciationDetail[]>;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
+  const scoreDetails =
+    practiceResult?.score.details ??
+    analysis.scoreDetails ??
+    canonicalCore?.score.details;
   const reviewItems =
     corrections ??
     (canonicalCore?.feedbackDeliveryAllowed &&
@@ -186,7 +191,9 @@ export function AnalysisView({
           </section>
         </div>
         <div className="space-y-2.5 px-5 pt-3 pb-6">
-          {scoreRows.length ? (
+          {scoreDetails ? (
+            <AnalysisScoreDetails details={scoreDetails} />
+          ) : scoreRows.length ? (
             scoreRows.map((row) => (
               <ScoreAccordion
                 key={row.id}
@@ -489,6 +496,8 @@ export function AnalysisView({
         <section className="flex flex-col items-center gap-4 pt-2">
           <AnalysisSummary key={summary} text={summary} />
         </section>
+
+        <AnalysisScoreDetails details={scoreDetails} />
 
         <section className="rounded-2xl bg-white p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">

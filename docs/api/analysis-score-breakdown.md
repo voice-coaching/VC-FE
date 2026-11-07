@@ -1,5 +1,7 @@
 # 항목별 발음 점수 표시
 
+2026-11-08: 아래는 기존 9항목이다. 새 음성 6항목은 [score.details](score-details.md)에 별도로 표시하며 이 배열이나 배점으로 재사용하지 않는다.
+
 분석 상세 API의 data.scoreBreakdown을 그대로 표시한다. 기대 음소 표본이 없는 항목(applicable=false, score=null)은 평가 대상 없음이며 0점으로 바꾸지 않는다. 필드 자체가 없거나 null인 과거 결과는 항목별 정보 없음으로 표시한다.
 
 항목 점수는 기본 배점 기준(score / maxScore)이며 소수 둘째 자리까지 보존한다. 종합 점수는 applicableMaxScore를 분모로100점 환산한 백엔드 overallScore를 사용한다. 프론트가 점수를 재채점하지 않는다.

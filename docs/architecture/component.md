@@ -1,5 +1,8 @@
 # 컴포넌트 및 모듈 문서 - VC-FE
 
+`score-details.ts`는 외부 표시 점수의 구조와 화면 변환을 맡고, `AnalysisScoreDetails`는 전달된 값을 렌더링한다.
+HTTP 호출·추론·합산 로직은 UI에 추가하지 않는다. canonical/Direct adapter와 AnalysisView에서 공통으로 사용한다.
+
 프로젝트 단위를 어떻게 분리하고 재사용하는지 기록한다.
 
 ## 분리 기준

@@ -38,6 +38,7 @@ export function canonicalPresentation(
   }
   return {
     canonical: view,
+    scoreDetails: core?.score.details,
     id: view.analysisId,
     status: view.jobStatus,
     outcome: null,

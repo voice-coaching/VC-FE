@@ -1,5 +1,9 @@
 # 디렉토리 문서 - VC-FE
 
+- `src/lib/score-details.ts`: 선택형 6항목 schema·타입·표시 변환. 총점 재계산 없음.
+- `src/components/analysis-score-details.tsx`: Backend·Direct·문장별 연습·저장 이력의 공통 세부점수 표시.
+- canonical/Direct presentation은 내부 `AnalysisResult.scoreDetails`로 선택 객체를 전달한다.
+
 이 파일은 현재 프로젝트 구조를 설명하는 기준 문서다.
 
 ## 필수 작성 항목

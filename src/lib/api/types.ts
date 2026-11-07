@@ -589,6 +589,8 @@ export interface AnalysisScoreBreakdown {
 export interface AnalysisResult {
   /** Verified v5 public result retained losslessly; not a legacy wire payload. */
   canonical?: import("../canonical-analysis").CanonicalAnalysisView;
+  /** Optional AI display scores, separate from historical phone worksheets. */
+  scoreDetails?: import("../score-details").PublicScoreDetails;
   coaching?: import("@/lib/coaching").AnalysisCoaching | null;
   id: Id;
   status: AnalysisStatus;
