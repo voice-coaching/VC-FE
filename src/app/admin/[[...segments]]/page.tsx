@@ -17,12 +17,13 @@ export default async function AdminPage({
     "notifications",
     "popups",
     "audit",
+    "title-exams",
   ];
   const creating = item === "new";
   if (
     segments.length > 2 ||
     !sections.includes(section) ||
-    (item && ["overview", "audit"].includes(section)) ||
+    (item && ["overview", "audit", "title-exams"].includes(section)) ||
     (creating && ["users", "inquiries"].includes(section))
   )
     notFound();

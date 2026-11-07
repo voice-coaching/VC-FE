@@ -30,6 +30,7 @@ export const adminNavigation = [
   { href: "/admin/users", title: "회원 관리", icon: Users },
   { href: "/admin/contents", title: "학습 콘텐츠", icon: FileText },
   { href: "/admin/announcer", title: "아나운서 음성", icon: Mic },
+  { href: "/admin/title-exams", title: "승급 시험 관리", icon: ShieldCheck },
   { href: "/admin/notices", title: "공지사항", icon: FileText },
   { href: "/admin/inquiries", title: "문의 관리", icon: MessageSquare },
   { href: "/admin/notifications", title: "알림 발송", icon: Bell },
