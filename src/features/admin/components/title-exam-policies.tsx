@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminCommand, useAdminQuery } from "../hooks";
 import {
   policyListSchema,
@@ -25,13 +26,6 @@ export function TitleExamPoliciesPage() {
   const query = useAdminQuery<unknown>("/title-exam-policies");
   const parsed =
     query.data === undefined ? null : policyListSchema.safeParse(query.data);
-  const [editing, setEditing] = useState<TitleExamPolicy | null>(null);
-  const returnFocus = useRef<string | null>(null);
-  useEffect(() => {
-    if (editing || query.isFetching || !returnFocus.current) return;
-    document.getElementById(returnFocus.current)?.focus();
-    returnFocus.current = null;
-  }, [editing, query.isFetching]);
   return (
     <>
       <Heading
@@ -58,47 +52,79 @@ export function TitleExamPoliciesPage() {
       />
       {parsed?.success &&
         !query.error &&
-        parsed.data.items.map((policy) =>
-          editing?.targetRank === policy.targetRank ? (
-            <PolicyEditor
-              key={policy.targetRank}
-              initial={editing}
-              onClose={() => {
-                returnFocus.current = `edit-title-exam-${policy.targetRank}`;
-                setEditing(null);
-                void query.refetch();
-              }}
-            />
-          ) : (
-            <Panel
-              key={policy.targetRank}
-              title={`${policy.targetTitle} 승급 시험`}
-              padded
-            >
-              <p>
-                합격 기준: <strong>{policy.passingScore}점 이상</strong>
+        parsed.data.items.map((policy) => (
+          <Panel
+            key={policy.targetRank}
+            title={`${policy.targetTitle} 승급 시험`}
+            padded
+          >
+            <p>
+              합격 기준: <strong>{policy.passingScore}점 이상</strong>
+            </p>
+            <p>시험 문장: {policy.content?.title ?? "연결된 문장 없음"}</p>
+            {policy.available ? (
+              <p className="whitespace-pre-wrap">
+                {policy.content?.scriptText}
               </p>
-              <p>시험 문장: {policy.content?.title ?? "연결된 문장 없음"}</p>
-              {policy.available ? (
-                <p className="whitespace-pre-wrap">
-                  {policy.content?.scriptText}
-                </p>
-              ) : (
-                <Message tone="error">
-                  현재 문제는 시험에 사용할 수 없습니다. 공개된 시험 문장을 다시
-                  연결해 주세요.
-                </Message>
-              )}
-              <Button
-                id={`edit-title-exam-${policy.targetRank}`}
-                disabled={editing !== null || query.isFetching}
-                onClick={() => setEditing(policy)}
-              >
-                설정 변경
-              </Button>
-            </Panel>
-          ),
-        )}
+            ) : (
+              <Message tone="error">
+                현재 문제는 시험에 사용할 수 없습니다. 공개된 시험 문장을 다시
+                연결해 주세요.
+              </Message>
+            )}
+            <ButtonLink href={`/admin/title-exams/${policy.targetRank}`}>
+              설정 변경
+            </ButtonLink>
+          </Panel>
+        ))}
+    </>
+  );
+}
+
+export function TitleExamPolicyEditPage({
+  targetRank,
+}: {
+  targetRank: TitleExamPolicy["targetRank"];
+}) {
+  const router = useRouter();
+  const query = useAdminQuery<unknown>("/title-exam-policies");
+  const parsed =
+    query.data === undefined ? null : policyListSchema.safeParse(query.data);
+  const policy = parsed?.success
+    ? parsed.data.items.find((item) => item.targetRank === targetRank)
+    : undefined;
+  return (
+    <>
+      <Heading
+        title="승급 시험 설정 변경"
+        description="시험 문장을 선택하고 합격 점수를 설정하세요."
+      >
+        <ButtonLink href="/admin/title-exams">목록으로</ButtonLink>
+      </Heading>
+      <LoadState
+        loading={query.isPending}
+        error={
+          query.error ??
+          (parsed && !parsed.success
+            ? new Error("시험 설정 응답을 확인하지 못했습니다.")
+            : null)
+        }
+        retry={() => void query.refetch()}
+      />
+      {parsed?.success &&
+        !query.error &&
+        (policy ? (
+          <PolicyEditor
+            key={targetRank}
+            initial={policy}
+            onClose={() => router.push("/admin/title-exams")}
+          />
+        ) : (
+          <Message tone="error">
+            해당 승급 시험 설정을 찾지 못했습니다. 목록으로 돌아가 다시 선택해
+            주세요.
+          </Message>
+        ))}
     </>
   );
 }

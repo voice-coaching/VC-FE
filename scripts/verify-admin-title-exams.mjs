@@ -144,7 +144,7 @@ try {
       .count(),
     1,
   );
-  await page.getByRole("button", { name: "설정 변경", exact: true }).click();
+  await page.getByRole("link", { name: "설정 변경", exact: true }).click();
   await page
     .getByRole("row")
     .filter({ hasText: "새 시험" })
@@ -172,7 +172,7 @@ try {
   assert.equal(reads[0].status, "PUBLISHED");
   assert.equal(reads[0].type, "SENTENCE");
   await page.getByRole("button", { name: "닫기", exact: true }).click();
-  await page.getByRole("button", { name: "설정 변경", exact: true }).click();
+  await page.getByRole("link", { name: "설정 변경", exact: true }).click();
   conflict = true;
   await page.getByLabel("작업 사유", { exact: true }).fill("충돌 시 입력 보존");
   await page
@@ -192,9 +192,9 @@ try {
     content: null,
     practiceContentId: null,
   };
-  await page.reload();
+  await page.goto(base + "/admin/title-exams");
   await page.getByText(/현재 문제는 시험에 사용할 수 없습니다/).waitFor();
-  await page.getByRole("button", { name: "설정 변경", exact: true }).click();
+  await page.getByRole("link", { name: "설정 변경", exact: true }).click();
   assert.equal(
     await page
       .getByRole("button", { name: "시험 설정 저장", exact: true })
@@ -218,21 +218,34 @@ try {
   empty = false;
   multiplePolicies = true;
   await page.setViewportSize({ width: 400, height: 811 });
-  await page.reload();
+  await page.goto(base + "/admin/title-exams");
   await page
-    .getByRole("button", { name: "설정 변경", exact: true })
+    .getByRole("link", { name: "설정 변경", exact: true })
     .first()
     .waitFor();
   for (const index of [0, 3]) {
     await page
-      .getByRole("button", { name: "설정 변경", exact: true })
+      .getByRole("link", { name: "설정 변경", exact: true })
       .nth(index)
       .click();
+    await page.waitForURL(`**/admin/title-exams/${ranks[index]}`);
     const heading = page.getByRole("heading", {
       name: `${titles[index]} 시험 설정 변경`,
       exact: true,
     });
     await heading.waitFor();
+    if (index === 0) {
+      await page.reload();
+      await heading.waitFor();
+    } else {
+      await page.goBack();
+      await page.waitForURL("**/admin/title-exams");
+      await page
+        .getByRole("link", { name: "설정 변경", exact: true })
+        .nth(index)
+        .click();
+      await heading.waitFor();
+    }
     // DOM visibility alone misses a form appended below all four cards.
     await page.waitForFunction(
       (title) => {
@@ -259,21 +272,25 @@ try {
       true,
     );
     await page.getByRole("button", { name: "취소", exact: true }).click();
-    await page.waitForFunction(
-      (id) => document.activeElement?.id === id,
-      `edit-title-exam-${ranks[index]}`,
-    );
-    assert.equal(
-      await page
-        .getByRole("button", { name: "설정 변경", exact: true })
-        .nth(index)
-        .evaluate((element) => element === document.activeElement),
-      true,
-    );
+    await page.waitForURL("**/admin/title-exams");
+    await page
+      .getByRole("link", { name: "설정 변경", exact: true })
+      .nth(index)
+      .waitFor();
   }
+  const invalid = await page.goto(base + "/admin/title-exams/INVALID_RANK");
+  // App Router can stream its not-found UI with an already-sent 200 status.
+  assert.ok([200, 404].includes(invalid.status()));
+  await page.getByRole("heading", { name: "404", exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "시험 설정 저장", exact: true })
+      .count(),
+    0,
+  );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: navigation, selection/preview, versioned save, conflict preservation, unavailable/empty, access denial, mobile four-policy editor visibility/focus/return (8 scenarios)",
+    "PASS: navigation, selection/preview, versioned save, conflict preservation, unavailable/empty, access denial, mobile edit-page navigation/reload/back, invalid rank (9 scenarios)",
   );
 } finally {
   await browser.close();
