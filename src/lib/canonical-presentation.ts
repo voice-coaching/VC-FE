@@ -44,7 +44,10 @@ export function canonicalPresentation(
     transcript: null,
     sttConfidence: null,
     overallScore:
-      core?.score.validity === "RUBRIC_COMPUTED"
+      view.jobStatus === "COMPLETED" &&
+      core?.decision.status === "ACCEPT" &&
+      core.representation === "INLINE" &&
+      core.score.validity === "RUBRIC_COMPUTED"
         ? core.score.overallScore
         : null,
     pronunciationScore: null,

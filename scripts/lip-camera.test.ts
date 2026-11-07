@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
-import {
-  assertCoachingInput,
-  coachingLimitNotice,
-} from "../src/lib/coaching-usage";
+import { coachingLimitNotice } from "../src/lib/coaching-usage";
 import { analysisRequestWasRejected } from "../src/lib/canonical-recovery";
 
 const source = readFileSync("src/routes/lip-practice.tsx", "utf8");
@@ -38,14 +35,11 @@ async function requestCamera(
     mounted: { current: true },
     mediaRequest: { current: 0 },
     setStep: (step: string) => steps.push(step),
+    setRequestingMedia: () => {},
+    setPermission: () => {},
     setError: (error: string | null) => errors.push(error),
     navigator: { mediaDevices: { getUserMedia } },
     streamRef,
-    audioContextRef: { current: null },
-    AudioContext: class {
-      state = "running";
-      async resume() {}
-    },
     releaseLipResources: () => {},
     requireAnalysisScope: () => {
       throw new Error("Video analysis is unavailable");
@@ -53,7 +47,11 @@ async function requestCamera(
     DOMException,
   };
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  await new AsyncFunction(...Object.keys(dependencies), body)(
+  const executable =
+    ts.transpile(`async function run() {${body}}`, {
+      target: ts.ScriptTarget.ES2022,
+    }) + "\nreturn await run();";
+  await new AsyncFunction(...Object.keys(dependencies), executable)(
     ...Object.values(dependencies),
   );
   return { steps, errors, streamRef, mediaBusy };
@@ -68,7 +66,7 @@ test("local camera practice opens even when server video analysis is unavailable
     });
     return stream;
   });
-  assert.deepEqual(result.steps, ["permission", "align"]);
+  assert.deepEqual(result.steps, ["align"]);
   assert.deepEqual(result.errors, [null]);
   assert.equal(result.streamRef.current, stream);
   assert.equal(result.mediaBusy.current, false);
@@ -78,12 +76,12 @@ test("camera permission denial remains retryable and shows an error", async () =
   const result = await requestCamera(async () => {
     throw new DOMException("Denied", "NotAllowedError");
   });
-  assert.deepEqual(result.steps, ["permission"]);
+  assert.deepEqual(result.steps, []);
   assert.match(result.errors[1]!, /카메라와 마이크 권한/);
   assert.equal(result.mediaBusy.current, false);
 });
 
-test("a single reviewed clip can open the result screen and submit audio immediately", () => {
+test("a single reviewed clip can open the result screen and request analysis immediately", () => {
   let handler = "";
   function visit(node: ts.Node) {
     if (
@@ -130,7 +128,7 @@ test("camera results explicitly enable video feedback", () => {
   assert.match(source, /<AnalysisView[\s\S]*?isCameraPractice[\s\S]*?\/>/);
 });
 
-test("lip analysis submits captured audio through authenticated coaching admission", async () => {
+test("lip analysis submits captured video once through authenticated coaching admission", async () => {
   let analysisBody = "";
   function visit(node: ts.Node) {
     if (
@@ -141,15 +139,18 @@ test("lip analysis submits captured audio through authenticated coaching admissi
     ts.forEachChild(node, visit);
   }
   visit(file);
-  const audio = new Blob(["wav"], { type: "audio/wav" });
   const video = new Blob(["video"], { type: "video/mp4" });
   let submitted = 0;
   const noop = () => {};
   const dependencies = {
-    reportClip: { blob: video, audioBlob: audio, durationMs: 7000 },
+    reportClip: { blob: video, hasAudioTrack: true, durationMs: 7000 },
     analysisBusyRef: { current: false },
     mounted: { current: true },
-    videoConsentAccepted: true,
+    processingConsent: {
+      voicePolicyRevision: "current-policy",
+      videoPolicyRevision: "video-policy",
+    },
+    setVideoCapabilities: noop,
     analysisOwnerRef: { current: null },
     submittedClipsRef: { current: new Set<Blob>() },
     setSubmittedPrompts: noop,
@@ -164,34 +165,28 @@ test("lip analysis submits captured audio through authenticated coaching admissi
     setAnalysisProgress: noop,
     selectedClip: 0,
     prompts: ["연습 문장"],
-    prepareAudioForAnalysis: async (source: Blob) => {
-      assert.equal(source, audio);
-      return { blob: audio, mimeType: "audio/wav", extension: "wav" };
+    loadLipAnalysisCapabilities: async () => ({}),
+    prepareLipAnalysis: (clip: { blob: Blob }) => {
+      assert.equal(clip.blob, video);
+      return {
+        blob: video,
+        mimeType: "video/mp4",
+        extension: "mp4",
+        analysisConsent: { accepted: true, policyRevision: "current-policy" },
+      };
+    },
+    uploadLipRecording: async (options: {
+      clip: { blob: Blob };
+      prepared: { blob: Blob };
+    }) => {
+      assert.equal(options.clip.blob, video);
+      assert.equal(options.prepared.blob, video);
+      return 3;
     },
     contentByPromptRef: { current: new Map() },
     api: {
       content: { createCustom: async () => ({ id: 1 }) },
-      training: {
-        getAnalysisCapabilities: async () => ({
-          recordingUpload: "CONFIGURED",
-          analysisRequests: "CONFIGURED",
-          supportedLearningFocuses: ["PRONUNCIATION"],
-          consentPolicyRevision: "current-policy",
-          minimumDurationMs: 1000,
-          maximumDurationMs: 90000,
-          maximumAudioUploadBytes: 1000000,
-          acceptedAudioMimeTypes: ["audio/wav"],
-        }),
-        create: async () => ({ sessionId: 2 }),
-        getUploadUrl: async () => ({ objectKey: "audio.wav" }),
-        uploadRecording: async (_upload: unknown, blob: Blob) => {
-          assert.equal(blob, audio);
-          assert.notEqual(blob, video);
-        },
-        registerRecording: async () => ({ recordingId: 3 }),
-        listRecordings: async () => [{ recordingId: 3, qualityStatus: "PASS" }],
-        selectRecording: async () => {},
-      },
+      training: { create: async () => ({ sessionId: 2 }) },
     },
     canonicalApi: {
       analyzeAudiovisual: async (sessionId: number, consent: unknown) => {
@@ -207,21 +202,7 @@ test("lip analysis submits captured audio through authenticated coaching admissi
     waitForCanonicalResult: async () => {
       throw new Error("Stopped after verifying admission");
     },
-    uploadRecordingWithFreshUrl: async (input: {
-      issueUploadUrl: () => Promise<unknown>;
-      upload: (info: unknown) => Promise<void>;
-    }) => {
-      const info = await input.issueUploadUrl();
-      await input.upload(info);
-      return info;
-    },
-    voiceProcessingConsentInput: () => ({
-      accepted: true,
-      policyRevision: "current-policy",
-    }),
-    requireAnalysisScope: async () => {},
     invalidatesCanonicalResult: () => false,
-    assertCoachingInput,
     coachingLimitNotice,
     analysisRequestWasRejected,
   };

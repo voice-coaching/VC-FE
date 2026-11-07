@@ -654,8 +654,13 @@ export function createHttpClient(
     headers: Record<string, string>,
     onProgress?: (percent: number) => void,
     authorize = false,
+    signal?: AbortSignal,
   ) {
     return new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException("업로드를 취소했습니다.", "AbortError"));
+        return;
+      }
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", url);
       const version = sessionVersion;
@@ -726,6 +731,11 @@ export function createHttpClient(
             "UPLOAD_TIMEOUT",
           ),
         );
+      const cancel = () => xhr.abort();
+      xhr.onabort = () =>
+        reject(new DOMException("업로드를 취소했습니다.", "AbortError"));
+      xhr.onloadend = () => signal?.removeEventListener("abort", cancel);
+      signal?.addEventListener("abort", cancel, { once: true });
       xhr.send(audio);
     });
   }

@@ -80,3 +80,11 @@ FE는 지원 범위를 녹음/업로드 전에 확인하고, 위 필드가 빠�
 ## 활성 인증형 연습의 프론트 진행
 
 문장·뉴스·아나운서·내 문장·클래스는 [인증형 연속 녹음 흐름](authenticated-sentence-practice.md)을 사용한다. 기존 API 요청/응답·인증 계약을 변경하지 않고 캡처와 업로드/분석의 대기를 분리한다. 익명 Direct endpoint로 자동 전환하지 않는다.
+
+## 영상 촬영본 소비 계약 (2026-11-07)
+
+기존 `/api/analysis-capabilities`, `/api/analysis-capabilities/canonical`, recording upload/register/select, analyze 및 canonical 조회 URL을 유지한다. 신규 endpoint는 없다.
+미디어 capability는 no-store로 조회한다. `acceptedVideoMimeTypes`, `maximumVideoUploadBytes`, `minimumDurationMs`, `maximumDurationMs`, `videoRequiresAudioTrack`을 적용한다.
+등록의 기존 선택 필드 `videoProcessingConsentAccepted: boolean|null`, `videoProcessingConsentPolicyRevision: string|null`은 영상 정책이 필요하고 해당 revision에 동의한 경우에만 true/서버 revision으로 전달한다. 비활성 정책에서는 생략한다.
+음성 동의는 별도의 analyze body에 유지한다. 정책 미확인·미동의는 Frontend 단계에서 중단하고 API를 호출하지 않는다. 등록 응답의 기존 `analysisMediaType=AUDIO_VISUAL`을 확인한다.
+입술 확장 필드의 enum·선택/null·측정 단위는 [영상 입술 점수 소비 계약](../contracts/lip-provisional-score-v1.md)을 따른다. 종합점수 경로는 `data.canonicalAnalysis.score.overallScore`이며 ApiResponse 래퍼 해제 후에는 `view.canonicalAnalysis.score.overallScore`다. Client는 점수를 다시 계산하지 않는다.

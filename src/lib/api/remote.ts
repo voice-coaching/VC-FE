@@ -421,7 +421,8 @@ export function createRemoteApi(baseUrl: string): ApiContract {
       },
     },
     training: {
-      getAnalysisCapabilities: () => request("/api/analysis-capabilities"),
+      getAnalysisCapabilities: (signal) =>
+        request("/api/analysis-capabilities", { cache: "no-store", signal }),
       create: (input) =>
         request("/api/training-sessions", { method: "POST", body: input }),
       get: (sessionId) =>
@@ -440,7 +441,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
             body: input,
           },
         ),
-      uploadRecording: (uploadInfo, audio, onProgress) => {
+      uploadRecording: (uploadInfo, audio, onProgress, signal) => {
         const target = uploadTarget(baseUrl, uploadInfo.uploadUrl);
         return upload(
           target.url,
@@ -448,6 +449,7 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           uploadInfo.requiredHeaders ?? {},
           onProgress,
           target.authorize,
+          signal,
         );
       },
       registerRecording: (sessionId, input) =>

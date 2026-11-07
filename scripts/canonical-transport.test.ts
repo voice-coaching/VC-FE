@@ -56,7 +56,12 @@ test("new audio/video requests and retries all select the unified V6 result cont
 
 test("V6 capabilities authorize audio, course and title scopes independently", async () => {
   globalThis.fetch = async () => json(capabilities());
-  for (const requested of ["STANDALONE_AUDIO", "COURSE", "TITLE_EXAM"] as const)
+  for (const requested of [
+    "STANDALONE_AUDIO",
+    "COURSE",
+    "TITLE_EXAM",
+    "VIDEO",
+  ] as const)
     assert.equal(
       (await requireAnalysisScope(requested)).analysisProfile,
       AUDIOVISUAL_PROFILE,

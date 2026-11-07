@@ -950,7 +950,9 @@ export interface ApiContract {
     getMyProgress(status?: CourseProgressStatus): Promise<UserCourseProgress[]>;
   };
   training: {
-    getAnalysisCapabilities(): Promise<AnalysisCapabilities>;
+    getAnalysisCapabilities(
+      signal?: AbortSignal,
+    ): Promise<AnalysisCapabilities>;
     create(input: {
       contentId: Id;
       courseStepId?: Id | null;
@@ -973,6 +975,7 @@ export interface ApiContract {
       upload: RecordingUploadUrl,
       audio: Blob,
       onProgress?: (percent: number) => void,
+      signal?: AbortSignal,
     ): Promise<void>;
     registerRecording(
       sessionId: Id,
