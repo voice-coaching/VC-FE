@@ -63,7 +63,7 @@ export async function requireAnalysisScope(
     !value.resultSchemas.includes(CANONICAL_RESULT_HEADER)
   )
     throw new ApiError(
-      messages.STANDALONE_AUDIO,
+      messages[requested],
       503,
       "ANALYSIS_INTEGRATION_UNAVAILABLE",
     );

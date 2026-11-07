@@ -23,7 +23,7 @@ export type LipClip = {
   promptIndex: number;
   url: string;
   blob: Blob;
-  audioBlob?: Blob;
+  hasAudioTrack: boolean;
   durationMs: number;
 };
 
@@ -38,7 +38,7 @@ export function preferredVideoMimeType(supports: (mime: string) => boolean) {
 }
 
 export function normalizeVideoMimeType(mimeType: string) {
-  return mimeType.split(";", 1)[0]?.trim().toLowerCase() || "video/mp4";
+  return mimeType.split(";", 1)[0]?.trim().toLowerCase() || "";
 }
 
 export function prepareVideoForAnalysis(
@@ -46,7 +46,10 @@ export function prepareVideoForAnalysis(
   acceptedMimeTypes: string[],
 ) {
   const sourceMimeType = normalizeVideoMimeType(source.type);
-  if (!acceptsMediaMimeType(sourceMimeType, acceptedMimeTypes)) {
+  if (
+    !sourceMimeType.startsWith("video/") ||
+    !acceptsMediaMimeType(sourceMimeType, acceptedMimeTypes)
+  ) {
     throw new Error(
       `이 기기의 영상 형식(${sourceMimeType})을 서버가 지원하지 않습니다.`,
     );

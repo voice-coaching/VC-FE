@@ -82,11 +82,15 @@ export function LipCapture({
             </span>
           </div>
         ) : (
-          <div className={styles.countdown} key={countdown}>
+          <div className={styles.countdown} key={`countdown-${countdown}`}>
             {countdown || ""}
           </div>
         )}
-        <div className={styles.sentences} key={index} aria-live="polite">
+        <div
+          className={styles.sentences}
+          key={`sentence-${index}`}
+          aria-live="polite"
+        >
           {index > 0 && <p className={styles.previous}>{prompts[index - 1]}</p>}
           <p className={styles.current} data-long={prompts[index].length > 35}>
             {prompts[index]}

@@ -201,3 +201,44 @@ test("direct upload diagnostics retain the response but exclude the signed query
     },
   );
 });
+
+test("cancelling a video upload aborts the transport and never reports success", async () => {
+  let sent = false;
+  let aborted = false;
+  class PendingUpload extends FakeXMLHttpRequest {
+    onabort: (() => void) | null = null;
+    onloadend: (() => void) | null = null;
+    send() {
+      sent = true;
+    }
+    abort() {
+      aborted = true;
+      this.onabort?.();
+      this.onloadend?.();
+    }
+  }
+  globalThis.XMLHttpRequest = PendingUpload as unknown as typeof XMLHttpRequest;
+  const controller = new AbortController();
+  const api = createRemoteApi("https://qa.example.test");
+  const promise = api.training.uploadRecording(
+    uploadInfo(1),
+    new Blob(["video"], { type: "video/webm" }),
+    undefined,
+    controller.signal,
+  );
+  controller.abort();
+  await assert.rejects(promise, { name: "AbortError" });
+  assert.equal(sent, true);
+  assert.equal(aborted, true);
+  sent = false;
+  await assert.rejects(
+    api.training.uploadRecording(
+      uploadInfo(1),
+      new Blob(["video"]),
+      undefined,
+      controller.signal,
+    ),
+    { name: "AbortError" },
+  );
+  assert.equal(sent, false);
+});

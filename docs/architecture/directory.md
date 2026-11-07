@@ -50,3 +50,12 @@ UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은
 | `src/lib/practice-capture.ts` | 실제 PCM 길이·형식 확인과 필요한 전체 녹음 연결·재생 경계 |
 
 [진입 경로·상태·인증·인계 범위](../api/authenticated-sentence-practice.md)를 따른다. Direct 경로의 독립 batch 계약을 현재 인증형 연습 진입점으로 혼동하지 않는다.
+
+### 영상 입술 분석 (2026-11-07)
+
+| 파일 | 역할 |
+| --- | --- |
+| `src/lib/lip-analysis.ts` | VIDEO 지원·미디어 제한·revision별 동의 검증, 영상 업로드/등록/품질/선택 유스케이스 |
+| `src/components/lip-processing-consent.tsx` | 현재 영상·음성 처리 목적과 필요한 동의 항목 표시 |
+| `src/lib/canonical-lip.ts` | 입술 PROVISIONAL·선택 하위 점수와 측정 근거 계약 파싱 |
+| `docs/contracts/lip-provisional-score-v1.md` | 서버 소유 종합점수와 입술 근거 소비 계약 |

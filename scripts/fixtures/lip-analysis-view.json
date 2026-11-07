@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "voice-coaching.canonical-analysis-view.v3",
+  "analysisProfile": "CANONICAL_AUDIOVISUAL_20261007_V6",
+  "analysisId": 88,
+  "recordingId": 55,
+  "requestId": "00000000-0000-4000-8000-000000000001",
+  "executionId": "00000000-0000-4000-8000-000000000002",
+  "jobStatus": "COMPLETED",
+  "serviceFailure": null,
+  "persistenceStatus": "SAVED",
+  "actions": {
+    "canComplete": false,
+    "canRerecord": true,
+    "canRetry": false,
+    "canRegenerate": false,
+    "unavailableReasonCodes": {
+      "retry": [],
+      "rerecord": [],
+      "complete": [],
+      "regenerate": []
+    }
+  },
+  "canonicalAnalysis": {
+    "representation": "INLINE",
+    "decision": {
+      "status": "ACCEPT",
+      "reason_code": null,
+      "stage": null
+    },
+    "coreStatus": "ok",
+    "feedbackDeliveryAllowed": true,
+    "pronunciationFeedbackSource": "REFINED_P1_ONLY",
+    "selection": null,
+    "coaching": {
+      "schemaVersion": "canonical-llm-expression-result-v1",
+      "adapterStatus": "READY",
+      "generationStatus": "SCHEMA_AND_STRUCTURAL_SEMANTICS_VALID",
+      "items": [],
+      "feedback": "서버에서 제공한 발음 피드백입니다.",
+      "dispatchAttempts": 1,
+      "fallbackReason": null,
+      "naturalLanguageSemanticsFullyVerified": false,
+      "visualCorrectiveClaimsAllowed": false
+    },
+    "score": {
+      "validity": "RUBRIC_COMPUTED",
+      "reason": "EVIDENCE_BOUND_PRACTICE_SCORE",
+      "overallScore": 73.6
+    },
+    "visual": {
+      "status": "OBSERVED",
+      "correctiveClaimsAllowed": false,
+      "score": null,
+      "scoreKind": "NONE",
+      "coverage": {
+        "targetCount": 1,
+        "visuallyEligibleCount": 1,
+        "observedCount": 1,
+        "scoredCount": 1,
+        "coverage": 1
+      },
+      "phoneAssessments": [
+        {
+          "expectedIndex": 0,
+          "expectedPhone": "아",
+          "role": "nucleus",
+          "status": "SCORED",
+          "score": 0,
+          "scoreKind": "PROVISIONAL",
+          "referenceDistance": 0.1,
+          "referenceIds": ["reference-1"],
+          "calibrationRevision": null,
+          "audioStartSeconds": 0.1,
+          "audioEndSeconds": 0.2,
+          "videoStartSeconds": 0.1,
+          "videoEndSeconds": 0.2,
+          "frameCount": 3,
+          "reasonCodes": [],
+          "observations": [],
+          "allowedActionIds": ["COMPARE_REFERENCE"],
+          "subScores": [
+            {
+              "criterionId": "lip_timing",
+              "label": "입술 움직임 시점",
+              "score": 0,
+              "status": "SCORED",
+              "reasonCode": "REFERENCE_COMPARED",
+              "measurements": [
+                {
+                  "metricId": "lip_timing",
+                  "value": 0.2,
+                  "referenceMedian": 0.5,
+                  "referenceScale": 0.1,
+                  "referenceCount": 13,
+                  "tolerance": 0.2,
+                  "unit": "PHONE_PHASE"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "omittedPhoneAssessmentCount": 0,
+      "reasonCodes": [],
+      "alignmentScope": "CANONICAL_MFA_DETECTOR_PHONES_V1",
+      "unresolvedExpectedIndices": [],
+      "subScores": [
+        {
+          "criterionId": "lip_aperture",
+          "label": "입 벌림",
+          "score": null,
+          "status": "UNSCORABLE",
+          "reasonCode": "INSUFFICIENT_COVERAGE"
+        },
+        {
+          "criterionId": "lip_rounding",
+          "label": "입술 둥글림",
+          "score": 0,
+          "status": "SCORED",
+          "reasonCode": "REFERENCE_COMPARED"
+        }
+      ]
+    }
+  }
+}
