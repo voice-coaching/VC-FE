@@ -59,6 +59,8 @@ export const adminLabels: Record<string, string> = {
   COURSE_PROGRESS: "클래스 진도",
   TITLES: "현재 칭호",
   TITLE_EXAMS: "승급 심사",
+  TITLE_EXAM_POLICY: "승급 시험 설정",
+  TITLE_EXAM_POLICY_EDIT: "승급 시험 설정 변경",
   DIRECT_ANALYSES: "별도 음성 평가",
   COACHING_USAGE: "코칭 사용 내역",
   ONBOARDING: "학습 목표",

@@ -74,6 +74,8 @@ export function adminErrorMessage(error: unknown): string {
       )
       .join(" · ");
   if (error instanceof ApiError) {
+    if (error.code === "ADMIN_TITLE_EXAM_CONTENT_IN_USE")
+      return "승급 시험에서 사용 중인 문장입니다. 새 문장을 등록해 시험 설정을 교체하고, 진행 중인 시험이 끝난 뒤 기존 문장을 정리해 주세요.";
     if (error.code === "ADMIN_SELF_DELETION_NOT_ALLOWED")
       return "현재 로그인한 관리자 본인의 계정은 여기서 삭제할 수 없습니다.";
     if (error.status === 409)

@@ -15,6 +15,7 @@ import {
   PopupDetail,
 } from "./communications";
 import { AuditPage } from "./audit";
+import { TitleExamPoliciesPage } from "./title-exam-policies";
 export function AdminRouter({
   section,
   id,
@@ -25,6 +26,8 @@ export function AdminRouter({
   creating?: boolean;
 }) {
   switch (section) {
+    case "title-exams":
+      return <TitleExamPoliciesPage />;
     case "users":
       return id ? <MemberDetail userId={id} /> : <MembersPage />;
     case "contents":
