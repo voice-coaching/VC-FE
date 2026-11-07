@@ -46,7 +46,15 @@ let policy = {
 };
 let conflict = false,
   denied = false,
-  empty = false;
+  empty = false,
+  multiplePolicies = false;
+const ranks = [
+  "BEGINNER",
+  "LOCAL_ANNOUNCER",
+  "ASPIRING_ANNOUNCER",
+  "ANNOUNCER",
+];
+const titles = ["초보", "동네 아나운서", "아나운서 지망생", "아나운서"];
 const writes = [],
   reads = [];
 await context.route("**/api/backend/**", async (route) => {
@@ -83,7 +91,18 @@ await context.route("**/api/backend/**", async (route) => {
       ? reply(null, 403)
       : reply({ id: 1, nickname: "운영자", role: "ADMIN" });
   if (url.pathname.endsWith("/title-exam-policies"))
-    return reply({ items: [policy] });
+    return reply({
+      items: multiplePolicies
+        ? ranks.map((targetRank, index) => ({
+            ...policy,
+            targetRank,
+            targetTitle: titles[index],
+            available: true,
+            practiceContentId: 10,
+            content: content(10),
+          }))
+        : [policy],
+    });
   if (url.pathname.endsWith("/title-exam-policies/BEGINNER")) {
     writes.push(req.postDataJSON());
     if (conflict) return reply(null, 409);
@@ -194,8 +213,67 @@ try {
     0,
   );
   assert.deepEqual(errors, []);
+  denied = false;
+  conflict = false;
+  empty = false;
+  multiplePolicies = true;
+  await page.setViewportSize({ width: 400, height: 811 });
+  await page.reload();
+  await page
+    .getByRole("button", { name: "설정 변경", exact: true })
+    .first()
+    .waitFor();
+  for (const index of [0, 3]) {
+    await page
+      .getByRole("button", { name: "설정 변경", exact: true })
+      .nth(index)
+      .click();
+    const heading = page.getByRole("heading", {
+      name: `${titles[index]} 시험 설정 변경`,
+      exact: true,
+    });
+    await heading.waitFor();
+    // DOM visibility alone misses a form appended below all four cards.
+    await page.waitForFunction(
+      (title) => {
+        const heading = [...document.querySelectorAll("h2")].find(
+          (item) => item.textContent === title,
+        );
+        if (!heading) return false;
+        const rect = heading.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= window.innerHeight;
+      },
+      `${titles[index]} 시험 설정 변경`,
+      { timeout: 3000 },
+    );
+    const editor = page.getByRole("region", {
+      name: `${titles[index]} 시험 설정 변경`,
+      exact: true,
+    });
+    assert.equal(
+      await editor.evaluate(
+        (element) =>
+          element === document.activeElement ||
+          element.contains(document.activeElement),
+      ),
+      true,
+    );
+    await page.getByRole("button", { name: "취소", exact: true }).click();
+    await page.waitForFunction(
+      (id) => document.activeElement?.id === id,
+      `edit-title-exam-${ranks[index]}`,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "설정 변경", exact: true })
+        .nth(index)
+        .evaluate((element) => element === document.activeElement),
+      true,
+    );
+  }
+  assert.deepEqual(errors, []);
   console.log(
-    "PASS: navigation, selection/preview, versioned save, conflict preservation, unavailable/empty, access denial (6 scenarios)",
+    "PASS: navigation, selection/preview, versioned save, conflict preservation, unavailable/empty, access denial, mobile four-policy editor visibility/focus/return (8 scenarios)",
   );
 } finally {
   await browser.close();
