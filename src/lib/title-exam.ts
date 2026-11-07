@@ -10,7 +10,12 @@ export function validateTitleExamResult(
   result: UserTitleExamResult,
 ): UserTitleExamResult {
   const hasValidScore =
-    Number.isFinite(result.score) && Number.isFinite(result.passingScore);
+    Number.isFinite(result.score) &&
+    result.score >= 0 &&
+    result.score <= 100 &&
+    Number.isFinite(result.passingScore) &&
+    result.passingScore >= 0 &&
+    result.passingScore <= 100;
   const passedByScore = hasValidScore && result.score >= result.passingScore;
   const titleChanged = result.currentTitle !== result.previousTitle;
   const isConsistentPass =
@@ -19,6 +24,7 @@ export function validateTitleExamResult(
     passedByScore &&
     titleChanged;
   const isConsistentFailure =
+    hasValidScore &&
     result.status === "FAILED" &&
     result.passed === false &&
     !passedByScore &&
