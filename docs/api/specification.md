@@ -1,5 +1,11 @@
 # API 명세 - VC-FE
 
+## 2026-11-08 선택형 음성 세부점수
+
+기존 Backend `/api/v3/analyses/{analysisId}`와 Direct 조회/SSE/저장 이력의 `score.details`를 보존한다.
+인증·상태·endpoint는 유지하며, 선택 필드가 없어도 총점·총평을 표시한다.
+[필드·표시·호환성 계약](score-details.md).
+
 정확한 API 계약을 이 문서에 기록한다.
 
 ## 엔드포인트 템플릿
