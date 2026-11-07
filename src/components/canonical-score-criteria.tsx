@@ -1,5 +1,6 @@
 import type { CanonicalAnalysisView } from "@/lib/canonical-analysis";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
+import { AnalysisScoreDetails } from "./analysis-score-details";
 
 export function CanonicalScoreCriteria({
   view,
@@ -7,6 +8,7 @@ export function CanonicalScoreCriteria({
   view: CanonicalAnalysisView;
 }) {
   const score = view.canonicalAnalysis?.score;
+  if (score?.details) return <AnalysisScoreDetails details={score.details} />;
   if (score?.validity !== "RUBRIC_COMPUTED") return null;
   const rows = canonicalCriterionPoints(score);
   if (rows.length === 0) return null;
