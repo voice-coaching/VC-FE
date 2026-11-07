@@ -282,6 +282,59 @@ test("contradictory grading responses are rejected before promotion UI", () => {
   );
 });
 
+test("missing or invalid grades are not displayed as a normal failure or pass", () => {
+  const result = {
+    examId: 456,
+    passed: false,
+    status: "FAILED" as const,
+    score: 69,
+    passingScore: 70,
+    previousTitle: "왕초보" as const,
+    currentTitle: "왕초보" as const,
+    evaluatedAt: "2026-11-07T00:00:00Z",
+  };
+  for (const score of [null, undefined, Number.NaN, Infinity, -1, 101, "69"]) {
+    assert.throws(
+      () => validateTitleExamResult({ ...result, score: score as number }),
+      /채점 결과를 확인할 수 없습니다/,
+    );
+  }
+  for (const passingScore of [null, undefined, Number.NaN, -1, 101]) {
+    assert.throws(
+      () =>
+        validateTitleExamResult({
+          ...result,
+          passingScore: passingScore as number,
+        }),
+      /채점 결과를 확인할 수 없습니다/,
+    );
+  }
+});
+
+test("the exact passing threshold is accepted and valid zero is a failure", () => {
+  const result = {
+    examId: 456,
+    passed: true,
+    status: "PASSED" as const,
+    score: 70,
+    passingScore: 70,
+    previousTitle: "왕초보" as const,
+    currentTitle: "초보" as const,
+    evaluatedAt: "2026-11-07T00:00:00Z",
+  };
+  assert.equal(validateTitleExamResult(result).passed, true);
+  assert.equal(
+    validateTitleExamResult({
+      ...result,
+      passed: false,
+      status: "FAILED",
+      score: 0,
+      currentTitle: "왕초보",
+    }).passed,
+    false,
+  );
+});
+
 test("all example difficulties use the existing content API and pronunciation filter", async () => {
   for (const difficulty of ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const) {
     globalThis.fetch = async (url) => {
