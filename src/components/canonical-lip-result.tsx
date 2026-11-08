@@ -37,6 +37,11 @@ export function CanonicalLipResult({
     !core.feedbackDeliveryAllowed
   )
     return null;
+  return <LipVisualResult visual={visual} />;
+}
+
+/** Also used by AI-owned video jobs without fabricating a Backend canonical view. */
+export function LipVisualResult({ visual }: { visual: LipVisual }) {
   const provisional =
     visual.scoreKind === "PROVISIONAL" ||
     visual.phoneAssessments.some((phone) => phone.scoreKind === "PROVISIONAL");
