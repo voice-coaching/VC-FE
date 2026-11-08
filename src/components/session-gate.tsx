@@ -1,8 +1,7 @@
 "use client";
 
-import { LoadingOverlay } from "@/components/loading-overlay";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "@/lib/api";
 import {
   getAuthSessionSnapshot,
@@ -33,18 +32,6 @@ function isProtectedPath(pathname: string) {
   );
 }
 
-function canOpenPath(pathname: string) {
-  const session = getAuthSessionSnapshot();
-  if (session.status !== "authenticated") return false;
-  return (
-    sessionRouteRedirect(
-      pathname,
-      session.onboardingCompleted,
-      hasAcceptedTerms(session.userId),
-    ) === null
-  );
-}
-
 export function SessionGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -55,6 +42,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
       : "ready",
   );
   const [message, setMessage] = useState("");
+  const [verifiedGeneration, setVerifiedGeneration] = useState(0);
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
@@ -111,6 +99,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           router.replace(destination);
           return;
         }
+        setVerifiedGeneration((value) => value + 1);
         setStatus("ready");
       })
       .catch((reason) => {
@@ -132,31 +121,27 @@ export function SessionGate({ children }: { children: ReactNode }) {
     };
   }, [pathname, protectedPath, retryKey, router]);
 
-  if (!protectedPath || (status === "ready" && canOpenPath(pathname)))
-    return children;
-
   return (
-    <main className="flex min-h-dvh items-center justify-center px-6 text-center">
-      {status !== "error" ? (
-        <LoadingOverlay label="로그인 상태를 확인하는 중…" />
-      ) : (
-        <div>
-          <h1 className="text-xl font-bold">서비스에 연결하지 못했어요</h1>
-          <p role="alert" className="mt-3 text-sm text-muted-foreground">
-            {message}
-          </p>
+    <>
+      <Fragment key={verifiedGeneration}>{children}</Fragment>
+      {protectedPath && status === "error" && (
+        <div
+          role="alert"
+          className="fixed bottom-20 left-1/2 z-50 w-[calc(100%-2rem)] max-w-[370px] -translate-x-1/2 rounded-2xl bg-[#191f28] p-4 text-sm text-white shadow-lg"
+        >
+          <p>로그인 상태를 확인하지 못했어요. {message}</p>
           <button
             type="button"
             onClick={() => {
               resetAuthSession();
               setRetryKey((value) => value + 1);
             }}
-            className="mt-6 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background"
+            className="mt-2 min-h-11 font-semibold text-[#c7baff]"
           >
-            다시 시도
+            다시 확인
           </button>
         </div>
       )}
-    </main>
+    </>
   );
 }

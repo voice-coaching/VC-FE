@@ -6,7 +6,7 @@ import type {
 
 export const TITLE_EXAM_CONTENT_CATEGORY = "TITLE_EXAM";
 
-function isTitleExamCategory(value: string, label?: string) {
+export function isTitleExamCategory(value: string, label?: string) {
   return (
     value === TITLE_EXAM_CONTENT_CATEGORY ||
     value === "EXAMPLE_QUESTION" ||

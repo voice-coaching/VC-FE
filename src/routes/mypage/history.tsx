@@ -1,5 +1,7 @@
 "use client";
 
+import { canonicalApi, canonicalDatabaseId } from "@/lib/api/canonical";
+import { isTitleExamCategory } from "@/lib/catalog-visibility";
 import { DirectHistory } from "@/components/direct-history";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
@@ -76,6 +78,7 @@ export default function LearningHistory() {
   const [items, setItems] = useState<TrainingHistoryItem[]>(
     initialHistory?.items ?? [],
   );
+  const [eligible, setEligible] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [loading, setLoading] = useState(initialHistory === null);
@@ -206,12 +209,60 @@ export default function LearningHistory() {
       active = false;
     };
   }, [items, userId, retry]);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    setEligible({});
+    void Promise.all(
+      items.map(async (item) => {
+        try {
+          const content = await api.content.get(item.contentId);
+          if (isTitleExamCategory(content.category))
+            return [String(item.sessionId), false] as const;
+          const detail = await api.myPage.getTrainingSession(item.sessionId);
+          if (!detail.analysis?.id || !detail.recording?.id)
+            return [String(item.sessionId), false] as const;
+          const view = await canonicalApi.get(
+            {
+              analysisId: canonicalDatabaseId(detail.analysis.id),
+              recordingId: canonicalDatabaseId(detail.recording.id),
+            },
+            controller.signal,
+          );
+          const core = view.canonicalAnalysis;
+          const hasFeedback =
+            view.jobStatus === "COMPLETED" &&
+            core?.decision.status === "ACCEPT" &&
+            core.feedbackDeliveryAllowed &&
+            core.coaching?.adapterStatus === "READY" &&
+            core.coaching.items.some((entry) =>
+              Boolean(entry.expression.action.trim()),
+            );
+          return [String(item.sessionId), Boolean(hasFeedback)] as const;
+        } catch {
+          return [String(item.sessionId), false] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (active) setEligible(Object.fromEntries(entries));
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [items, retry]);
+  const eligibilityPending = items.some(
+    (item) => eligible[String(item.sessionId)] === undefined,
+  );
   const visibleItems = useMemo(
     () =>
-      filterValue === "CUSTOM"
-        ? items.filter((item) => origins[String(item.contentId)] === "custom")
-        : items,
-    [items, origins, filterValue],
+      items.filter(
+        (item) =>
+          eligible[String(item.sessionId)] &&
+          (filterValue !== "CUSTOM" ||
+            origins[String(item.contentId)] === "custom"),
+      ),
+    [items, origins, filterValue, eligible],
   );
   const originsPending =
     filterValue === "CUSTOM" &&
@@ -336,7 +387,7 @@ export default function LearningHistory() {
               </button>
             </div>
           ) : null}
-          {loadingList || originsPending ? (
+          {loadingList || originsPending || eligibilityPending ? (
             <HistoryListSkeleton />
           ) : error ? null : groups.length ? (
             <div className="mt-5 space-y-7">
@@ -423,7 +474,7 @@ export default function LearningHistory() {
               </button>
             </p>
           ) : null}
-          {filterValue === "CUSTOM" && !groups.length && hasNext ? (
+          {!groups.length && hasNext ? (
             <button
               disabled={loadingMore || refreshing}
               onClick={() => void loadMore()}

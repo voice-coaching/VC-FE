@@ -871,11 +871,6 @@ function CourseCatalogView({
                             style={{ width: `${progress}%` }}
                           />
                         </div>
-                        <p className="mt-2 text-[11px] leading-[14px] text-[#8b95a1]">
-                          {(courseSteps?.length ?? detail?.stepCount)
-                            ? `${courseSteps?.length ?? detail?.stepCount}단계`
-                            : "단계별 연습"}
-                        </p>
                       </div>
                     </button>
                   );

@@ -25,7 +25,7 @@ export function initialSentenceAdmissions(
   resumeRequested: boolean,
   saved: unknown,
   count: number,
-  active?: SentenceAnalysisAdmission[],
+  active?: (SentenceAnalysisAdmission | null)[],
 ) {
   if (active) return readSentenceAdmissions(active, count);
   return resumeRequested ? readSentenceAdmissions(saved, count) : [];
