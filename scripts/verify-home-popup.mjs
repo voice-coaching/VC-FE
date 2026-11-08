@@ -28,6 +28,7 @@ try {
     "unsafe",
     "long",
     "link",
+    "weekly",
   ]) {
     const context = await browser.newContext({
       viewport:
@@ -41,6 +42,8 @@ try {
     );
     const calls = [],
       errors = [];
+    let currentPopupId = popup.id,
+      currentUserId = 1;
     await context.route("**/api/backend/**", async (route) => {
       const request = route.request(),
         path = new URL(request.url()).pathname.replace("/api/backend", "");
@@ -57,7 +60,7 @@ try {
         });
       if (path === "/api/users/me")
         return reply({
-          id: 1,
+          id: currentUserId,
           nickname: "fixture",
           onboardingCompleted: true,
           role: "USER",
@@ -75,7 +78,7 @@ try {
                   body: "긴 안내 문구입니다.\n".repeat(65),
                   deepLink: null,
                 }
-              : popup,
+              : { ...popup, id: currentPopupId },
         );
       }
       if (path === "/api/home")
@@ -155,10 +158,45 @@ try {
           path: "test-artifacts/home-popup/mobile-dismissed.png",
           animations: "disabled",
         });
+        await page.reload();
+        await dialog.waitFor();
       } else if (scenario === "long") {
         assert.equal(await dialog.getByRole("link").count(), 0);
         await page.getByRole("button", { name: "확인", exact: true }).click();
         await dialog.waitFor({ state: "detached" });
+      } else if (scenario === "weekly") {
+        const started = Date.now();
+        await page.getByRole("button", { name: "일주일간 보지 않기" }).click();
+        await dialog.waitFor({ state: "detached" });
+        const expiresAt = await page.evaluate(() =>
+          Number(localStorage.getItem("speakai.popup-hidden-until.v1:1:42")),
+        );
+        assert.ok(
+          expiresAt >= started + 7 * 86400000 &&
+            expiresAt <= Date.now() + 7 * 86400000,
+        );
+        await Promise.all([
+          page.waitForResponse((response) =>
+            response.url().endsWith("/api/users/me/popup"),
+          ),
+          page.reload(),
+        ]);
+        await homeHeading.waitFor({ state: "attached" });
+        assert.equal(await dialog.count(), 0);
+        currentPopupId = 43;
+        await page.reload();
+        await dialog.waitFor();
+        await page.getByRole("button", { name: "일주일간 보지 않기" }).click();
+        currentUserId = 2;
+        await page.reload();
+        await dialog.waitFor();
+        currentUserId = 1;
+        currentPopupId = 42;
+        await page.evaluate(() =>
+          localStorage.setItem("speakai.popup-hidden-until.v1:1:42", "0"),
+        );
+        await page.reload();
+        await dialog.waitFor();
       } else {
         assert.equal(
           await page

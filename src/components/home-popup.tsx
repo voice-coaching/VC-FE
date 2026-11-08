@@ -6,13 +6,17 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
 import { loadActiveHomePopup, type ActiveHomePopup } from "@/lib/home-popup";
 import {
+  isHomePopupHidden,
+  hideHomePopupForWeek,
+} from "@/lib/home-popup-preferences";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from "./ui/dialog";
 
-// Dismissals belong to this page visit/login only, not a permanent or daily preference.
+// Ordinary dismissals belong to this page visit/login; weekly choices use a separate preference.
 const dismissed = new Set<string>();
 
 /** Home-only notice overlay; loading/failure must not move or block the existing home content. */
@@ -37,7 +41,8 @@ export function HomePopup() {
           owner.signal.aborted ||
           epoch !== getAuthSessionVersion() ||
           !popup ||
-          dismissed.has(`${scope}:${popup.id}`)
+          dismissed.has(`${scope}:${popup.id}`) ||
+          isHomePopupHidden(userId, popup.id)
         )
           return;
         setSnapshot({ scope, popup });
@@ -94,6 +99,16 @@ export function HomePopup() {
               </Link>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (userId) hideHomePopupForWeek(userId, popup.id);
+              close();
+            }}
+            className="min-h-11 rounded-lg text-xs font-medium text-[#6b7684] underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
+          >
+            일주일간 보지 않기
+          </button>
         </DialogContent>
       )}
     </Dialog>
