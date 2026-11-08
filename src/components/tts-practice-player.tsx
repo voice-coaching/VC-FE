@@ -87,7 +87,7 @@ export function useTtsPracticePlayer(enabled: boolean) {
         }}
         onError={() => {
           setStatus("idle");
-          setNotice("??? ???? ?????. ?? ??? ???.");
+          setNotice("음성을 재생하지 못했습니다. 다시 눌러 재생해 주세요.");
         }}
       />
     ),
@@ -112,7 +112,7 @@ export function TtsPracticeButton({
         type="button"
         disabled={loading}
         onClick={() => void player.play(example)}
-        aria-label={`${index + 1}? ?? ${playing ? "?? ???" : "?? ??"}`}
+        aria-label={`${index + 1}번 예문 ${loading ? "불러오는 중" : playing ? "일시 정지" : "재생"}`}
         aria-busy={loading}
         className="flex min-h-11 items-center justify-center gap-1 rounded-full bg-[#f1edff] px-3 text-xs font-semibold text-[#6346f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6346f6] disabled:cursor-wait"
       >
@@ -126,7 +126,7 @@ export function TtsPracticeButton({
         ) : (
           <Play className="size-4" fill="currentColor" aria-hidden="true" />
         )}
-        {loading ? "?? ?" : playing ? "???" : "?? ??"}
+        {loading ? "불러오는 중" : playing ? "일시 정지" : "예시 듣기"}
       </button>
       {active && player.notice && (
         <p role="status" className="mt-1 max-w-28 text-xs text-destructive">
