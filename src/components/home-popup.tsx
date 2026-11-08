@@ -7,7 +7,7 @@ import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
 import { loadActiveHomePopup, type ActiveHomePopup } from "@/lib/home-popup";
 import {
   isHomePopupHidden,
-  hideHomePopupForWeek,
+  hideHomePopupForDays,
 } from "@/lib/home-popup-preferences";
 import {
   Dialog,
@@ -81,34 +81,30 @@ export function HomePopup() {
           <DialogDescription className="whitespace-pre-wrap break-words text-sm leading-6 text-[#4e5968]">
             {popup.body}
           </DialogDescription>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
+          {popup.href && (
+            <Link
+              href={popup.href}
               onClick={close}
-              className="min-h-12 flex-1 rounded-full bg-[#f2f4f6] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
+              className="flex min-h-12 items-center justify-center rounded-full bg-[#6346f6] px-4 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
             >
-              확인
-            </button>
-            {popup.href && (
-              <Link
-                href={popup.href}
-                onClick={close}
-                className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-[#6346f6] px-4 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
+              자세히 보기
+            </Link>
+          )}
+          <div className="flex gap-2 border-t border-[#f2f4f6] pt-1">
+            {([1, 7] as const).map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => {
+                  if (userId) hideHomePopupForDays(userId, popup.id, days);
+                  close();
+                }}
+                className="min-h-11 flex-1 rounded-lg text-xs font-medium text-[#6b7684] outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
               >
-                자세히 보기
-              </Link>
-            )}
+                {days === 1 ? "하루 동안 보지 않기" : "일주일 동안 보지 않기"}
+              </button>
+            ))}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (userId) hideHomePopupForWeek(userId, popup.id);
-              close();
-            }}
-            className="min-h-11 rounded-lg text-xs font-medium text-[#6b7684] underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
-          >
-            일주일간 보지 않기
-          </button>
         </DialogContent>
       )}
     </Dialog>

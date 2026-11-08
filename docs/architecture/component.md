@@ -10,7 +10,7 @@
 
 ## 홈 관리자 공지
 
-`HomePopup`은 `/home`에서만 마운트하고 기존 Dialog로 제목·본문·확인/이동 버튼을 렌더링한다.
+`HomePopup`은 `/home`에서만 마운트하고 기존 Dialog로 제목·본문·선택 이동 버튼과 하루/일주일 숨김 텍스트 버튼을 렌더링한다.
 HTTP와 외부 DTO 검증·허용 목적지 변환은 `lib/home-popup.ts`에 둔다. 기존 홈 카드·헤더 CSS는 수정하지 않는다.
 
 `score-details.ts`는 외부 표시 점수의 구조와 화면 변환을 맡고, `AnalysisScoreDetails`는 전달된 값을 렌더링한다.

@@ -1,4 +1,4 @@
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 type PopupStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 function browserStorage(): PopupStorage | undefined {
@@ -34,18 +34,28 @@ export function isHomePopupHidden(
   return false;
 }
 
-/** The ordinary close action does not call this; only the explicit weekly hide button persists a choice. */
+/** Only an explicit hide action persists a preference; X/Escape/backdrop close stay visit-only. */
+export function hideHomePopupForDays(
+  userId: string,
+  popupId: number,
+  days: 1 | 7,
+  now = Date.now(),
+  storage = browserStorage(),
+): boolean {
+  if (!storage) return false;
+  try {
+    storage.setItem(storageKey(userId, popupId), String(now + days * DAY_MS));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function hideHomePopupForWeek(
   userId: string,
   popupId: number,
   now = Date.now(),
   storage = browserStorage(),
 ): boolean {
-  if (!storage) return false;
-  try {
-    storage.setItem(storageKey(userId, popupId), String(now + WEEK_MS));
-    return true;
-  } catch {
-    return false;
-  }
+  return hideHomePopupForDays(userId, popupId, 7, now, storage);
 }

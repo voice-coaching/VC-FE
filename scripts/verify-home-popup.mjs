@@ -29,6 +29,7 @@ try {
     "long",
     "link",
     "weekly",
+    "daily",
   ]) {
     const context = await browser.newContext({
       viewport:
@@ -140,6 +141,17 @@ try {
       assert.ok(await homeHeading.isVisible());
     } else {
       await dialog.waitFor();
+      assert.equal(
+        await dialog.getByRole("button", { name: "확인", exact: true }).count(),
+        0,
+      );
+      for (const label of ["하루 동안 보지 않기", "일주일 동안 보지 않기"]) {
+        const control = dialog.getByRole("button", { name: label });
+        assert.equal(
+          await control.evaluate((element) => getComputedStyle(element).color),
+          "rgb(107, 118, 132)",
+        );
+      }
       const box = await dialog.boundingBox(),
         viewport = page.viewportSize();
       assert.ok(box.x >= 0 && box.x + box.width <= viewport.width);
@@ -162,18 +174,21 @@ try {
         await dialog.waitFor();
       } else if (scenario === "long") {
         assert.equal(await dialog.getByRole("link").count(), 0);
-        await page.getByRole("button", { name: "확인", exact: true }).click();
+        await page.getByRole("button", { name: "닫기", exact: true }).click();
         await dialog.waitFor({ state: "detached" });
-      } else if (scenario === "weekly") {
+      } else if (scenario === "weekly" || scenario === "daily") {
+        const days = scenario === "daily" ? 1 : 7;
+        const hideLabel =
+          days === 1 ? "하루 동안 보지 않기" : "일주일 동안 보지 않기";
         const started = Date.now();
-        await page.getByRole("button", { name: "일주일간 보지 않기" }).click();
+        await page.getByRole("button", { name: hideLabel }).click();
         await dialog.waitFor({ state: "detached" });
         const expiresAt = await page.evaluate(() =>
           Number(localStorage.getItem("speakai.popup-hidden-until.v1:1:42")),
         );
         assert.ok(
-          expiresAt >= started + 7 * 86400000 &&
-            expiresAt <= Date.now() + 7 * 86400000,
+          expiresAt >= started + days * 86400000 &&
+            expiresAt <= Date.now() + days * 86400000,
         );
         await Promise.all([
           page.waitForResponse((response) =>
@@ -186,7 +201,7 @@ try {
         currentPopupId = 43;
         await page.reload();
         await dialog.waitFor();
-        await page.getByRole("button", { name: "일주일간 보지 않기" }).click();
+        await page.getByRole("button", { name: hideLabel }).click();
         currentUserId = 2;
         await page.reload();
         await dialog.waitFor();
