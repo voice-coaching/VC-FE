@@ -6,7 +6,10 @@
 `BrowserVideoPracticeAttempt`는 같은 촬영본의 UUID·권한 문맥·업로드/조회 재개를 소유하고,
 `video-upload-authorizations.ts`와 `BrowserVideoClient`가 각각 Backend 권한/AI HTTP 및 DTO 검증을 담당한다.
 `browserVideoPresentation`은 공개 AI DTO를 화면 모델로 옮긴다. `BrowserVideoAnalysisResult`는 기존 AnalysisView와
-독립 `LipVisualResult`를 사용하며 Backend canonical wrapper·정수 ID를 생성하지 않는다.
+`LipScoreSummary`로 요약 입술점수를 표시하며 Backend canonical wrapper·정수 ID를 생성하지 않는다.
+요약 전용 score DTO는 숫자/null과 의미 문자열을 읽고 전체 결과용 canonical 점수 조건을 재사용하지 않는다.
+영상 화면은 `AnalysisView.plainFeedback` → `AnalysisSummary.plainText`로 서버 피드백을
+공백·기호·줄바꿈 포함 일반 텍스트로 표시한다. 기존 음성 총평의 표시 방식은 유지한다.
 
 ## 홈 관리자 공지
 

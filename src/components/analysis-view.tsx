@@ -81,6 +81,7 @@ export function AnalysisView({
   pronunciationDetails = {},
   lipVisual,
   lipSummary,
+  plainFeedback = false,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -97,6 +98,7 @@ export function AnalysisView({
   pronunciationDetails?: Record<string, PronunciationDetail[]>;
   lipVisual?: LipVisual;
   lipSummary?: BrowserVideoResult["visual"];
+  plainFeedback?: boolean;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const scoreDetails =
@@ -132,11 +134,12 @@ export function AnalysisView({
   );
   const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
   const canonicalCoaching = analysis.canonical?.canonicalAnalysis?.coaching;
-  const summary =
-    (canonicalCoaching?.adapterStatus === "READY" &&
-      canonicalCoaching.feedback?.trim()) ||
-    analysis.summaryFeedback?.trim() ||
-    "제공된 AI 총평이 없습니다.";
+  const summary = plainFeedback
+    ? (analysis.summaryFeedback ?? "제공된 AI 총평이 없습니다.")
+    : (canonicalCoaching?.adapterStatus === "READY" &&
+        canonicalCoaching.feedback?.trim()) ||
+      analysis.summaryFeedback?.trim() ||
+      "제공된 AI 총평이 없습니다.";
   const scoreRows = useMemo(() => {
     const score = analysis.canonical?.canonicalAnalysis?.score;
     if (score?.validity === "RUBRIC_COMPUTED") {
@@ -504,7 +507,11 @@ export function AnalysisView({
         className={`${styles.report} ${styles.reportEntrance} min-w-0 max-w-full space-y-5 px-5 py-4 overflow-x-clip [touch-action:pan-y_pinch-zoom] [overflow-wrap:anywhere] ${overlay ? "invisible" : ""}`}
       >
         <section className="flex flex-col items-center gap-4 pt-2">
-          <AnalysisSummary key={summary} text={summary} />
+          <AnalysisSummary
+            key={summary}
+            text={summary}
+            plainText={plainFeedback}
+          />
         </section>
 
         <AnalysisScoreDetails details={scoreDetails} />
