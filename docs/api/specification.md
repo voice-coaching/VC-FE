@@ -6,6 +6,26 @@
 권한 POST에만 검증한 Origin을 Backend 중계로 전달한다. 기존 VIDEO capability는 이 새 흐름의 gate가 아니다.
 Frontend 내부 endpoint는 기존 /api/backend/* 중계를 유지하며 영상 bytes는 이 중계를 통과하지 않는다.
 
+## GET /api/users/me/popup — 홈 관리자 공지
+
+활성 로그인 회원용 기존 Backend API를 `/api/backend` 프록시로 조회한다. path/query/body 인자는 없고
+기존 인증과 갱신을 사용한다. `cache: no-store`로 조회하며 팝업 조회 실패 때문에 홈을 오류 화면으로 바꾸지 않는다.
+200 ApiEnvelope.data는 아래 객체 또는 null이다. null이면 표시하지 않는다.
+
+| 필드 | 타입·필수/null | 의미 |
+| --- | --- | --- |
+| id | 양의 정수, 필수/non-null | 팝업 식별자 |
+| title | 문자열 1~200자, 필수/non-null | 공지 제목 |
+| body | 문자열 1~1,000자, 필수/non-null | 공지 본문, 줄바꿈 유지. 공백만 있는 값은 거절 |
+| deepLink | `/home`·`/notifications`·`/mypage`, 필수/nullable | 선택 이동 목적지. null이면 이동 버튼 없음 |
+| startsAt | offset 포함 ISO datetime, 필수/non-null | 서버가 정한 게시 시작 |
+| endsAt | offset 포함 ISO datetime, 필수/non-null | 게시 종료, 시작 이후 |
+
+서버가 시각·활성 상태·우선순위를 판단한다. FE가 기기 시각으로 게시 여부를 재판정하지 않는다.
+Backend `/notifications` 목적지는 실제 FE 화면 `/home/notifications`로 변환한다. 외부·임의 경로는 거절한다.
+401/403은 기존 인증/권한 오류이며, 네트워크/5xx/잘못된 응답도 팝업만 생략한다. 신규 분석·저장·읽음 API는 호출하지 않는다.
+닫기는 현재 로그인·브라우저 페이지 실행 중 메모리에만 보관하며 새로고침하면 서버에서 다시 확인한다.
+
 ## 2026-11-08 선택형 음성 세부점수
 
 기존 Backend `/api/v3/analyses/{analysisId}`와 Direct 조회/SSE/저장 이력의 `score.details`를 보존한다.
