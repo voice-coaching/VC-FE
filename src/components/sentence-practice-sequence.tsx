@@ -286,6 +286,11 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         courseExampleIndex={current.courseExampleIndex}
         sentenceIndex={current.sentenceIndex}
         capturedRecording={capture.files[index]}
+        recoveryScope={
+          capture.recoveryScope
+            ? `${capture.recoveryScope}:${index}`
+            : undefined
+        }
         background
         autoSubmit
         onTitleChange={undefined}

@@ -47,6 +47,16 @@ import { BrowserVideoPracticeAttempt } from "@/lib/browser-video-practice";
 import type { BrowserVideoResult } from "@/lib/api/browser-video";
 
 const MAX_RECORDING_MS = 12_000;
+function videoRecoveryScope(prompt: string) {
+  const location = new URL(window.location.href);
+  let id = location.searchParams.get("videoAttempt");
+  if (!id) {
+    id = crypto.randomUUID();
+    location.searchParams.set("videoAttempt", id);
+    window.history.replaceState(window.history.state, "", location);
+  }
+  return `video:${id}:${prompt}`;
+}
 
 type LipAnalysisPhase =
   "idle" | "preparing" | "uploading" | "analyzing" | "result" | "error";
@@ -105,6 +115,56 @@ export default function LipPractice() {
       onChange={setVideoConsentAccepted}
     />
   );
+
+  useEffect(() => {
+    let active = true;
+    const epoch = getAuthSessionVersion();
+    void (async () => {
+      try {
+        for (const set of LIP_PRACTICE_SETS) {
+          const restored = await Promise.all(
+            set.sentences.map((text) =>
+              BrowserVideoPracticeAttempt.restore(
+                videoRecoveryScope(text),
+                text,
+              ),
+            ),
+          );
+          if (!active || epoch !== getAuthSessionVersion()) {
+            restored.forEach((item) => {
+              if (item) URL.revokeObjectURL(item.clip.url);
+            });
+            return;
+          }
+          const found = restored.filter((item) => item !== null);
+          if (!found.length) continue;
+          setPracticeSet(set);
+          found.forEach((item) =>
+            attemptsRef.current.set(item.clip.promptIndex, item),
+          );
+          const clips = found.map((item) => item.clip);
+          clipsRef.current = clips;
+          setClips(clips);
+          setSelectedClip(clips[0].promptIndex);
+          setStep("complete");
+          setAnalysisError(
+            "보관한 촬영본을 복구했습니다. 동의 후 같은 작업의 상태를 다시 확인해 주세요.",
+          );
+          return;
+        }
+      } catch (reason) {
+        if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "영상 복구 정보를 읽지 못했습니다.",
+          );
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(
     () =>
@@ -243,7 +303,27 @@ export default function LipPractice() {
           delete next[promptIndex];
           return next;
         });
-        attemptsRef.current.delete(promptIndex);
+        const capturedAttempt = new BrowserVideoPracticeAttempt(
+          nextClips.find((item) => item.promptIndex === promptIndex)!,
+          prompts[promptIndex],
+          `입 모양 연습 ${promptIndex + 1}`,
+          videoRecoveryScope(prompts[promptIndex]),
+        );
+        try {
+          await capturedAttempt.saveCapture();
+          if (!mounted.current) return;
+          attemptsRef.current.set(promptIndex, capturedAttempt);
+        } catch (reason) {
+          if (mounted.current) {
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : "촬영본 보관에 실패했습니다.",
+            );
+            setStep("review");
+          }
+          return;
+        }
         setSubmittedPrompts((current) =>
           current.filter((index) => index !== promptIndex),
         );
@@ -280,7 +360,7 @@ export default function LipPractice() {
       setError("이 기기에서 영상 녹화를 시작하지 못했어요.");
       setStep("align");
     }
-  }, [promptIndex, prompts.length, stopRecording]);
+  }, [promptIndex, prompts, stopRecording]);
 
   useEffect(() => {
     if (step === "recording") void startRecording();
@@ -417,6 +497,7 @@ export default function LipPractice() {
         reportClip,
         prompts[target],
         `입 모양 연습 ${target + 1}`,
+        videoRecoveryScope(prompts[target]),
       );
       attemptsRef.current.set(target, attempt);
     }

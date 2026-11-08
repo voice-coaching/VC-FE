@@ -955,14 +955,17 @@ export interface ApiContract {
     getAnalysisCapabilities(
       signal?: AbortSignal,
     ): Promise<AnalysisCapabilities>;
-    create(input: {
-      contentId: Id;
-      courseStepId?: Id | null;
-      titleExamId?: Id | null;
-      sentenceIndex?: number;
-      sentenceText?: string;
-      learningFocus: LearningFocus;
-    }): Promise<TrainingSession>;
+    create(
+      input: {
+        contentId: Id;
+        courseStepId?: Id | null;
+        titleExamId?: Id | null;
+        sentenceIndex?: number;
+        sentenceText?: string;
+        learningFocus: LearningFocus;
+      },
+      idempotencyKey?: string,
+    ): Promise<TrainingSession>;
     get(sessionId: Id): Promise<TrainingSession>;
     cancel(sessionId: Id): Promise<{
       sessionId: Id;
@@ -972,6 +975,7 @@ export interface ApiContract {
     getUploadUrl(
       sessionId: Id,
       input: { fileName: string; mimeType: string; fileSizeBytes: number },
+      idempotencyKey?: string,
     ): Promise<RecordingUploadUrl>;
     uploadRecording(
       upload: RecordingUploadUrl,
@@ -989,6 +993,7 @@ export interface ApiContract {
         videoProcessingConsentAccepted?: boolean | null;
         videoProcessingConsentPolicyRevision?: string | null;
       },
+      idempotencyKey?: string,
     ): Promise<VoiceRecording>;
     listRecordings(sessionId: Id): Promise<VoiceRecording[]>;
     deleteRecording(sessionId: Id, recordingId: Id): Promise<void>;
@@ -999,6 +1004,7 @@ export interface ApiContract {
     analyze(
       sessionId: Id,
       consent?: AnalysisConsentInput,
+      idempotencyKey?: string,
     ): Promise<AnalysisRequest>;
     getAnalysisStatus(
       sessionId: Id,
@@ -1008,6 +1014,7 @@ export interface ApiContract {
       sessionId: Id,
       consent?: AnalysisConsentInput,
       expected?: import("../canonical-analysis").CanonicalViewIdentity,
+      idempotencyKey?: string,
     ): Promise<AnalysisRequest>;
     getSessionAnalysis(sessionId: Id): Promise<SessionAnalysis>;
     getRecordingPlaybackUrl(recordingId: Id): Promise<PlaybackUrl>;

@@ -94,6 +94,7 @@ export async function createTitleExamSession(
   examId: Id,
   contentId: Id,
   isCurrent: () => boolean = () => true,
+  idempotencyKey?: string,
 ) {
   const exam = await api.users.getTitleExam(examId);
   if (!isCurrent())
@@ -108,12 +109,15 @@ export async function createTitleExamSession(
     );
   // This endpoint reuses a live linked session under the server lock and
   // creates a replacement for CANCELED/FAILED sessions. A cached ID cannot do so.
-  const session = await api.training.create({
-    contentId: exam.practiceContentId,
-    titleExamId: exam.id,
-    courseStepId: null,
-    learningFocus: "PRONUNCIATION",
-  });
+  const session = await api.training.create(
+    {
+      contentId: exam.practiceContentId,
+      titleExamId: exam.id,
+      courseStepId: null,
+      learningFocus: "PRONUNCIATION",
+    },
+    idempotencyKey,
+  );
   const sessionId = session.sessionId ?? session.id;
   if (sessionId == null) throw new Error("학습 세션 ID가 응답에 없습니다.");
   return sessionId;

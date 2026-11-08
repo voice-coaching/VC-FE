@@ -85,7 +85,33 @@ function submission(
   let error: string | null = null;
   let waits = 0;
   const noop = () => {};
+  let prepared = false;
+  const durable = {
+    record: { recordingId: 104 },
+    prepareRecording: async () => {
+      if (!prepared) {
+        counts.uploads++;
+        counts.registrations++;
+        prepared = true;
+      }
+      return { sessionId: 138, recordingId: 104 };
+    },
+    admission: async () => {
+      counts.submissions++;
+      if (options.admissionFailure)
+        throw new ApiError(
+          "not accepted",
+          options.admissionFailure,
+          options.admissionCode,
+        );
+      return { analysisId: 20 };
+    },
+  };
   const deps = {
+    recovery: { ready: true, error: null, attempt: { current: null } },
+    durableAttempt: async () => durable,
+    setSessionId: noop,
+    resumedRecording: null,
     submissionBusyRef: busy,
     mountedRef: { current: true },
     authEpochRef: { current: 1 },
@@ -239,6 +265,7 @@ test("a lost acknowledgement can advance after a status read without waiting for
   const admissions: SentenceAnalysisAdmission[] = [];
   const noop = () => {};
   const deps = {
+    recovery: { attempt: { current: null } },
     sessionId: 138,
     setRequestError: noop,
     setRequestFailure: noop,
@@ -283,6 +310,7 @@ test("a finalized sentence automatically submits exactly once and does not retry
   const recorder = { status: "recorded", blob: new Blob(["sentence one"]) };
   const submittedBlob = { current: null as Blob | null };
   const execute = new Function(
+    "recovery",
     "autoSubmit",
     "phase",
     "recorder",
@@ -297,6 +325,7 @@ test("a finalized sentence automatically submits exactly once and does not retry
   );
   const run = (phase = "review") =>
     execute(
+      { ready: true, error: null },
       true,
       phase,
       recorder,

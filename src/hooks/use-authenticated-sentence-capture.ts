@@ -35,6 +35,7 @@ export function useAuthenticatedSentenceCapture(
   const pending = useRef(new Set<Promise<void>>());
   const failures = useRef(new Map<number, string>());
   const run = useRef<{ scope: string; runId: string } | null>(null);
+  const [recoveryScope, setRecoveryScope] = useState<string>();
   const owner = useRef(0);
   const accepted = useRef(admissions);
   useLayoutEffect(() => {
@@ -120,6 +121,7 @@ export function useAuthenticatedSentenceCapture(
         }
         runId ??= crypto.randomUUID();
         run.current = { scope, runId };
+        setRecoveryScope(`${scope}:${runId}`);
         localStorage.setItem(scope, JSON.stringify({ identity, runId }));
         const restored = await Promise.all(
           items.map(async (_, index) => {
@@ -159,6 +161,7 @@ export function useAuthenticatedSentenceCapture(
       (_, index) => Boolean(admissions[index]) || recorded.includes(index),
     );
   return {
+    recoveryScope,
     recorder,
     files,
     ready,
