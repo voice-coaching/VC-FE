@@ -63,7 +63,9 @@ export const directResultSchema = z
         : null;
     if (
       practice.decisionStatus !== result.decision.status ||
-      JSON.stringify(practice.score) !== JSON.stringify(result.score) ||
+      practice.score.overallScore !== result.score.overallScore ||
+      practice.score.validity !== result.score.validity ||
+      practice.score.reason !== result.score.reason ||
       practice.feedback !== feedback
     ) {
       context.addIssue({

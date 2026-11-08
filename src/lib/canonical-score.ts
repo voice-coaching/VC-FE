@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { publicScoreDetailsSchema } from "./score-details";
+
+// Optional display metadata must never hide an otherwise valid overall score.
+const scoreMetadata = {
+  rubricRevision: z.unknown().optional(),
+  criteria: z.unknown().optional(),
+  details: publicScoreDetailsSchema.optional().catch(undefined),
+};
 
 export const scoreCriteria = [
   ["vowels", "모음", 25],
@@ -18,8 +26,7 @@ const computedScore = z
     validity: z.literal("RUBRIC_COMPUTED"),
     reason: z.literal("EVIDENCE_BOUND_PRACTICE_SCORE"),
     // AI owns grading. Historical details never gate the overall score.
-    rubricRevision: z.unknown().optional(),
-    criteria: z.unknown().optional(),
+    ...scoreMetadata,
   })
   .strict();
 
@@ -34,6 +41,7 @@ export const canonicalScoreSchema = z.union([
         "NOT_AVAILABLE",
       ]),
       reason: z.literal("NO_APPROVED_SCORING_CONTRACT"),
+      ...scoreMetadata,
     })
     .strict(),
   z
@@ -41,6 +49,7 @@ export const canonicalScoreSchema = z.union([
       overallScore: z.null(),
       validity: z.literal("UNSCORABLE"),
       reason: z.literal("SCORING_FAILED"),
+      ...scoreMetadata,
     })
     .strict(),
   z
@@ -48,6 +57,7 @@ export const canonicalScoreSchema = z.union([
       overallScore: z.null(),
       validity: z.literal("NOT_AVAILABLE"),
       reason: z.literal("INPUT_NOT_ACCEPTED"),
+      ...scoreMetadata,
     })
     .strict(),
   z
@@ -55,6 +65,7 @@ export const canonicalScoreSchema = z.union([
       overallScore: z.null(),
       validity: z.literal("NOT_AVAILABLE"),
       reason: z.literal("RESULT_NOT_DELIVERED"),
+      ...scoreMetadata,
     })
     .strict(),
 ]);

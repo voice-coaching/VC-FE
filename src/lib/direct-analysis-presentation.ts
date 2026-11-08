@@ -22,6 +22,7 @@ export function directAnalysisPresentation(
     )
     .join("\n\n");
   return {
+    scoreDetails: result.score.details ?? result.practiceResult?.score.details,
     id: result.sourceIdentity.executionId,
     status: result.failure ? "FAILED" : "COMPLETED",
     outcome: null,
