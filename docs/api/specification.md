@@ -5,6 +5,10 @@
 `/lip-practice`의 Backend 권한 발급과 AI 원본 접수/조회는 [직접 영상 계약](direct-video-upload.md)을 따른다.
 권한 POST에만 검증한 Origin을 Backend 중계로 전달한다. 기존 VIDEO capability는 이 새 흐름의 gate가 아니다.
 Frontend 내부 endpoint는 기존 /api/backend/* 중계를 유지하며 영상 bytes는 이 중계를 통과하지 않는다.
+화면용 최종 결과는 AI `GET /browser/v1/video-analysis-jobs/{jobId}/summary`를 사용한다.
+동일 grant/Origin으로 조회하고 200 요약의 score·visual·coaching·failure를 전용 DTO로 읽는다.
+요약 bytes의 digest는 X-Result-SHA256·ETag와 대조하며 상태의 전체 결과 digest와 비교하지 않는다.
+필드·실패·표시 계약은 [화면용 요약](direct-video-upload.md#결과-표시와-보존-범위)에 정의한다.
 
 ## GET /api/users/me/popup — 홈 관리자 공지
 

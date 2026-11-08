@@ -1,6 +1,7 @@
 # 브라우저 원본 영상 직접 업로드
 
-2026-11-08 소스 연결. AI 운영 계약 d67aaf6/PR #73, Backend #212·#213을 따른다.
+2026-11-08 소스 연결. 업로드는 AI PR #73, 화면용 요약은 AI PR #75의
+`voice-coaching.browser-video-summary.v1`, 권한 발급은 Backend #212·#213을 따른다.
 이 문서의 Frontend 변경 자체는 운영 배포·실제 로그인 영상 QA 완료를 뜻하지 않는다.
 이전 RS256 `/api/analysis-authorizations/video` 후보를 사용하지 않고 운영 Ed25519 계약으로 교체했다.
 
@@ -43,7 +44,7 @@ AI 호출은 Backend가 반환한 HTTPS origin과 고정 jobsPath만 사용하�
 | PUT | /browser/v1/video-analysis-jobs/{jobId}/source | 실제 원본 Blob, 선언 video MIME, 200 상태 |
 | POST | /browser/v1/video-analysis-jobs/{jobId}/start | 본문 없음, 202 상태 |
 | GET | /browser/v1/video-analysis-jobs/{jobId} | 200 상태 |
-| GET | /browser/v1/video-analysis-jobs/{jobId}/result | 200 원본 JSON bytes·X-Result-SHA256 |
+| GET | /browser/v1/video-analysis-jobs/{jobId}/summary | 200 화면용 최종 요약 bytes·X-Result-SHA256·ETag |
 | POST | /browser/v1/video-analysis-jobs/{jobId}/cancel | 명시적 서버 취소용 client 메서드, 200 상태 |
 
 상태는 AWAITING_MEDIA→QUEUED→RUNNING→COMPLETED/FAILED, 또는 CANCELLED다.
@@ -55,19 +56,44 @@ AI 취소·실패를 뜻하지 않는다. 대기 중단은 AbortSignal로 요청
 
 ## 결과 표시와 보존 범위
 
-resultAvailable=true일 때 최대 2 MiB 원본 응답 bytes를 SHA-256으로 검증하고 상태 digest·응답 헤더와 대조한다.
-jobId·executionId·clientRequestId·종료 상태·originalVideoSha256·scriptSha256을 현재 촬영본과 대조한다.
-score.overallScore·선택 details·coaching.feedback·visual 및 위치별 subScores를 기존 리포트에 표시한다.
-0은 유효, null은 미제공이다. 총점/가중치를 재계산하지 않고 세부점수 부재로 총평을 숨기지 않는다.
+resultAvailable=true일 때 `/summary`의 최대 2 MiB 응답 bytes를 SHA-256으로 검증하고
+요약 응답의 X-Result-SHA256·따옴표로 감싼 ETag와 대조한다. 상태 resultSha256은 전체 보존
+결과의 digest이므로 요약과 비교하지 않는다. `/result`는 호환용이며 이 화면에서는 호출하지 않는다.
+jobId·executionId·clientRequestId·종료 상태를 현재 시도와 대조한다. 요약에는 원본 미디어 hash가 없다.
+
+| 필드 | 타입·필수/null | 의미 |
+|---|---|---|
+| schemaVersion | string/필수 | voice-coaching.browser-video-summary.v1 |
+| jobId·executionId·clientRequestId | UUID string/필수 | 현재 작업·실행·시도 연결 |
+| status | string/필수 | COMPLETED 또는 FAILED |
+| score.overallScore | number/필수/nullable | AI 종합점수 0~100 |
+| score.validity·score.reason | string/필수 | AI 점수 의미. 기존 전체 결과 enum으로 거절하지 않음 |
+| visual.score | number/필수/nullable | 종합점수와 별도인 입술점수 0~100 |
+| visual.scoreKind | string/필수 | CALIBRATED·PROVISIONAL·NONE |
+| visual.scoreScope | string/필수 | WHOLE_CLIP·ASSESSED_PHONES_ONLY·UNAVAILABLE |
+| coaching.feedback | string/필수 | 서버 피드백을 기호·공백·줄바꿈 포함 일반 텍스트로 표시 |
+| failure | object/필수/nullable | 실패 시 code:string. HTTP 200도 status/failure를 확인 |
+
+요약은 전용 DTO로 읽고 기존 전체 결과의 점수·CORE 파서를 재사용하지 않는다.
+0은 유효, null은 미제공이다. 입술점수 null이어도 총점·피드백을 표시한다.
+ASSESSED_PHONES_ONLY는 ‘관찰된 부분 기준’, PROVISIONAL은 임시 참조 비교 점수로 표시한다.
+점수·가중치를 재계산하지 않고 발음별 관찰·시간·프레임·세부 조음 목록을 생성하지 않는다.
 내부 CORE·landmark·저장 경로를 화면에 전달하지 않으며 AI UUID를 Backend 정수 분석 ID로 위장하지 않는다.
+
+요약 GET의 401은 동일 시도 권한 갱신, 403은 Origin 오류, 404는 미존재/다른 소유자,
+409는 결과 미준비/없는 종료 결과다. 오류 시 상태 재확인으로 판단하며 5xx·수집 실패를
+새 분석·GPT 실행으로 바꾸지 않는다. 실패 응답에 서버 피드백이 있으면 그대로 표시한다.
 
 이 새 경로는 Backend 분석 이력/완료에 연결되지 않는다. 현재 화면에서 결과를 확인하고 완료 시 홈으로 이동한다.
 저장됐다고 주장하는 리포트 저장 dialog와 Backend 학습 기록 이동을 새 영상 경로에 사용하지 않는다.
-기존 음성/Backend 결과의 이력과 리포트 저장은 바꾸지 않는다. 페이지를 떠난 뒤 영상 결과 재진입은 별도 연결 과제다.
+기존 음성/Backend 결과의 이력과 리포트 저장은 바꾸지 않는다. 브라우저 복구 저장소의 기존
+촬영본·UUID·세션·AI 작업 연결로 같은 연습을 재개하며, 사용자 이력 화면 연결과는 구분한다.
 
 ## 검증
 
 TypeScript noEmit·변경 파일 ESLint/Prettier·Git diff와 endpoint/호출 경로를 확인했다.
+요약·기존 작업 복구 회귀 21건에서 0/null·확장 점수 의미·실패 피드백·긴 피드백·
+일반 텍스트 이스케이프·요약 digest·시도 식별자 검증을 확인했다.
 Next 16.3.5 webpack 프로덕션 빌드에서 컴파일·타입 검사·42개 페이지 생성을 통과했다.
 로컬에 빠진 잠금 버전 PortOne SDK 0.1.13은 기존 검증 전용 설치 경로로 해석했다.
 빌드 중에만 사용한 tsconfig 경로 설정과 생성된 next-env 변경은 원복하고 의존성·잠금 파일을 변경하지 않는다.

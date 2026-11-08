@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { canonicalScoreSchema } from "../canonical-score";
 import { ApiError, getAuthSessionVersion } from "./client";
 import type { Id } from "./types";
 import {
@@ -36,9 +35,14 @@ const resultSchema = z.object({
   executionId: z.string().uuid(),
   clientRequestId: z.string().uuid(),
   status: z.enum(["COMPLETED", "FAILED"]),
-  score: canonicalScoreSchema,
+  // Summary validity/reason are descriptive strings, not legacy scoring gates.
+  score: z.object({
+    overallScore: z.number().finite().min(0).max(100).nullable(),
+    validity: z.string(),
+    reason: z.string(),
+  }),
   coaching: z.object({
-    feedback: z.string().max(4000),
+    feedback: z.string(),
   }),
   visual: z.object({
     score: z.number().finite().min(0).max(100).nullable(),

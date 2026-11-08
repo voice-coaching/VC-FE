@@ -30,6 +30,7 @@ export function BrowserVideoAnalysisResult({
       recordingUrl={recordingUrl}
       isCameraPractice
       corrections={[]}
+      plainFeedback
       lipSummary={completed ? result.visual : undefined}
       reportParameter={`videoReport-${result.jobId}`}
     />
