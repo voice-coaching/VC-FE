@@ -79,6 +79,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
     retry: boolean,
     signal?: AbortSignal,
     audiovisual = false,
+    idempotencyKey?: string,
   ) {
     const epoch = getAuthSessionVersion();
     try {
@@ -92,6 +93,7 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
           endpointErrorsOnly: true,
           headers: {
             "X-Analysis-Result-Schema": CANONICAL_RESULT_HEADER,
+            ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
           },
         },
       );
@@ -126,12 +128,14 @@ export function createCanonicalAnalysisClient(baseUrl: string) {
       sessionId: Id,
       consent?: AnalysisConsentInput,
       signal?: AbortSignal,
-    ) => submit(sessionId, consent, false, signal),
+      idempotencyKey?: string,
+    ) => submit(sessionId, consent, false, signal, false, idempotencyKey),
     retry: (
       sessionId: Id,
       consent?: AnalysisConsentInput,
       signal?: AbortSignal,
-    ) => submit(sessionId, consent, true, signal),
+      idempotencyKey?: string,
+    ) => submit(sessionId, consent, true, signal, false, idempotencyKey),
   };
 }
 

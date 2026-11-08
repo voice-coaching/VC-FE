@@ -248,12 +248,13 @@ function ActiveTitleExamSession({
     [examId, content.id],
   );
   const restoreSession = useCallback(
-    async (isCurrent: () => boolean) => {
+    async (isCurrent: () => boolean, idempotencyKey?: string) => {
       const restored = await loadTitleExamResume(
         api,
         examId,
         content.id,
         isCurrent,
+        idempotencyKey,
       );
       // A recording may have appeared in another tab since the entry lookup.
       if (
