@@ -16,6 +16,7 @@ import {
 } from "./communications";
 import { AuditPage } from "./audit";
 import { TitleExamPoliciesPage } from "./title-exam-policies";
+import { CoursesPage, CourseDetail } from "./courses";
 export function AdminRouter({
   section,
   id,
@@ -26,6 +27,8 @@ export function AdminRouter({
   creating?: boolean;
 }) {
   switch (section) {
+    case "courses":
+      return id || creating ? <CourseDetail courseId={id} /> : <CoursesPage />;
     case "title-exams":
       return <TitleExamPoliciesPage />;
     case "users":

@@ -51,3 +51,14 @@
 | POST | `/direct/api/v1/practice-batches/{batchId}/sentences/{sequenceNo}` | 없음 | 문장 WAV 한 개 접수·분석 시작 |
 | GET | `/direct/api/v1/practice-batches/{batchId}` | 없음 | 진행 또는 전 문장 피드백 일괄 조회 |
 | POST | `/direct/api/v1/practice-batches/{batchId}/cancellations` | 없음 | 미공개 연습과 접수 작업 취소 |
+
+## 관리자 클래스 문장
+
+| Method | Path                      | 인증  | 목적                              |
+| ------ | ------------------------- | ----- | --------------------------------- |
+| GET    | `/api/admin/courses`      | ADMIN | 클래스별 검색·페이징              |
+| GET    | `/api/admin/courses/{id}` | ADMIN | 클래스와 현재 연결 문장           |
+| POST   | `/api/admin/courses`      | ADMIN | 클래스와 문장 구성 등록           |
+| PATCH  | `/api/admin/courses/{id}` | ADMIN | 클래스 설정과 문장 구성 전체 저장 |
+
+`GET /api/admin/contents`의 선택 `excludeClassPractice`를 포함한 [계약·오류·배포 순서](../admin-class-contents.md).

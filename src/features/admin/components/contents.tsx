@@ -34,13 +34,16 @@ import {
   label,
 } from "./shared";
 import styles from "../admin.module.css";
+import { CoursesPanel } from "./courses";
 export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
+  const router = useRouter();
   const base = announcer ? "/admin/announcer" : "/admin/contents";
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<Query>({});
   const contents = useAdminQuery<AdminPage<Content>>("/contents", {
     ...filters,
     ...(announcer ? { type: "ANNOUNCER" } : {}),
+    ...(!announcer ? { excludeClassPractice: true } : {}),
     page,
     size: 20,
   });
@@ -51,7 +54,7 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
         description={
           announcer
             ? "연습 문장을 등록하고 아나운서 기준 음성을 연결하세요."
-            : "공용 학습 문장의 초안 작성과 공개 상태를 관리하세요."
+            : "클래스는 묶음으로, 일반 콘텐츠는 문장별로 관리하세요."
         }
       >
         <ButtonLink href={`${base}/new`} primary>
@@ -59,12 +62,17 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
           {announcer ? "문장·음성 등록" : "새 콘텐츠"}
         </ButtonLink>
       </Heading>
+      {!announcer && <CoursesPanel />}
       <Panel>
         <form
           className={styles.filters}
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
+            if (data.get("type") === "CLASS_PRACTICE") {
+              router.push("/admin/courses");
+              return;
+            }
             setFilters({
               keyword: String(data.get("keyword") ?? ""),
               type: String(data.get("type") ?? ""),
@@ -336,6 +344,10 @@ function ContentEditor({
             value={type}
             disabled={!!current || announcer}
             onChange={(event) => {
+              if (!current && event.target.value === "CLASS_PRACTICE") {
+                router.push("/admin/courses/new");
+                return;
+              }
               setType(event.target.value as ContentType);
               setCategory("");
             }}

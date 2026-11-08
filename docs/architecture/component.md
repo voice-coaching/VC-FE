@@ -1,5 +1,9 @@
 # 컴포넌트 및 모듈 문서 - VC-FE
 
+## 관리자 클래스 편집
+
+`CoursesPanel`은 실제 클래스별 목록, `CourseDetail`/`CourseEditor`는 같은 페이지의 문장 편집 상태와 UI를 맡는다. `course-services.ts`는 문장 배열·클래스 소속·기대 버전을 검증하고 기존 `adminApi` adapter로 저장한다. 변경 후 캐시 갱신·권한 변경·중복 실행 차단은 기존 관리자 hooks를 사용한다. [계약과 배포 순서](../admin-class-contents.md).
+
 ## 브라우저 영상 직접 업로드
 
 `LipPractice`는 촬영과 화면 조립, `BrowserVideoConsent`는 현재 동의 입력을 맡는다.

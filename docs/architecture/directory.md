@@ -1,5 +1,12 @@
 # 디렉토리 문서 - VC-FE
 
+## 관리자 클래스 문장 관리
+
+- `src/features/admin/components/courses.tsx`: 클래스별 목록, 같은 페이지의 클래스·문장 편집 UI.
+- `src/features/admin/course-services.ts`: 클래스 전체 저장 검증·관리 API 호출·응답 검증.
+- `src/features/admin/course-services.test.ts`, `scripts/verify-admin-courses.mjs`: 서비스/브라우저 검증.
+- [동작과 백엔드 선행 배포](../admin-class-contents.md).
+
 ## 원본 영상 직접 업로드
 
 - `src/lib/api/video-upload-authorizations.ts`: 운영 Ed25519 grant DTO/권한 발급 client.
