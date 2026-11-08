@@ -11,6 +11,28 @@ import {
 import { saveAccessToken } from "../src/lib/api/client";
 import { browserVideoPresentation } from "../src/lib/browser-video-presentation";
 import { LipScoreSummary } from "../src/components/lip-score-summary";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+
+// Use the real feedback component; only CSS and Next's image renderer are stubbed for Node.
+const AnalysisSummary = new Function(
+  "React",
+  "Image",
+  "styles",
+  "const { useId, useState } = React;\n" +
+    ts.transpile(
+      readFileSync("src/components/analysis-summary.tsx", "utf8")
+        .replace(/^import.*;$/gm, "")
+        .replace("export function", "function"),
+      { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
+    ) +
+    "\nreturn AnalysisSummary;",
+)(
+  React,
+  (props: React.ImgHTMLAttributes<HTMLImageElement>) =>
+    React.createElement("img", props),
+  {},
+);
 
 const jobId = "10000000-0000-4000-8000-000000000001";
 const executionId = "10000000-0000-4000-8000-000000000002";
@@ -48,6 +70,11 @@ for (const scenario of [
   "wrong-execution",
   "zero",
   "null-lip",
+  "new-score-metadata",
+  "null-overall",
+  "long-feedback",
+  "failed-feedback",
+  "wrong-score",
 ] as const) {
   test(`summary ${scenario}: uses its own digest and preserves attempt binding`, async () => {
     const originalFetch = globalThis.fetch;
@@ -65,6 +92,25 @@ for (const scenario of [
       value.visual.scoreKind = "NONE";
       value.visual.scoreScope = "UNAVAILABLE";
     }
+    if (scenario === "new-score-metadata") {
+      value.score.validity = "NEW_AI_VALIDITY";
+      value.score.reason = "NEW_AI_REASON";
+    }
+    if (scenario === "null-overall") {
+      value.score.overallScore = null;
+      value.score.validity = "UNSCORABLE";
+      value.score.reason = "INSUFFICIENT_AUDIO";
+    }
+    if (scenario === "long-feedback")
+      value.coaching.feedback = "가".repeat(4001);
+    if (scenario === "failed-feedback") {
+      value.status = "FAILED";
+      value.failure = { code: "EXECUTION_INTERRUPTED" };
+      value.score.overallScore = null;
+      value.score.validity = "NOT_AVAILABLE";
+      value.score.reason = "EXECUTION_INTERRUPTED";
+    }
+    if (scenario === "wrong-score") value.score.overallScore = 101;
     const raw = new TextEncoder().encode(JSON.stringify(value));
     const pin = await browserVideoSha256(raw);
     let summaryGets = 0;
@@ -126,7 +172,7 @@ for (const scenario of [
         jobId,
         executionId,
         clientRequestId: attempt,
-        status: "COMPLETED",
+        status: value.status,
         resultSha256: "c".repeat(64),
       } as BrowserVideoJob;
       if (scenario.startsWith("wrong-"))
@@ -172,4 +218,19 @@ test("missing lip score keeps valid overall score and feedback", () => {
     renderToStaticMarkup(<LipScoreSummary visual={value.visual} />),
     /점수를 제공하기 어려워요/,
   );
+});
+
+test("video feedback remains literal text including markup and line breaks", () => {
+  const value = result();
+  const feedback =
+    "  * 입술 → **안내**를 읽어 보세요.\n\n<script>example</script>  ";
+  value.coaching.feedback = feedback;
+  const view = browserVideoPresentation(value);
+  assert.equal(view.summaryFeedback, feedback);
+  const html = renderToStaticMarkup(
+    <AnalysisSummary text={view.summaryFeedback} plainText />,
+  );
+  assert.match(html, /  \* 입술 → \*\*안내\*\*를 읽어 보세요\.\n\n/);
+  assert.match(html, /&lt;script&gt;example&lt;\/script&gt;  /);
+  assert.doesNotMatch(html, /더 보기|<strong>|<script>/);
 });

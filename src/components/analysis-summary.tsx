@@ -4,7 +4,13 @@ import Image from "next/image";
 import { useId, useState } from "react";
 import styles from "./analysis-summary.module.css";
 
-export function AnalysisSummary({ text }: { text: string }) {
+export function AnalysisSummary({
+  text,
+  plainText = false,
+}: {
+  text: string;
+  plainText?: boolean;
+}) {
   const id = useId();
   const paragraphs = text
     .replace(/\r\n/g, "\n")
@@ -55,21 +61,29 @@ export function AnalysisSummary({ text }: { text: string }) {
         <h2>AI 총평</h2>
       </div>
       <div id={id} className={styles.body}>
-        <div className={styles.text}>{content[0]}</div>
-        <div
-          className={styles.remainder}
-          data-expanded={expanded}
-          inert={!expanded}
-          aria-hidden={!expanded}
-        >
-          <div className={styles.remainderClip}>
-            <div className={`${styles.text} ${styles.remainingText}`}>
-              {content.slice(1)}
+        {plainText ? (
+          <p className={styles.text} style={{ whiteSpace: "pre-wrap" }}>
+            {text}
+          </p>
+        ) : (
+          <>
+            <div className={styles.text}>{content[0]}</div>
+            <div
+              className={styles.remainder}
+              data-expanded={expanded}
+              inert={!expanded}
+              aria-hidden={!expanded}
+            >
+              <div className={styles.remainderClip}>
+                <div className={`${styles.text} ${styles.remainingText}`}>
+                  {content.slice(1)}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
-      {overflows && (
+      {!plainText && overflows && (
         <button
           type="button"
           aria-expanded={expanded}

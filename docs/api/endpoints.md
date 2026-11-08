@@ -27,6 +27,10 @@
 
 | Method | URL | 인증 | 설명 |
 |---|---|---|---|
+| GET | `/browser/v1/video-analysis-jobs/{jobId}/summary` (AI origin) | Backend grant·허용 Origin | 영상 최종 종합점수·입술점수·피드백 조회 |
+
+| Method | URL | 인증 | 설명 |
+|---|---|---|---|
 | GET | `/api/analysis-capabilities/canonical` | 사용자 로그인 | 분석 계약·접수 가능 상태·목적별 지원 범위 |
 | GET | `/api/v3/analyses/{analysisId}` | 사용자 로그인·소유 확인 | 현재 실행 결과와 저장·후속 작업 상태 |
 
