@@ -88,6 +88,28 @@ async function proxyRequest(request: Request, context: ProxyContext) {
   });
   requestHeaders.set("x-forwarded-origin", requestUrl.origin);
 
+  // Only browser-video grants require the actual origin in their signed binding.
+  // Keep stripping Origin on every other upstream route.
+  if (
+    request.method === "POST" &&
+    /^api\/training-sessions\/[1-9][0-9]*\/video-analysis-upload-grants$/.test(
+      targetPath,
+    )
+  ) {
+    const origin = request.headers.get("origin");
+    if (origin !== requestUrl.origin)
+      return Response.json(
+        {
+          result: false,
+          message: "영상 업로드 권한의 접속 주소를 확인해 주세요.",
+          data: null,
+          code: "ACCESS_DENIED",
+        },
+        { status: 403, headers: { "Cache-Control": "no-store" } },
+      );
+    requestHeaders.set("origin", origin);
+  }
+
   const hasBody = !["GET", "HEAD"].includes(request.method);
   try {
     const upstreamResponse = await fetch(upstreamUrl, {

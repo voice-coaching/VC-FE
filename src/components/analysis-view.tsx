@@ -9,7 +9,11 @@ import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
 import { AnalysisScoreDetails } from "@/components/analysis-score-details";
-import { CanonicalLipResult } from "@/components/canonical-lip-result";
+import {
+  CanonicalLipResult,
+  LipVisualResult,
+} from "@/components/canonical-lip-result";
+import type { LipVisual } from "@/lib/canonical-lip";
 import { visibleAnalysisScoreGroups } from "@/lib/analysis-feedback";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
 import {
@@ -73,6 +77,7 @@ export function AnalysisView({
   practiceDecisionStatus,
   sentenceMode = false,
   pronunciationDetails = {},
+  lipVisual,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -87,6 +92,7 @@ export function AnalysisView({
   practiceDecisionStatus?: string;
   sentenceMode?: boolean;
   pronunciationDetails?: Record<string, PronunciationDetail[]>;
+  lipVisual?: LipVisual;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const scoreDetails =
@@ -543,11 +549,15 @@ export function AnalysisView({
           </div>
         </section>
 
-        {analysis.canonical && (
-          <CanonicalLipResult
-            view={analysis.canonical}
-            isCameraPractice={isCameraPractice}
-          />
+        {isCameraPractice && analysis.status === "COMPLETED" && lipVisual ? (
+          <LipVisualResult visual={lipVisual} />
+        ) : (
+          analysis.canonical && (
+            <CanonicalLipResult
+              view={analysis.canonical}
+              isCameraPractice={isCameraPractice}
+            />
+          )
         )}
 
         <button
