@@ -12,10 +12,12 @@ import {
   type PracticeExample,
   type PracticeExamples,
 } from "@/lib/api";
-import { TtsPracticePlayer } from "@/components/tts-practice-player";
+import {
+  TtsPracticeButton,
+  useTtsPracticePlayer,
+} from "@/components/tts-practice-player";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { useHistoryScroll } from "@/hooks/use-history-scroll";
-import { navigationEntryId } from "@/lib/navigation-history";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
 import {
@@ -28,11 +30,6 @@ type CourseLessonCache = {
   detail?: CourseStepDetail;
   examples?: PracticeExamples;
 };
-
-const exampleSelections = new Map<string, number>();
-function selectionKey(scope: string) {
-  return `${scope}:${typeof window === "undefined" ? "" : navigationEntryId(window.history.state)}`;
-}
 
 export function CourseLesson({
   course,
@@ -59,9 +56,7 @@ export function CourseLesson({
     if (example) setVisitedExamples(true);
   }, [example]);
   const selectionScope = `${userId}:${course.id}:${step.id}`;
-  const [selectedExampleIndex, setSelectedExampleIndex] = useState(
-    () => exampleSelections.get(selectionKey(selectionScope)) ?? 0,
-  );
+  const player = useTtsPracticePlayer(example);
   const [content, setContent] = useState<PracticeContent | null>(null);
   const [stepDetail, setStepDetail] = useState<CourseStepDetail | null>(
     initialCache?.detail ?? null,
@@ -170,10 +165,6 @@ export function CourseLesson({
       active = false;
     };
   }, [practiceContentId, userId, contentReload]);
-  const safeIndex = examples?.items[selectedExampleIndex]
-    ? selectedExampleIndex
-    : 0;
-  const selectedExample = examples?.items[safeIndex];
   const scrollRef = useHistoryScroll(
     `${selectionScope}:${example ? "examples" : "lesson"}`,
     example
@@ -293,47 +284,32 @@ export function CourseLesson({
             ) : examples.items.length === 0 ? (
               <p>아직 등록된 예문이 없습니다.</p>
             ) : null}
+            {player.audio}
             <ol className="space-y-2.5">
-              {examples?.items.map((practiceExample, index) => {
-                return (
-                  <li key={practiceExample.id}>
-                    <button
-                      type="button"
-                      aria-label={`${index + 1}번 문장 가이드 확인`}
-                      onClick={() => {
-                        const key = selectionKey(selectionScope);
-                        exampleSelections.delete(key);
-                        exampleSelections.set(key, index);
-                        if (exampleSelections.size > 100)
-                          exampleSelections.delete(
-                            exampleSelections.keys().next().value!,
-                          );
-                        setSelectedExampleIndex(index);
-                      }}
-                      className="flex w-full gap-3 rounded-2xl border border-border bg-white p-4 text-left"
-                    >
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#f1edff] text-xs font-bold text-primary">
-                        {index + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <strong className="block text-[15px] leading-6">
-                          {practiceExample.text}
-                        </strong>
-                        <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                          {practiceExample.hint}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
+              {examples?.items.map((practiceExample, index) => (
+                <li
+                  key={practiceExample.id}
+                  className="flex items-center gap-3 rounded-2xl border border-border bg-white p-4"
+                >
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#f1edff] text-xs font-bold text-primary">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-[15px] leading-6">
+                      {practiceExample.text}
+                    </strong>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {practiceExample.hint}
+                    </span>
+                  </span>
+                  <TtsPracticeButton
+                    example={practiceExample}
+                    index={index}
+                    player={player}
+                  />
+                </li>
+              ))}
             </ol>
-            {selectedExample && examples && (
-              <TtsPracticePlayer
-                key={`${selectedExample.id}:${examples.revision}`}
-                example={selectedExample}
-              />
-            )}
           </>
         ) : (
           <>

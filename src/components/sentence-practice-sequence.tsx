@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -69,8 +69,10 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   );
   const resource = `sentence-sequence-v1:${courseId ?? content.id}:${courseExamples?.revision ?? "content"}:${courseExampleIndex ?? 0}`;
   const [ready, setReady] = useState(!resumeRequested);
-  const [admissions, setAdmissions] = useState<SentenceAnalysisAdmission[]>([]);
-  const admissionsRef = useRef<SentenceAnalysisAdmission[]>([]);
+  const [admissions, setAdmissions] = useState<
+    (SentenceAnalysisAdmission | null)[]
+  >([]);
+  const admissionsRef = useRef<(SentenceAnalysisAdmission | null)[]>([]);
   const initializedScope = useRef<string | null>(null);
   const [results, setResults] = useState<Record<number, SentenceResult>>({});
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   });
   const recording = capture.recorder.status === "recording";
   const waiting = capture.allCaptured && !recording;
-  const allAdmitted = admissions.length === items.length;
+  const allAdmitted = items.every((_, index) => Boolean(admissions[index]));
   const allResultsReady =
     allAdmitted && items.every((_, index) => results[index]?.result != null);
   const allCompleted =
@@ -197,7 +199,9 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       setAdmissions(saved);
       setResults({});
       setError(null);
-      saved.forEach((admission, index) => observe(index, admission));
+      saved.forEach((admission, index) => {
+        if (admission) observe(index, admission);
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -243,8 +247,6 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     [observe, resource, userId],
   );
 
-  const currentIndex = admissions.length;
-  const current = items[currentIndex];
   useEffect(() => {
     onTitleChange?.(waiting ? "문장별 분석 결과" : "연습하기");
   }, [waiting, onTitleChange]);
@@ -265,12 +267,13 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       </div>
     );
 
-  const example =
-    current?.courseExampleIndex != null
-      ? courseExamples?.items[current.courseExampleIndex]
-      : null;
-  const worker =
-    current && capture.files[currentIndex] ? (
+  const workers = items.map((current, index) => {
+    if (admissions[index] || !capture.files[index]) return null;
+    const example =
+      current.courseExampleIndex != null
+        ? courseExamples?.items[current.courseExampleIndex]
+        : null;
+    return (
       <RecordingPracticeSession
         key={current.key}
         {...props}
@@ -282,7 +285,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         }}
         courseExampleIndex={current.courseExampleIndex}
         sentenceIndex={current.sentenceIndex}
-        capturedRecording={capture.files[currentIndex]}
+        capturedRecording={capture.files[index]}
         background
         autoSubmit
         onTitleChange={undefined}
@@ -291,9 +294,10 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
           setSubmissionError(message);
           setSubmissionFailure(reason);
         }}
-        onAnalysisAdmitted={(admission) => accept(currentIndex, admission)}
+        onAnalysisAdmitted={(admission) => accept(index, admission)}
       />
-    ) : null;
+    );
+  });
   if (!allResultsReady || recording) {
     const active = recording
       ? capture.recorder.index
@@ -301,7 +305,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     const elapsed = Math.floor(capture.recorder.elapsedMs / 1000);
     return (
       <div className="flex min-h-full flex-col bg-[#f2f4f6]">
-        {worker}
+        {workers}
         {guard.dialog}
         {!waiting && (
           <NewsRecordingReader
@@ -415,7 +419,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
                     type="button"
                     className="design-action"
                     disabled={results[index].reading}
-                    onClick={() => observe(index, admissions[index])}
+                    onClick={() => observe(index, admissions[index]!)}
                   >
                     기존 분석 상태 다시 확인
                   </button>
@@ -456,7 +460,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
                   id: item.contentId,
                   scriptText: item.text,
                 }}
-                recordingId={admission.recordingId}
+                recordingId={admission!.recordingId}
                 reportParameter={`sentenceReport${index}`}
                 courseMode={Boolean(courseId)}
               />
@@ -468,7 +472,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
                 <button
                   className="min-h-11 rounded-xl border px-4 text-sm"
                   disabled={state.reading}
-                  onClick={() => observe(index, admission)}
+                  onClick={() => observe(index, admission!)}
                 >
                   기존 분석 상태 다시 확인
                 </button>
@@ -488,7 +492,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
                   <button
                     type="button"
                     className="min-h-11 rounded-xl border px-4"
-                    onClick={() => observe(index, admission)}
+                    onClick={() => observe(index, admission!)}
                   >
                     기존 결과 저장 상태 다시 확인
                   </button>
@@ -537,7 +541,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
             throw new Error("모든 문장의 녹음을 완료한 뒤 이동해 주세요.");
           await Promise.all(
             admissions.map((admission) =>
-              reportSaves.set("SESSION", admission.sessionId, saved),
+              reportSaves.set("SESSION", admission!.sessionId, saved),
             ),
           );
           if (courseId && courseExamples) {

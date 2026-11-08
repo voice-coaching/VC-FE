@@ -15,7 +15,7 @@ export type CapturedSentence = { blob: Blob; durationMs: number };
 /** Capture all visible practice types locally while their authenticated submissions run independently. */
 export function useAuthenticatedSentenceCapture(
   items: SentencePracticeItem[],
-  admissions: SentenceAnalysisAdmission[],
+  admissions: (SentenceAnalysisAdmission | null)[],
   options: {
     userId: string | null;
     resource: string;
@@ -44,7 +44,7 @@ export function useAuthenticatedSentenceCapture(
     `${scope}:${run.current!.runId}:${index}`;
   function next(): number | null {
     const index = items.findIndex(
-      (_, index) => index >= accepted.current.length && !raw.current.has(index),
+      (_, index) => !accepted.current[index] && !raw.current.has(index),
     );
     return index < 0 ? null : index;
   }
@@ -156,7 +156,7 @@ export function useAuthenticatedSentenceCapture(
   const allCaptured =
     items.length > 0 &&
     items.every(
-      (_, index) => index < admissions.length || recorded.includes(index),
+      (_, index) => Boolean(admissions[index]) || recorded.includes(index),
     );
   return {
     recorder,
@@ -167,10 +167,10 @@ export function useAuthenticatedSentenceCapture(
     allCaptured,
     hasFailedSave: failedSave != null,
     recordedCount: items.filter(
-      (_, index) => index < admissions.length || recorded.includes(index),
+      (_, index) => Boolean(admissions[index]) || recorded.includes(index),
     ).length,
     nextIndex: items.findIndex(
-      (_, index) => index >= admissions.length && !recorded.includes(index),
+      (_, index) => !admissions[index] && !recorded.includes(index),
     ),
     start: () => {
       if (ready && !error) {

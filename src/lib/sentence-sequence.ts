@@ -73,34 +73,33 @@ export function sentencePracticeItems(
 
 /** Only a server acknowledgement adds an item; duplicate callbacks cannot skip a sentence. */
 export function appendSentenceAdmission(
-  current: SentenceAnalysisAdmission[],
+  current: (SentenceAnalysisAdmission | null)[],
   index: number,
   admission: SentenceAnalysisAdmission,
 ) {
-  if (index < current.length) {
-    const previous = current[index];
-    if (
-      previous &&
-      ["sessionId", "recordingId", "analysisId"].every(
-        (key) =>
-          String(previous[key as keyof SentenceAnalysisAdmission]) ===
-          String(admission[key as keyof SentenceAnalysisAdmission]),
-      )
-    )
-      return current;
-  }
+  const previous = current[index];
   if (
-    index !== current.length ||
-    current.some(
-      (item) => String(item.sessionId) === String(admission.sessionId),
+    previous &&
+    ["sessionId", "recordingId", "analysisId"].every(
+      (key) =>
+        String(previous[key as keyof SentenceAnalysisAdmission]) ===
+        String(admission[key as keyof SentenceAnalysisAdmission]),
     )
   )
-    throw new ApiError(
-      "문장별 분석 순서가 변경되었습니다.",
-      409,
-      "SENTENCE_SEQUENCE_CHANGED",
-    );
-  return readSentenceAdmissions([...current, admission], current.length + 1);
+    return current;
+  if (
+    previous ||
+    current.some(
+      (item) => item && String(item.sessionId) === String(admission.sessionId),
+    )
+  )
+    throw new ApiError("??? ?? ??? ???????.", 409, "SENTENCE_SEQUENCE_CHANGED");
+  const next = Array.from(
+    { length: Math.max(current.length, index + 1) },
+    (_, i) => current[i] ?? null,
+  );
+  next[index] = admission;
+  return readSentenceAdmissions(next, next.length);
 }
 
 export function readSentenceAdmissions(raw: unknown, count: number) {
@@ -110,18 +109,19 @@ export function readSentenceAdmissions(raw: unknown, count: number) {
     raw.length > count ||
     raw.some(
       (row) =>
-        !row ||
+        row != null &&
         [row.sessionId, row.recordingId, row.analysisId].some(
           (id) =>
             !/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(Number(id)),
         ),
     ) ||
-    new Set(raw.map((row) => String(row.sessionId))).size !== raw.length
+    new Set(raw.filter(Boolean).map((row) => String(row.sessionId))).size !==
+      raw.filter(Boolean).length
   )
     throw new ApiError(
       "이전 문장별 분석 기록을 확인해 주세요.",
       409,
       "SENTENCE_SEQUENCE_CHANGED",
     );
-  return raw as SentenceAnalysisAdmission[];
+  return raw as (SentenceAnalysisAdmission | null)[];
 }

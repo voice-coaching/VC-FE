@@ -6,33 +6,39 @@ import { api, ApiError, type PracticeExample } from "@/lib/api";
 
 type PlaybackStatus = "idle" | "loading" | "playing";
 
-export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
+export function useTtsPracticePlayer(enabled: boolean) {
   const audio = useRef<HTMLAudioElement>(null);
   const pending = useRef<AbortController | null>(null);
   const currentUrl = useRef<string | null>(null);
   const sequence = useRef(0);
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [notice, setNotice] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     const player = audio.current;
     return () => {
       sequence.current += 1;
+      setStatus("idle");
+      setActiveId(null);
       pending.current?.abort();
       player?.pause();
       if (currentUrl.current) URL.revokeObjectURL(currentUrl.current);
       currentUrl.current = null;
     };
-  }, [example.id]);
+  }, [enabled]);
 
-  async function play() {
+  async function play(example: PracticeExample) {
     const player = audio.current;
     if (!player) return;
-    if (status === "playing") {
+    if (activeId === example.id && status === "playing" && !player.paused) {
       player.pause();
       setStatus("idle");
+      setActiveId(null);
       return;
     }
+    player.pause();
+    setActiveId(example.id);
     const attempt = ++sequence.current;
     pending.current?.abort();
     const controller = new AbortController();
@@ -67,54 +73,64 @@ export function TtsPracticePlayer({ example }: { example: PracticeExample }) {
     }
   }
 
-  return (
-    <div>
+  return {
+    play,
+    activeId,
+    status,
+    notice,
+    audio: (
       <audio
         ref={audio}
-        onEnded={() => setStatus("idle")}
+        onEnded={() => {
+          setStatus("idle");
+          setActiveId(null);
+        }}
         onError={() => {
           setStatus("idle");
-          setNotice("음성을 재생하지 못했습니다. 다시 시도해 주세요.");
+          setNotice("??? ???? ?????. ?? ??? ???.");
         }}
       />
+    ),
+  };
+}
+
+export function TtsPracticeButton({
+  example,
+  index,
+  player,
+}: {
+  example: PracticeExample;
+  index: number;
+  player: ReturnType<typeof useTtsPracticePlayer>;
+}) {
+  const active = player.activeId === example.id;
+  const loading = active && player.status === "loading";
+  const playing = active && player.status === "playing";
+  return (
+    <div className="shrink-0">
       <button
         type="button"
-        disabled={status === "loading"}
-        onClick={() => void play()}
-        aria-busy={status === "loading"}
-        className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#6346f6] disabled:cursor-wait ${status === "playing" ? "bg-[#191f28] text-white" : "bg-[#f2f4f6] text-[#4e5968]"}`}
+        disabled={loading}
+        onClick={() => void player.play(example)}
+        aria-label={`${index + 1}? ?? ${playing ? "?? ???" : "?? ??"}`}
+        aria-busy={loading}
+        className="flex min-h-11 items-center justify-center gap-1 rounded-full bg-[#f1edff] px-3 text-xs font-semibold text-[#6346f6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6346f6] disabled:cursor-wait"
       >
-        <span className="flex size-5 shrink-0 items-center justify-center">
-          {status === "playing" ? (
-            <Pause
-              className="size-[18px]"
-              fill="currentColor"
-              strokeWidth={0}
-              aria-hidden="true"
-            />
-          ) : status === "loading" ? (
-            <LoaderCircle
-              className="size-[18px] animate-spin motion-reduce:animate-none"
-              aria-hidden="true"
-            />
-          ) : (
-            <Play
-              className="size-[18px]"
-              fill="currentColor"
-              strokeWidth={0}
-              aria-hidden="true"
-            />
-          )}
-        </span>
-        {status === "loading"
-          ? "예시 음성 준비 중…"
-          : status === "playing"
-            ? "음성 멈추기"
-            : "예시 발음 듣기"}
+        {loading ? (
+          <LoaderCircle
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+        ) : playing ? (
+          <Pause className="size-4" fill="currentColor" aria-hidden="true" />
+        ) : (
+          <Play className="size-4" fill="currentColor" aria-hidden="true" />
+        )}
+        {loading ? "?? ?" : playing ? "???" : "?? ??"}
       </button>
-      {notice && (
-        <p role="status" className="mt-2 text-center text-xs text-[#4e5968]">
-          {notice}
+      {active && player.notice && (
+        <p role="status" className="mt-1 max-w-28 text-xs text-destructive">
+          {player.notice}
         </p>
       )}
     </div>

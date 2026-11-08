@@ -1,6 +1,6 @@
 "use client";
 
-import { LoadingOverlay } from "@/components/loading-overlay";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -156,7 +156,18 @@ export function OAuthCallback({
             </Link>
           </>
         ) : (
-          <LoadingOverlay label={`${providerLabel} 로그인 확인 중`} />
+          <div role="status" className="flex flex-col items-center">
+            <Image
+              src="/figma/brand/splash-final.svg"
+              alt="SpeakAI"
+              width={180}
+              height={80}
+              priority
+            />
+            <p className="mt-5 text-sm text-[#8b95a1]">
+              로그인 정보를 확인하고 있어요
+            </p>
+          </div>
         )}
       </div>
     </AppShell>

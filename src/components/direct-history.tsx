@@ -65,7 +65,11 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
         새 음성 분석 기록
       </h2>
       {items
-        .filter((item) => !savedOnly || savedIds.includes(item.jobId))
+        .filter(
+          (item) =>
+            (!savedOnly || savedIds.includes(item.jobId)) &&
+            Boolean(item.result?.coaching.feedback?.trim()),
+        )
         .map((item) => (
           <details
             key={item.jobId}
