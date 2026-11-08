@@ -14,6 +14,7 @@ import {
   Button,
   ButtonLink,
   Field,
+  Textarea,
   LoadState,
   Message,
   Pager,
@@ -35,9 +36,10 @@ export function TitleExamPoliciesPage() {
         <ButtonLink href="/admin/contents/new">시험 문장 등록</ButtonLink>
       </Heading>
       <Message>
-        새 문장은 학습 콘텐츠에서 유형 ‘문장’, 분류 ‘승급 심사’로 등록하고
-        공개한 뒤 선택하세요. 변경한 설정은 새로 생성하는 시험부터 적용됩니다.
-        응시 횟수 정책은 변경하지 않습니다.
+        기존 문장은 설정 변경에서 수정할 수 있습니다. 새 문장을 따로 등록하려면
+        학습 콘텐츠에서 유형 ‘문장’, 분류 ‘승급 심사’로 등록하고 공개한 뒤
+        선택하세요. 변경한 설정은 새로 생성하는 시험부터 적용됩니다. 응시 횟수
+        정책은 변경하지 않습니다.
       </Message>
       <LoadState
         loading={query.isPending}
@@ -97,7 +99,7 @@ export function TitleExamPolicyEditPage({
     <>
       <Heading
         title="승급 시험 설정 변경"
-        description="시험 문장을 선택하고 합격 점수를 설정하세요."
+        description="시험 문장을 선택·수정하고 합격 점수를 설정하세요."
       >
         <ButtonLink href="/admin/title-exams">목록으로</ButtonLink>
       </Heading>
@@ -147,6 +149,9 @@ function PolicyEditor({
     Content,
     "id" | "version" | "title" | "scriptText"
   > | null>(baseline.available ? baseline.content : null);
+  const [scriptText, setScriptText] = useState(
+    baseline.available ? (baseline.content?.scriptText ?? "") : "",
+  );
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(0);
   const candidates = useAdminQuery<AdminPage<Content>>("/contents", {
@@ -157,7 +162,11 @@ function PolicyEditor({
     page,
     size: 10,
   });
-  const command = useAdminCommand(["/title-exam-policies", "/audit-logs"]);
+  const command = useAdminCommand([
+    "/title-exam-policies",
+    "/contents",
+    "/audit-logs",
+  ]);
   return (
     <div
       ref={editor}
@@ -212,8 +221,11 @@ function PolicyEditor({
                       </td>
                       <td>
                         <Button
-                          disabled={command.busy}
-                          onClick={() => setSelected(item)}
+                          disabled={command.busy || Boolean(command.success)}
+                          onClick={() => {
+                            setSelected(item);
+                            setScriptText(item.scriptText);
+                          }}
                         >
                           {selected?.id === item.id ? "선택됨" : "이 문장 선택"}
                         </Button>
@@ -241,6 +253,7 @@ function PolicyEditor({
                 selected?.id ?? 0,
                 selected?.version ?? 0,
                 data,
+                selected?.scriptText,
               ),
             );
           }}
@@ -252,9 +265,21 @@ function PolicyEditor({
             <Message>
               선택한 문제: {selected?.title ?? "문장을 선택해 주세요."}
             </Message>
-            {selected && (
-              <p className="whitespace-pre-wrap">{selected.scriptText}</p>
-            )}
+            <Textarea
+              name="scriptText"
+              label="시험 문장 원문"
+              value={scriptText}
+              onChange={(event) => setScriptText(event.target.value)}
+              maxLength={10000}
+              required
+              disabled={!selected}
+              rows={6}
+            />
+            <Message>
+              수정한 문장은 새로 생성하는 시험부터 적용됩니다. 기존 시험은 이전
+              문장을 유지하며, 수정 문장의 TTS 음성은 저장 후 자동 생성됩니다.
+              생성이 끝날 때까지 기준 음성 재생이 대기할 수 있습니다.
+            </Message>
             <Field
               name="passingScore"
               label="합격 점수"

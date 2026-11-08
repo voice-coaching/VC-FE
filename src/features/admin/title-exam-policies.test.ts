@@ -115,3 +115,73 @@ test("missing/deleted linked question is represented as unavailable, not fabrica
     false,
   );
 });
+
+test("edited script sends exact text and accepts only a new content ID with the same text", async () => {
+  const data = form();
+  data.set(
+    "scriptText",
+    "새 시험 문장을 정확히 읽습니다.\n두 번째 문장입니다.",
+  );
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(String(options?.body));
+    assert.equal(body.scriptText, data.get("scriptText"));
+    assert.equal(body.practiceContentId, 10);
+    assert.equal(body.contentVersion, 2);
+    return Response.json({
+      result: true,
+      data: {
+        ...updated(),
+        practiceContentId: 20,
+        content: {
+          ...policy.content!,
+          id: 20,
+          version: 0,
+          scriptText: body.scriptText,
+        },
+      },
+    });
+  };
+  assert.equal(
+    (await saveTitleExamPolicy(policy, 10, 2, data)).practiceContentId,
+    20,
+  );
+  for (const result of [
+    updated(),
+    {
+      ...updated(),
+      practiceContentId: 20,
+      content: { ...policy.content!, id: 20, scriptText: "다른 원문" },
+    },
+  ]) {
+    globalThis.fetch = async () =>
+      Response.json({ result: true, data: result });
+    await assert.rejects(saveTitleExamPolicy(policy, 10, 2, data), /저장 결과/);
+  }
+});
+
+test("unchanged selected text omits scriptText and does not require a cloned content", async () => {
+  const data = form();
+  data.set("scriptText", policy.content!.scriptText);
+  globalThis.fetch = async (_url, options) => {
+    assert.equal("scriptText" in JSON.parse(String(options?.body)), false);
+    return Response.json({ result: true, data: updated() });
+  };
+  assert.equal(
+    (await saveTitleExamPolicy(policy, 10, 2, data)).practiceContentId,
+    10,
+  );
+});
+
+test("blank and oversized scripts are rejected without a write", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({});
+  };
+  for (const value of ["", "   ", "x".repeat(10001)]) {
+    const data = form();
+    data.set("scriptText", value);
+    await assert.rejects(saveTitleExamPolicy(policy, 10, 2, data));
+  }
+  assert.equal(calls, 0);
+});

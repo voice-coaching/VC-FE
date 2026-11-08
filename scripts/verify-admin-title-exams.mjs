@@ -107,12 +107,19 @@ await context.route("**/api/backend/**", async (route) => {
     writes.push(req.postDataJSON());
     if (conflict) return reply(null, 409);
     const body = req.postDataJSON();
+    const selected = content(body.practiceContentId);
+    const edited = body.scriptText !== undefined;
+    const savedId = edited ? 30 : body.practiceContentId;
     policy = {
       ...policy,
       version: policy.version + 1,
-      practiceContentId: body.practiceContentId,
+      practiceContentId: savedId,
       passingScore: body.passingScore,
-      content: content(body.practiceContentId),
+      content: {
+        ...selected,
+        id: savedId,
+        ...(edited ? { scriptText: body.scriptText } : {}),
+      },
     };
     return reply(policy);
   }
@@ -173,7 +180,31 @@ try {
   assert.equal(reads[0].type, "SENTENCE");
   await page.getByRole("button", { name: "닫기", exact: true }).click();
   await page.getByRole("link", { name: "설정 변경", exact: true }).click();
+  const originalScript = await page
+    .getByLabel("시험 문장 원문", { exact: true })
+    .inputValue();
+  assert.equal(originalScript, content(20).scriptText);
+  await page
+    .getByLabel("시험 문장 원문", { exact: true })
+    .fill("수정한 승급 시험 문장입니다.");
+  await page.getByLabel("작업 사유", { exact: true }).fill("문장 직접 수정");
+  await page
+    .getByRole("button", { name: "시험 설정 저장", exact: true })
+    .click();
+  await page.getByText("변경사항을 저장했습니다.").waitFor();
+  assert.equal(writes[1].scriptText, "수정한 승급 시험 문장입니다.");
+  assert.equal(writes[1].practiceContentId, 20);
+  assert.equal(policy.practiceContentId, 30);
+  await page.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.getByRole("link", { name: "설정 변경", exact: true }).click();
+  assert.equal(
+    await page.getByLabel("시험 문장 원문", { exact: true }).inputValue(),
+    "수정한 승급 시험 문장입니다.",
+  );
   conflict = true;
+  await page
+    .getByLabel("시험 문장 원문", { exact: true })
+    .fill("충돌해도 유지할 원문입니다.");
   await page.getByLabel("작업 사유", { exact: true }).fill("충돌 시 입력 보존");
   await page
     .getByRole("button", { name: "시험 설정 저장", exact: true })
@@ -183,7 +214,11 @@ try {
     await page.getByLabel("작업 사유", { exact: true }).inputValue(),
     "충돌 시 입력 보존",
   );
-  assert.equal(writes.length, 2);
+  assert.equal(
+    await page.getByLabel("시험 문장 원문", { exact: true }).inputValue(),
+    "충돌해도 유지할 원문입니다.",
+  );
+  assert.equal(writes.length, 3);
   await page.getByRole("button", { name: "취소", exact: true }).click();
   empty = true;
   policy = {
@@ -290,7 +325,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: navigation, selection/preview, versioned save, conflict preservation, unavailable/empty, access denial, mobile edit-page navigation/reload/back, invalid rank (9 scenarios)",
+    "PASS: navigation, selection/preview, versioned save, script edit/new content, conflict preserves script, unavailable/empty, access denial, mobile edit-page navigation/reload/back, invalid rank (10 scenarios)",
   );
 } finally {
   await browser.close();

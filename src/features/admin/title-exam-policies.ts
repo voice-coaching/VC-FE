@@ -36,7 +36,15 @@ export async function saveTitleExamPolicy(
   contentId: number,
   contentVersion: number,
   form: FormData,
+  sourceScriptText: string | undefined = current.content?.id === contentId
+    ? current.content.scriptText
+    : undefined,
 ) {
+  const submittedScript = form.get("scriptText");
+  const scriptText =
+    submittedScript === null || submittedScript === sourceScriptText
+      ? undefined
+      : String(submittedScript);
   const input = z
     .object({
       practiceContentId: z
@@ -50,6 +58,14 @@ export async function saveTitleExamPolicy(
         .max(100, "합격 점수는 100점 이하입니다."),
       version: z.number().int().nonnegative(),
       contentVersion: z.number().int().nonnegative(),
+      scriptText: z
+        .string()
+        .max(10000, "시험 문장은 10,000자 이하입니다.")
+        .refine(
+          (value) => value.trim().length > 0,
+          "시험 문장을 입력해 주세요.",
+        )
+        .optional(),
       reason: z
         .string()
         .trim()
@@ -59,6 +75,7 @@ export async function saveTitleExamPolicy(
     .parse({
       practiceContentId: contentId,
       contentVersion,
+      ...(scriptText === undefined ? {} : { scriptText }),
       passingScore: form.get("passingScore"),
       version: current.version,
       reason: String(form.get("reason") ?? ""),
@@ -75,10 +92,13 @@ export async function saveTitleExamPolicy(
   if (
     result.targetRank !== current.targetRank ||
     result.version !== current.version + 1 ||
-    result.practiceContentId !== contentId ||
+    (scriptText === undefined
+      ? result.practiceContentId !== contentId
+      : result.practiceContentId === contentId ||
+        result.content?.scriptText !== scriptText) ||
     result.passingScore !== input.passingScore ||
     !result.available ||
-    result.content?.id !== contentId
+    result.content?.id !== result.practiceContentId
   )
     throw new Error(
       "저장 결과를 확인하지 못했습니다. 최신 시험 설정을 다시 조회해 주세요.",
