@@ -12,10 +12,6 @@ import {
 } from "@/lib/lip-practice-sets";
 import { useRouter } from "next/navigation";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
-import { ReportSaveDialog } from "@/components/report-save-dialog";
-import { reportSaves } from "@/lib/report-saves";
-import { canonicalApi } from "@/lib/api/canonical";
-import { canonicalViewCompletable } from "@/lib/canonical-analysis";
 import { coachingLimitNotice } from "@/lib/coaching-usage";
 
 import {
@@ -27,8 +23,6 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
-import { analysisRequestWasRejected } from "@/lib/canonical-recovery";
 import {
   useCallback,
   useEffect,
@@ -36,68 +30,31 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { AnalysisView } from "@/components/analysis-view";
 import { PracticeAnalysisLoading } from "@/components/practice-analysis-loading";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
-import { LipProcessingConsentFields } from "@/components/lip-processing-consent";
-import {
-  EMPTY_LIP_CONSENT,
-  hasLipProcessingConsent,
-  loadLipAnalysisCapabilities,
-  prepareLipAnalysis,
-  uploadLipRecording,
-  type LipProcessingConsent,
-} from "@/lib/lip-analysis";
-import {
-  awaitCanonicalPersistence,
-  completeCanonicalPractice,
-  invalidatesCanonicalResult,
-  persistencePending,
-} from "@/lib/canonical-persistence";
-import { waitForCanonicalResult } from "@/lib/canonical-result-wait";
-import {
-  canonicalPresentation,
-  CanonicalResultUnavailable,
-} from "@/lib/canonical-presentation";
-import {
-  ApiError,
-  getAuthSessionVersion,
-  subscribeAuthSession,
-} from "@/lib/api/client";
-import {
-  api,
-  type AnalysisCapabilities,
-  type AnalysisResult,
-  type AnalysisSegment,
-  type PracticeContent,
-} from "@/lib/api";
+import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
 import {
   preferredVideoMimeType,
   releaseLipResources,
   type LipClip,
   type LipPracticeStep,
 } from "@/lib/lip-practice";
-import type { DirectView } from "@/lib/direct-analysis";
-import { DirectAnalysisResult } from "@/components/direct-analysis-result";
+
+import { BrowserVideoConsent } from "@/components/browser-video-consent";
+import { BrowserVideoAnalysisResult } from "@/components/browser-video-analysis-result";
+import { BrowserVideoPracticeAttempt } from "@/lib/browser-video-practice";
+import type { BrowserVideoResult } from "@/lib/api/browser-video";
 
 const MAX_RECORDING_MS = 12_000;
 
 type LipAnalysisPhase =
   "idle" | "preparing" | "uploading" | "analyzing" | "result" | "error";
 
-type LipAnalysisBundle = {
-  sessionId: import("@/lib/api/types").Id;
-  content: PracticeContent;
-  analysis: AnalysisResult;
-  segments: AnalysisSegment[];
-};
-
 export default function LipPractice() {
   const router = useRouter();
   const [permission, setPermission] = useState<LipPermission | null>(null);
   const [requestingMedia, setRequestingMedia] = useState(false);
-  const [saveReportOpen, setSaveReportOpen] = useState(false);
   const [practiceSet, setPracticeSet] = useState<LipPracticeSet>(
     LIP_PRACTICE_SETS[1],
   );
@@ -110,30 +67,19 @@ export default function LipPractice() {
   const [selectedClip, setSelectedClip] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [mirrored, setMirrored] = useState(true);
-  const [processingConsent, setProcessingConsent] =
-    useState<LipProcessingConsent>(EMPTY_LIP_CONSENT);
-  const [videoCapabilities, setVideoCapabilities] =
-    useState<AnalysisCapabilities | null>(null);
-  const [policyLoading, setPolicyLoading] = useState(false);
-  const [policyError, setPolicyError] = useState<string | null>(null);
-  const [policyRetry, setPolicyRetry] = useState(0);
+  const [videoConsentAccepted, setVideoConsentAccepted] = useState(false);
   const [analysisPhase, setAnalysisPhase] = useState<LipAnalysisPhase>("idle");
   const [analysisTarget, setAnalysisTarget] = useState<number | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analyses, setAnalyses] = useState<
-    Partial<Record<number, LipAnalysisBundle>>
+    Partial<Record<number, BrowserVideoResult>>
   >({});
   const previewRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const [directResults, setDirectResults] = useState<
-    Partial<Record<number, DirectView>>
-  >({});
-  const directAttemptsRef = useRef(
-    new Map<number, { id: string; claim: string; jobId?: string }>(),
-  );
+  const attemptsRef = useRef(new Map<number, BrowserVideoPracticeAttempt>());
   const chunksRef = useRef<Blob[]>([]);
   const stopTimerRef = useRef<number | null>(null);
   const clipsRef = useRef<LipClip[]>([]);
@@ -141,72 +87,54 @@ export default function LipPractice() {
   const advanceAfterStop = useRef(false);
   const [advancing, setAdvancing] = useState(false);
   const [captureStartedAt, setCaptureStartedAt] = useState(0);
-  const contentByPromptRef = useRef(new Map<number, PracticeContent>());
   const mounted = useRef(false);
   const mediaRequest = useRef(0);
   const mediaBusy = useRef(false);
   const analysisBusyRef = useRef(false);
   const analysisOwnerRef = useRef<AbortController | null>(null);
-  const submittedClipsRef = useRef(new WeakSet<Blob>());
   const [submittedPrompts, setSubmittedPrompts] = useState<number[]>([]);
   const analysisBusy =
     analysisPhase === "preparing" ||
     analysisPhase === "uploading" ||
     analysisPhase === "analyzing";
 
-  const canAnalyzeVideo =
-    videoCapabilities !== null &&
-    !policyLoading &&
-    !policyError &&
-    hasLipProcessingConsent(videoCapabilities, processingConsent);
-
-  useEffect(() => {
-    if (!["guide", "review", "complete", "setup"].includes(step)) return;
-    const owner = new AbortController();
-    setPolicyLoading(true);
-    setPolicyError(null);
-    void loadLipAnalysisCapabilities(owner.signal)
-      .then((capabilities) => {
-        if (!owner.signal.aborted) setVideoCapabilities(capabilities);
-      })
-      .catch((reason) => {
-        if (owner.signal.aborted) return;
-        setVideoCapabilities(null);
-        setPolicyError(
-          reason instanceof Error
-            ? reason.message
-            : "영상 분석 지원 정보를 확인하지 못했어요.",
-        );
-      })
-      .finally(() => {
-        if (!owner.signal.aborted) setPolicyLoading(false);
-      });
-    return () => owner.abort();
-  }, [step, policyRetry]);
-
+  const canAnalyzeVideo = videoConsentAccepted;
   const consentFields = (
-    <LipProcessingConsentFields
-      capabilities={videoCapabilities}
-      accepted={processingConsent}
-      onChange={setProcessingConsent}
-      busy={policyLoading}
-      error={policyError}
-      onRetry={() => setPolicyRetry((value) => value + 1)}
+    <BrowserVideoConsent
+      accepted={videoConsentAccepted}
+      onChange={setVideoConsentAccepted}
     />
   );
 
   useEffect(
     () =>
       subscribeAuthSession(() => {
-        setProcessingConsent(EMPTY_LIP_CONSENT);
-        setVideoCapabilities(null);
-        setPolicyRetry((value) => value + 1);
+        setVideoConsentAccepted(false);
         analysisOwnerRef.current?.abort();
-        contentByPromptRef.current.clear();
+        attemptsRef.current.clear();
+        const recorder = recorderRef.current;
+        if (recorder) {
+          recorder.onstop = null;
+          recorder.ondataavailable = null;
+          recorder.onerror = null;
+          if (recorder.state !== "inactive") recorder.stop();
+        }
+        mediaRequest.current += 1;
+        mediaBusy.current = false;
+        setRequestingMedia(false);
+        setPermission(null);
+        if (stopTimerRef.current !== null)
+          window.clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
+        releaseLipResources(streamRef.current, clipsRef.current);
+        streamRef.current = null;
+        clipsRef.current = [];
+        setClips([]);
         setAnalyses({});
-        setDirectResults({});
-        directAttemptsRef.current.clear();
-        submittedClipsRef.current = new WeakSet<Blob>();
+        setPromptIndex(0);
+        setSelectedClip(0);
+        setAnalysisTarget(null);
+        setStep("guide");
         setSubmittedPrompts([]);
         setAnalysisError(null);
         setAnalysisPhase("idle");
@@ -315,16 +243,10 @@ export default function LipPractice() {
           delete next[promptIndex];
           return next;
         });
-        contentByPromptRef.current.delete(promptIndex);
-        directAttemptsRef.current.delete(promptIndex);
+        attemptsRef.current.delete(promptIndex);
         setSubmittedPrompts((current) =>
           current.filter((index) => index !== promptIndex),
         );
-        setDirectResults((current) => {
-          const next = { ...current };
-          delete next[promptIndex];
-          return next;
-        });
         setSelectedClip(promptIndex);
         setAnalysisPhase("idle");
         setAnalysisError(null);
@@ -352,24 +274,13 @@ export default function LipPractice() {
       stopTimerRef.current = window.setTimeout(
         stopRecording,
         // Leave time for the recorder's stop event; validate actual elapsed time again before upload.
-        Math.max(
-          1,
-          Math.min(
-            MAX_RECORDING_MS,
-            videoCapabilities?.maximumDurationMs ?? MAX_RECORDING_MS,
-          ) - 100,
-        ),
+        MAX_RECORDING_MS - 100,
       );
     } catch {
       setError("이 기기에서 영상 녹화를 시작하지 못했어요.");
       setStep("align");
     }
-  }, [
-    promptIndex,
-    prompts.length,
-    stopRecording,
-    videoCapabilities?.maximumDurationMs,
-  ]);
+  }, [promptIndex, prompts.length, stopRecording]);
 
   useEffect(() => {
     if (step === "recording") void startRecording();
@@ -471,9 +382,7 @@ export default function LipPractice() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       setSelectedClip(0);
-      setAnalysisPhase(
-        analyses[0] || directResults[0]?.result ? "result" : "idle",
-      );
+      setAnalysisPhase(analyses[0] ? "result" : "idle");
       setStep("complete");
       return;
     }
@@ -484,7 +393,6 @@ export default function LipPractice() {
   const currentClip = clips.find((clip) => clip.promptIndex === promptIndex);
   const reportClip = clips.find((clip) => clip.promptIndex === selectedClip);
   const selectedAnalysis = analyses[selectedClip];
-  const selectedDirectResult = directResults[selectedClip]?.result;
 
   function analyzeCurrentClip() {
     if (!currentClip || analysisBusyRef.current) return;
@@ -495,234 +403,69 @@ export default function LipPractice() {
   }
 
   async function analyzeSelectedClip() {
-    if (!reportClip || analysisBusyRef.current || !mounted.current) return;
-    if (submittedClipsRef.current.has(reportClip.blob)) {
-      setAnalysisError(
-        "이미 전송한 녹음이에요. 추가 코칭을 요청하지 않고 학습 기록에서 기존 분석과 재시도 가능 여부를 확인해 주세요.",
-      );
-      setAnalysisPhase("error");
+    if (
+      !reportClip ||
+      analysisBusyRef.current ||
+      !mounted.current ||
+      !videoConsentAccepted
+    )
       return;
+    const target = selectedClip;
+    let attempt = attemptsRef.current.get(target);
+    if (!attempt || attempt.clip.blob !== reportClip.blob) {
+      attempt = new BrowserVideoPracticeAttempt(
+        reportClip,
+        prompts[target],
+        `입 모양 연습 ${target + 1}`,
+      );
+      attemptsRef.current.set(target, attempt);
     }
     analysisBusyRef.current = true;
     const owner = new AbortController();
     analysisOwnerRef.current?.abort();
     analysisOwnerRef.current = owner;
     const epoch = getAuthSessionVersion();
-    let previewShown = false;
-    let awaitingAdmission = false;
+    const active = () =>
+      mounted.current &&
+      !owner.signal.aborted &&
+      epoch === getAuthSessionVersion();
+    setAnalysisTarget(target);
     setAnalysisPhase("preparing");
-    setAnalysisTarget(selectedClip);
     setAnalysisError(null);
     setUploadProgress(0);
     setAnalysisProgress(0);
-    const requireActive = () => {
-      if (
-        !mounted.current ||
-        owner.signal.aborted ||
-        epoch !== getAuthSessionVersion()
-      )
-        throw new DOMException("화면이 닫혔습니다.", "AbortError");
-    };
-
     try {
-      const capabilities = await loadLipAnalysisCapabilities(owner.signal);
-      requireActive();
-      setVideoCapabilities(capabilities);
-      const prepared = prepareLipAnalysis(
-        reportClip,
-        prompts[selectedClip],
-        capabilities,
-        processingConsent,
-      );
-
-      let content = contentByPromptRef.current.get(selectedClip);
-      if (!content) {
-        content = await api.content.createCustom(
-          {
-            title: `입 모양 연습 ${selectedClip + 1}`,
-            scriptText: prompts[selectedClip],
-            learningFocus: "PRONUNCIATION",
-            retention: "SESSION_HISTORY",
-            locale: "ko-KR",
-          },
-          typeof crypto !== "undefined" &&
-            typeof crypto.randomUUID === "function"
-            ? crypto.randomUUID()
-            : undefined,
-        );
-        requireActive();
-        contentByPromptRef.current.set(selectedClip, content);
-      }
-
-      const session = await api.training.create({
-        contentId: content.id,
-        learningFocus: "PRONUNCIATION",
-      });
-      requireActive();
-      const sessionId = session.sessionId ?? session.id;
-      if (sessionId == null) throw new Error("학습 세션을 만들지 못했어요.");
-
-      setAnalysisPhase("uploading");
-      const recordingId = await uploadLipRecording({
-        sessionId,
-        clip: reportClip,
-        prepared,
+      const result = await attempt.run(videoConsentAccepted, {
         signal: owner.signal,
-        requireActive,
-        onProgress: (progress) => {
-          if (!owner.signal.aborted && mounted.current)
-            setUploadProgress(progress);
+        onPhase: (phase) => {
+          if (!active()) return;
+          setAnalysisPhase(phase);
+          if (phase === "analyzing") setUploadProgress(100);
+        },
+        onJob: (job) => {
+          if (!active()) return;
+          setSubmittedPrompts((current) =>
+            current.includes(target) ? current : [...current, target],
+          );
+          setAnalysisProgress(
+            job.status === "RUNNING" ? 65 : job.status === "QUEUED" ? 40 : 32,
+          );
         },
       });
-      requireActive();
-      submittedClipsRef.current.add(reportClip.blob);
-      setSubmittedPrompts((current) =>
-        current.includes(selectedClip) ? current : [...current, selectedClip],
-      );
-      awaitingAdmission = true;
-      const requested = await canonicalApi.analyzeAudiovisual(
-        sessionId,
-        prepared.analysisConsent,
-        owner.signal,
-      );
-      requireActive();
-      awaitingAdmission = false;
-      setAnalysisPhase("analyzing");
-      let analysis = await waitForCanonicalResult({
-        sessionId,
-        recordingId,
-        analysisId: requested.analysisId,
-        signal: owner.signal,
-        onProgress: setAnalysisProgress,
-        onConnectionChange: () => undefined,
-      });
-      requireActive();
-      const show = () => {
-        setAnalyses((current) => ({
-          ...current,
-          [selectedClip]: {
-            sessionId,
-            content: content!,
-            analysis,
-            segments: [],
-          },
-        }));
-        setAnalysisPhase("result");
-        previewShown = true;
-      };
-      show();
-      if (analysis.canonical && persistencePending(analysis.canonical)) {
-        const current = await awaitCanonicalPersistence(
-          analysis.canonical,
-          owner.signal,
-          () => {
-            setAnalysisError("결과 저장 상태를 확인하고 있습니다.");
-          },
-        );
-        requireActive();
-        analysis = canonicalPresentation(current);
-        show();
-      }
-      if (analysis.canonical && canonicalViewCompletable(analysis.canonical)) {
-        await completeCanonicalPractice(
-          api,
-          sessionId,
-          analysis.canonical,
-          () =>
-            mounted.current &&
-            !owner.signal.aborted &&
-            epoch === getAuthSessionVersion(),
-        );
-        requireActive();
-        setAnalysisError(null);
-      } else if (analysis.canonical) {
-        setAnalysisError(
-          new CanonicalResultUnavailable(analysis.canonical).message,
-        );
-      }
+      if (!active()) return;
+      setAnalyses((current) => ({ ...current, [target]: result }));
+      setAnalysisPhase("result");
     } catch (reason) {
-      if (
-        !mounted.current ||
-        owner.signal.aborted ||
-        epoch !== getAuthSessionVersion()
-      )
-        return;
-      if (invalidatesCanonicalResult(reason)) {
-        setAnalyses((current) => {
-          const next = { ...current };
-          delete next[selectedClip];
-          return next;
-        });
-        previewShown = false;
-      }
-      if (awaitingAdmission && analysisRequestWasRejected(reason)) {
-        submittedClipsRef.current.delete(reportClip.blob);
-        setSubmittedPrompts((current) =>
-          current.filter((index) => index !== selectedClip),
-        );
-      }
+      if (!active()) return;
       const coaching = coachingLimitNotice(reason);
       setAnalysisError(
         coaching
           ? `${coaching.title} ${coaching.hint}`
           : reason instanceof Error
             ? reason.message
-            : "영상 발음 분석을 완료하지 못했어요.",
+            : "영상 분석 상태를 확인하지 못했어요.",
       );
-      setAnalysisPhase(previewShown ? "result" : "error");
-    } finally {
-      if (analysisOwnerRef.current === owner) {
-        analysisOwnerRef.current = null;
-        analysisBusyRef.current = false;
-      }
-    }
-  }
-
-  async function refreshSavedResult() {
-    const bundle = analyses[selectedClip];
-    const view = bundle?.analysis.canonical;
-    if (!bundle || !view || analysisBusyRef.current) return;
-    analysisBusyRef.current = true;
-    const owner = new AbortController();
-    analysisOwnerRef.current = owner;
-    const epoch = getAuthSessionVersion();
-    const active = () =>
-      mounted.current &&
-      !owner.signal.aborted &&
-      epoch === getAuthSessionVersion();
-    try {
-      const current = await awaitCanonicalPersistence(
-        view,
-        owner.signal,
-        () => {
-          if (active())
-            setAnalysisError("결과 저장 상태를 다시 확인하고 있습니다.");
-        },
-      );
-      if (!active()) return;
-      setAnalyses((previous) => ({
-        ...previous,
-        [selectedClip]: { ...bundle, analysis: canonicalPresentation(current) },
-      }));
-      if (canonicalViewCompletable(current)) {
-        await completeCanonicalPractice(api, bundle.sessionId, current, active);
-        if (active()) setAnalysisError(null);
-      } else setAnalysisError(new CanonicalResultUnavailable(current).message);
-    } catch (reason) {
-      if (!active()) return;
-      if (invalidatesCanonicalResult(reason)) {
-        setAnalyses((previous) => {
-          const next = { ...previous };
-          delete next[selectedClip];
-          return next;
-        });
-        setAnalysisPhase("error");
-      }
-      setAnalysisError(
-        reason instanceof Error
-          ? reason.message
-          : "저장 상태를 확인하지 못했습니다.",
-      );
+      setAnalysisPhase("error");
     } finally {
       if (analysisOwnerRef.current === owner) {
         analysisOwnerRef.current = null;
@@ -795,7 +538,7 @@ export default function LipPractice() {
             onClick={() => {
               analysisOwnerRef.current?.abort();
               setAnalysisError(
-                "분석 대기를 중단했어요. 이미 접수된 분석은 학습 기록에서 확인해 주세요.",
+                "분석 대기를 중단했어요. 같은 촬영본에서 처리 상태를 다시 확인할 수 있어요.",
               );
               setAnalysisPhase("error");
             }}
@@ -816,11 +559,7 @@ export default function LipPractice() {
       </AppShell>
     );
 
-  if (
-    step === "complete" &&
-    analysisPhase === "result" &&
-    (selectedAnalysis || selectedDirectResult)
-  )
+  if (step === "complete" && analysisPhase === "result" && selectedAnalysis)
     return (
       <AppShell
         nav={false}
@@ -855,49 +594,22 @@ export default function LipPractice() {
               {analysisError}
             </p>
           )}
-          {selectedAnalysis ? (
-            <AnalysisView
-              analysis={selectedAnalysis.analysis}
-              segments={selectedAnalysis.segments}
-              content={selectedAnalysis.content}
-              recordingUrl={reportClip?.url}
-              isCameraPractice
-            />
-          ) : selectedDirectResult ? (
-            <DirectAnalysisResult
-              result={selectedDirectResult}
-              isCameraPractice
-              content={{
-                id: `lip-${selectedClip}`,
-                contentType: "SENTENCE",
-                title: practiceSet.title,
-                scriptText: prompts[selectedClip],
-                referenceAudioAvailable: false,
-              }}
+          {selectedAnalysis && (
+            <BrowserVideoAnalysisResult
+              result={selectedAnalysis}
+              title={practiceSet.title}
+              scriptText={prompts[selectedClip]}
               recordingUrl={reportClip?.url}
             />
-          ) : null}
+          )}
           <footer className="bg-white px-5 py-3">
             <button
               className="design-action"
-              onClick={() => setSaveReportOpen(true)}
+              onClick={() => router.push("/home")}
             >
               완료하기
             </button>
           </footer>
-          <ReportSaveDialog
-            open={saveReportOpen}
-            onOpenChange={setSaveReportOpen}
-            onConfirm={async (saved) => {
-              for (const bundle of Object.values(analyses))
-                if (bundle)
-                  await reportSaves.set("SESSION", bundle.sessionId, saved);
-              for (const view of Object.values(directResults))
-                if (view?.result)
-                  await reportSaves.set("DIRECT", view.jobId, saved);
-              router.push("/home");
-            }}
-          />
         </div>
       </AppShell>
     );
@@ -1073,11 +785,7 @@ export default function LipPractice() {
                     setSelectedClip(index);
                     setAnalysisTarget(null);
                     setAnalysisError(null);
-                    setAnalysisPhase(
-                      analyses[index] || directResults[index]?.result
-                        ? "result"
-                        : "idle",
-                    );
+                    setAnalysisPhase(analyses[index] ? "result" : "idle");
                   }}
                   className={`flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold ${selectedClip === index ? "bg-primary text-white" : "bg-white text-muted-foreground"}`}
                 >
@@ -1098,9 +806,7 @@ export default function LipPractice() {
               {prompts[selectedClip]}
             </p>
 
-            {!selectedAnalysis && !selectedDirectResult && !analysisBusy
-              ? consentFields
-              : null}
+            {!selectedAnalysis && !analysisBusy ? consentFields : null}
 
             {analysisTarget === selectedClip && analysisBusy ? (
               <PracticeAnalysisLoading
@@ -1127,63 +833,24 @@ export default function LipPractice() {
                     </p>
                   </div>
                 </div>
-                {reportClip?.blob && submittedPrompts.includes(selectedClip) ? (
-                  <Link
-                    href="/mypage/history"
-                    className="mt-4 flex min-h-12 w-full items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
-                  >
-                    학습 기록에서 기존 분석 확인
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void analyzeSelectedClip()}
-                    className="mt-4 min-h-12 w-full rounded-full bg-primary text-sm font-bold text-white"
-                  >
-                    다시 분석하기
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={!canAnalyzeVideo}
+                  onClick={() => void analyzeSelectedClip()}
+                  className="mt-4 min-h-12 w-full rounded-full bg-primary text-sm font-bold text-white disabled:opacity-45"
+                >
+                  {submittedPrompts.includes(selectedClip)
+                    ? "처리 상태 다시 확인"
+                    : "다시 요청하기"}
+                </button>
               </section>
-            ) : selectedDirectResult ? (
-              <div className="mt-5">
-                {analysisError ? (
-                  <p role="status" className="mb-3 text-sm">
-                    {analysisError}
-                  </p>
-                ) : null}
-                <DirectAnalysisResult
-                  result={selectedDirectResult}
-                  isCameraPractice
-                  content={{
-                    id: `lip-${selectedClip}`,
-                    contentType: "SENTENCE",
-                    title: `입 모양 연습 ${selectedClip + 1}`,
-                    scriptText: prompts[selectedClip],
-                    referenceAudioAvailable: false,
-                  }}
-                  recordingUrl={reportClip?.url}
-                />
-              </div>
             ) : selectedAnalysis ? (
               <div className="mt-5">
-                {analysisError && (
-                  <div role="status" className="mb-3 text-sm">
-                    <p>{analysisError}</p>
-                    <button
-                      type="button"
-                      className="mt-2 min-h-11 rounded-xl border px-4"
-                      onClick={() => void refreshSavedResult()}
-                    >
-                      저장·완료 상태 다시 확인
-                    </button>
-                  </div>
-                )}
-                <AnalysisView
-                  analysis={selectedAnalysis.analysis}
-                  segments={selectedAnalysis.segments}
-                  content={selectedAnalysis.content}
+                <BrowserVideoAnalysisResult
+                  result={selectedAnalysis}
+                  title={practiceSet.title}
+                  scriptText={prompts[selectedClip]}
                   recordingUrl={reportClip?.url}
-                  isCameraPractice
                 />
               </div>
             ) : (
@@ -1236,30 +903,10 @@ export default function LipPractice() {
             <button
               type="button"
               className="design-action mt-3"
-              onClick={() => {
-                if (
-                  Object.keys(analyses).length ||
-                  Object.keys(directResults).length
-                )
-                  setSaveReportOpen(true);
-                else router.push("/home");
-              }}
+              onClick={() => router.push("/home")}
             >
               완료
             </button>
-            <ReportSaveDialog
-              open={saveReportOpen}
-              onOpenChange={setSaveReportOpen}
-              onConfirm={async (saved) => {
-                for (const bundle of Object.values(analyses))
-                  if (bundle)
-                    await reportSaves.set("SESSION", bundle.sessionId, saved);
-                for (const view of Object.values(directResults))
-                  if (view?.result)
-                    await reportSaves.set("DIRECT", view.jobId, saved);
-                router.push("/home");
-              }}
-            />
           </div>
         ) : (
           <CameraStage mirrored={mirrored} videoRef={previewRef}>
@@ -1376,7 +1023,7 @@ function PrivacyNote() {
     <p className="mt-auto flex gap-2 pt-8 text-xs leading-5 text-muted-foreground">
       <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
       촬영 영상은 기기에 임시 보관되며, 분석을 요청하면 선택한 촬영본의 영상과
-      내장 음성이 발음·입술 움직임 분석을 위해 서버로 전송돼요.
+      내장 음성이 발음·입술 움직임 분석을 위해 AI 서버로 직접 전송돼요.
     </p>
   );
 }

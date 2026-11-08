@@ -1,5 +1,14 @@
 # 디렉토리 문서 - VC-FE
 
+## 원본 영상 직접 업로드
+
+- `src/lib/api/video-upload-authorizations.ts`: 운영 Ed25519 grant DTO/권한 발급 client.
+- `src/lib/api/browser-video.ts`: AI create/원본 PUT/start/상태/결과/취소 client·UUID/digest 검사.
+- `src/lib/browser-video-practice.ts`: 한 촬영본의 제출·재확인 orchestration. Backend 영상 bytes 전송 없음.
+- `src/lib/browser-video-presentation.ts`: AI 공개 점수/총평의 화면 모델 변환.
+- `src/components/browser-video-{consent,analysis-result}.tsx`: 동의와 기존 리포트 연결.
+- `src/routes/lip-practice.tsx`: 카메라 촬영·진행·결과 화면. 기존 lip-analysis.ts Backend 경로는 사용하지 않음.
+
 - `src/lib/score-details.ts`: 선택형 6항목 schema·타입·표시 변환. 총점 재계산 없음.
 - `src/components/analysis-score-details.tsx`: Backend·Direct·문장별 연습·저장 이력의 공통 세부점수 표시.
 - canonical/Direct presentation은 내부 `AnalysisResult.scoreDetails`로 선택 객체를 전달한다.

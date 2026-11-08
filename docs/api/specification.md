@@ -1,5 +1,11 @@
 # API 명세 - VC-FE
 
+## 2026-11-08 브라우저 원본 영상
+
+`/lip-practice`의 Backend 권한 발급과 AI 원본 접수/조회는 [직접 영상 계약](direct-video-upload.md)을 따른다.
+권한 POST에만 검증한 Origin을 Backend 중계로 전달한다. 기존 VIDEO capability는 이 새 흐름의 gate가 아니다.
+Frontend 내부 endpoint는 기존 /api/backend/* 중계를 유지하며 영상 bytes는 이 중계를 통과하지 않는다.
+
 ## 2026-11-08 선택형 음성 세부점수
 
 기존 Backend `/api/v3/analyses/{analysisId}`와 Direct 조회/SSE/저장 이력의 `score.details`를 보존한다.
