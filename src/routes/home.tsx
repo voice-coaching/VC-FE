@@ -18,6 +18,7 @@ import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
 import styles from "./home.module.css";
 import { HomePopularNews } from "@/components/home-popular-news";
+import { HomePopup } from "@/components/home-popup";
 import {
   updateHomeHeader,
   type HeaderScrollState,
@@ -403,6 +404,7 @@ export default function Home() {
       className={`relative ${styles.homeTheme}`}
       chromeColor={headerCollapsed ? "#f2f4f6" : "#5f55f8"}
     >
+      <HomePopup />
       <header
         className={`${styles.homeHeader} z-20`}
         data-state={headerCollapsed ? "hidden" : "visible"}

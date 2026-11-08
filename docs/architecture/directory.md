@@ -9,6 +9,13 @@
 - `src/components/browser-video-{consent,analysis-result}.tsx`: 동의와 기존 리포트 연결.
 - `src/routes/lip-practice.tsx`: 카메라 촬영·진행·결과 화면. 기존 lip-analysis.ts Backend 경로는 사용하지 않음.
 
+## 홈 관리자 공지
+
+- `src/lib/home-popup.ts`: 사용자 팝업 전용 HTTP 조회·응답 검증·이동 목적지 변환.
+- `src/lib/home-popup-preferences.ts`: 같은 브라우저의 사용자·팝업별 7일 숨김 저장·만료 확인. `scripts/home-popup-preferences.test.ts`에서 경계·격리·저장 차단 검증.
+- `src/components/home-popup.tsx`: 홈 상단 모달, 현재 방문의 닫기 상태와 인증/언마운트 시 요청 취소.
+- `scripts/home-popup.test.ts`, `scripts/verify-home-popup.mjs`: 조회 계약 및 로컬 모의 API 브라우저 검증.
+
 - `src/lib/score-details.ts`: 선택형 6항목 schema·타입·표시 변환. 총점 재계산 없음.
 - `src/components/analysis-score-details.tsx`: Backend·Direct·문장별 연습·저장 이력의 공통 세부점수 표시.
 - canonical/Direct presentation은 내부 `AnalysisResult.scoreDetails`로 선택 객체를 전달한다.

@@ -1,5 +1,9 @@
 # 엔드포인트 목록 - VC-FE
 
+| Method | Path | 인증 | 목적 |
+| --- | --- | --- | --- |
+| GET | `/api/users/me/popup` | 활성 로그인 회원 | 홈에 표시할 현재 관리자 공지 한 개 또는 null 조회 |
+
 운영 백엔드의 80개 엔드포인트 목록은 운영 OpenAPI
 `https://api.voice-coaching.site/v3/api-docs`를 단일 기준으로 사용한다. 프론트의
 전체 호출 계약은 `scripts/verify-api-contract.ts`, 구현은
