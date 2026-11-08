@@ -1,7 +1,5 @@
 import { z } from "zod";
-import { candidateSchema } from "../canonical-analysis";
 import { canonicalScoreSchema } from "../canonical-score";
-import { lipVisualSchema } from "../canonical-lip";
 import { ApiError, getAuthSessionVersion } from "./client";
 import type { Id } from "./types";
 import {
@@ -33,33 +31,21 @@ const jobSchema = z
   })
   .refine((job) => !job.resultAvailable || job.resultSha256 !== null);
 const resultSchema = z.object({
-  schemaVersion: z.literal("voice-coaching.independent-audiovisual-result.v1"),
+  schemaVersion: z.literal("voice-coaching.browser-video-summary.v1"),
   jobId: z.string().uuid(),
   executionId: z.string().uuid(),
   clientRequestId: z.string().uuid(),
   status: z.enum(["COMPLETED", "FAILED"]),
   score: canonicalScoreSchema,
   coaching: z.object({
-    adapterStatus: z.string(),
-    generationStatus: z.string(),
-    feedback: z.string().max(4000).nullable().optional(),
-    items: z
-      .array(
-        z.object({
-          candidate: candidateSchema,
-          expression: z.object({
-            explanation: z.string(),
-            action: z.string(),
-            practice: z.string(),
-            selfCheck: z.string(),
-          }),
-        }),
-      )
-      .max(3),
+    feedback: z.string().max(4000),
   }),
-  visual: lipVisualSchema,
-  sourceIdentity: z.object({ originalVideoSha256: hash, scriptSha256: hash }),
-  failure: z.union([z.string(), z.object({ code: z.string() })]).nullable(),
+  visual: z.object({
+    score: z.number().finite().min(0).max(100).nullable(),
+    scoreKind: z.enum(["NONE", "PROVISIONAL", "CALIBRATED"]),
+    scoreScope: z.enum(["UNAVAILABLE", "ASSESSED_PHONES_ONLY", "WHOLE_CLIP"]),
+  }),
+  failure: z.object({ code: z.string() }).nullable(),
 });
 export type BrowserVideoJob = z.infer<typeof jobSchema>;
 export type BrowserVideoResult = z.infer<typeof resultSchema>;
@@ -251,13 +237,17 @@ export class BrowserVideoClient {
     job: BrowserVideoJob,
     signal: AbortSignal,
   ): Promise<BrowserVideoResult> {
-    const response = await this.exchange(`/${job.jobId}/result`, "GET", signal);
+    const response = await this.exchange(
+      `/${job.jobId}/summary`,
+      "GET",
+      signal,
+    );
     await requireOk(response);
     const bytes = await boundedBytes(response, 2 * 1024 * 1024);
     const digest = await browserVideoSha256(bytes);
     if (
-      digest !== job.resultSha256 ||
-      digest !== response.headers.get("X-Result-SHA256")
+      digest !== response.headers.get("X-Result-SHA256") ||
+      response.headers.get("ETag") !== `"${digest}"`
     )
       throw invalid("VIDEO_RESULT_DIGEST_MISMATCH");
     const parsed = resultSchema.safeParse(decodeDocument(bytes));
@@ -267,15 +257,10 @@ export class BrowserVideoClient {
       result.jobId !== job.jobId ||
       result.executionId !== job.executionId ||
       result.clientRequestId !== this.binding.clientRequestId ||
-      result.status !== job.status ||
-      result.sourceIdentity.originalVideoSha256 !==
-        this.binding.source.sha256 ||
-      result.sourceIdentity.scriptSha256 !==
-        (await browserVideoSha256(
-          new TextEncoder().encode(this.binding.scriptText),
-        ))
+      result.status !== job.status
     )
       throw invalid("VIDEO_RESULT_IDENTITY_MISMATCH");
+    this.requireActive(signal);
     return result;
   }
 }
