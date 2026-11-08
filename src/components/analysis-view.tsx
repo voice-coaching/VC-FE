@@ -14,6 +14,8 @@ import {
   LipVisualResult,
 } from "@/components/canonical-lip-result";
 import type { LipVisual } from "@/lib/canonical-lip";
+import type { BrowserVideoResult } from "@/lib/api/browser-video";
+import { LipScoreSummary } from "./lip-score-summary";
 import { visibleAnalysisScoreGroups } from "@/lib/analysis-feedback";
 import { canonicalCriterionPoints } from "@/lib/canonical-score";
 import {
@@ -78,6 +80,7 @@ export function AnalysisView({
   sentenceMode = false,
   pronunciationDetails = {},
   lipVisual,
+  lipSummary,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -93,6 +96,7 @@ export function AnalysisView({
   sentenceMode?: boolean;
   pronunciationDetails?: Record<string, PronunciationDetail[]>;
   lipVisual?: LipVisual;
+  lipSummary?: BrowserVideoResult["visual"];
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const scoreDetails =
@@ -549,7 +553,9 @@ export function AnalysisView({
           </div>
         </section>
 
-        {isCameraPractice && analysis.status === "COMPLETED" && lipVisual ? (
+        {isCameraPractice && analysis.status === "COMPLETED" && lipSummary ? (
+          <LipScoreSummary visual={lipSummary} />
+        ) : isCameraPractice && analysis.status === "COMPLETED" && lipVisual ? (
           <LipVisualResult visual={lipVisual} />
         ) : (
           analysis.canonical && (

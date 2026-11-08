@@ -29,8 +29,8 @@ export function BrowserVideoAnalysisResult({
       }}
       recordingUrl={recordingUrl}
       isCameraPractice
-      corrections={completed ? result.coaching.items : []}
-      lipVisual={completed ? result.visual : undefined}
+      corrections={[]}
+      lipSummary={completed ? result.visual : undefined}
       reportParameter={`videoReport-${result.jobId}`}
     />
   );
