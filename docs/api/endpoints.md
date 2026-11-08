@@ -18,6 +18,9 @@
 
 ## 분석 연동
 
+원본 영상의 외부 Backend/AI endpoint 색인·인증은 [브라우저 직접 업로드 계약](direct-video-upload.md#ai-브라우저-endpoint)을 따른다.
+영상은 AI origin으로 직접 전송하며 Frontend 중계에는 권한 metadata만 보낸다.
+
 | Method | URL | 인증 | 설명 |
 |---|---|---|---|
 | GET | `/api/analysis-capabilities/canonical` | 사용자 로그인 | 분석 계약·접수 가능 상태·목적별 지원 범위 |
