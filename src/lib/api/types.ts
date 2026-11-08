@@ -1083,6 +1083,11 @@ export interface ApiContract {
     getRefundRequest(requestId: string): Promise<PaymentActionResult>;
   };
   notifications: {
+    registerNativeFcmDevice(input: {
+      installationId: string;
+      token: string;
+    }): Promise<void>;
+    unregisterNativeFcmDevice(installationId: string): Promise<void>;
     getPreferences(): Promise<NotificationPreferences>;
     updatePreferences(
       input: NotificationPreferencesUpdateInput,

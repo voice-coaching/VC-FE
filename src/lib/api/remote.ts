@@ -608,6 +608,15 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         }),
     },
     notifications: {
+      registerNativeFcmDevice: (input) =>
+        request("/api/users/me/native-fcm-devices", {
+          method: "PUT",
+          body: input,
+        }),
+      unregisterNativeFcmDevice: (installationId) =>
+        request(`/api/users/me/native-fcm-devices/${id(installationId)}`, {
+          method: "DELETE",
+        }),
       getPreferences: () => request("/api/users/me/notification-preferences"),
       updatePreferences: (input) =>
         request("/api/users/me/notification-preferences", {

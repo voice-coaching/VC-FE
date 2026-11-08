@@ -34,6 +34,11 @@ import {
   writeUserClientCache,
 } from "@/lib/client-cache";
 import { PRIVACY_TERMS, SERVICE_TERMS } from "@/lib/legal-terms";
+import {
+  enableAndroidPush,
+  isAndroidApp,
+  unregisterAndroidPush,
+} from "@/lib/android-push";
 
 type Panel =
   | "마이크와 음성"
@@ -75,6 +80,10 @@ const GROUPS: Array<{
 
 export default function AccountSettings() {
   const router = useRouter();
+  const [androidApp, setAndroidApp] = useState(false);
+  useEffect(() => {
+    setAndroidApp(isAndroidApp());
+  }, []);
   const userId = getAuthenticatedUserId();
   const [initialPreferences] = useState(() =>
     readUserClientCache<NotificationPreferences>(
@@ -100,6 +109,9 @@ export default function AccountSettings() {
   );
   const [notificationRetry, setNotificationRetry] = useState(0);
   const [notificationMessage, setNotificationMessage] = useState<string | null>(
+    null,
+  );
+  const [notificationSuccess, setNotificationSuccess] = useState<string | null>(
     null,
   );
   const [notices, setNotices] = useState<NoticeSummary[] | null>(null);
@@ -218,6 +230,7 @@ export default function AccountSettings() {
     const enabled = !previous.practiceReminder.enabled;
     setNotificationSaving(true);
     setNotificationMessage(null);
+    setNotificationSuccess(null);
     setNotificationPreferences({
       ...previous,
       practiceReminder: { ...previous.practiceReminder, enabled },
@@ -227,6 +240,7 @@ export default function AccountSettings() {
       practiceReminder: { ...previous.practiceReminder, enabled },
     });
     try {
+      if (enabled && isAndroidApp()) await enableAndroidPush();
       const updated = await api.notifications.updatePreferences({
         practiceReminder: { enabled },
       });
@@ -283,6 +297,7 @@ export default function AccountSettings() {
     setAction(kind);
     setMessage(null);
     try {
+      if (isAndroidApp()) await unregisterAndroidPush();
       if (kind === "logout") await api.auth.signOut();
       else await api.users.withdraw();
       router.replace("/");
@@ -373,6 +388,37 @@ export default function AccountSettings() {
               />
             </button>
           </div>
+          {androidApp && (
+            <button
+              type="button"
+              disabled={notificationSaving}
+              className="mx-5 min-h-11 text-sm font-semibold text-primary disabled:opacity-50"
+              onClick={() => {
+                setNotificationSaving(true);
+                setNotificationMessage(null);
+                setNotificationSuccess(null);
+                void enableAndroidPush()
+                  .then(() =>
+                    setNotificationSuccess("이 기기의 알림을 연결했어요."),
+                  )
+                  .catch((reason: unknown) =>
+                    setNotificationMessage(
+                      reason instanceof Error
+                        ? reason.message
+                        : "기기 알림을 연결하지 못했어요.",
+                    ),
+                  )
+                  .finally(() => setNotificationSaving(false));
+              }}
+            >
+              이 기기 알림 연결
+            </button>
+          )}
+          {notificationSuccess && (
+            <p role="status" className="px-5 pb-2 text-xs text-primary">
+              {notificationSuccess}
+            </p>
+          )}
           {notificationMessage ? (
             <div className="px-5 pb-2">
               <p role="alert" className="text-xs text-destructive">

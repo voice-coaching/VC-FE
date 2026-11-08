@@ -30,6 +30,13 @@ const config: CapacitorConfig = {
     cleartext: false,
     errorPath: "offline.html",
   },
+  experimental: {
+    ios: {
+      spm: {
+        packageOptions: { "@capacitor-firebase/messaging": { symlink: true } },
+      },
+    },
+  },
   plugins: {
     SplashScreen: {
       launchAutoHide: true,

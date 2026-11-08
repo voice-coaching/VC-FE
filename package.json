@@ -23,6 +23,7 @@
     "verify:admin:browser": "node scripts/verify-admin-browser.mjs"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8.6.0",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",

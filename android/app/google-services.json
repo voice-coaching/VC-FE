@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "901219131553",
+    "project_id": "speakai-95f67",
+    "storage_bucket": "speakai-95f67.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:901219131553:android:4e4a97682e0bc72ba150e0",
+        "android_client_info": {
+          "package_name": "site.voicecoaching.speakai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYiubo1qb5o9uqyblLYuFtWHDB_H7eXHs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

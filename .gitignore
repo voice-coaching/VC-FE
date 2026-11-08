@@ -9,3 +9,9 @@ out/
 
 # Local admin UI browser verification artifacts
 /test-artifacts/
+
+# Generated Capacitor Swift package links
+ios/App/CapApp-SPM/symlinks/
+
+# Generated Capacitor Swift package links
+ios/App/CapApp-SPM/symlinks/
