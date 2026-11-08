@@ -12,7 +12,7 @@ const componentSource = readFileSync(
 const CanonicalLipResult = new Function(
   "React",
   "Image",
-  ts.transpile(componentSource.replace("export function", "function"), {
+  ts.transpile(componentSource.replaceAll("export function", "function"), {
     target: ts.ScriptTarget.ES2022,
     jsx: ts.JsxEmit.React,
   }) + "\nreturn CanonicalLipResult;",
