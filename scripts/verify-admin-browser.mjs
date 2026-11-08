@@ -750,6 +750,8 @@ await context.route("**/api/backend/**", async (route) => {
   }
   if (/^\/popups\/\d+$/.test(path))
     return reply(popups.find((p) => p.id === Number(path.split("/")[2])));
+  if (path === "/courses" && method === "GET")
+    return reply(paged([], url.searchParams));
   if (path === "/audit-logs") return reply(paged(audits, url.searchParams));
   throw new Error(`Unhandled fixture request ${method} ${path}`);
 });
