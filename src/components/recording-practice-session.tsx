@@ -54,6 +54,7 @@ import {
   completeCanonicalPractice,
   invalidatesCanonicalResult,
   resultStillPending,
+  refreshCanonicalPersistence,
 } from "@/lib/canonical-persistence";
 import {
   CanonicalResultUnavailable,
@@ -114,6 +115,8 @@ export type PracticeSessionWorkflow = {
   resultTitle: string;
   restoringLabel: string;
   completionHref: string;
+  completionReady?: boolean;
+  completionLabel?: string;
   resultSummary: ReactNode;
   renderErrorDetails: (reason: unknown) => ReactNode;
 };
@@ -831,6 +834,7 @@ export function RecordingPracticeSession({
     phase,
     sessionId,
     analysis?.canonical?.analysisId,
+    analysis?.canonical?.recordingId,
     analysis?.canonical?.requestId,
     analysis?.canonical?.executionId,
   ]);
@@ -840,7 +844,7 @@ export function RecordingPracticeSession({
     if (!view || !sessionId) return;
     const epoch = getAuthSessionVersion();
     try {
-      const current = await canonicalApi.get(view);
+      const current = await refreshCanonicalPersistence(view);
       if (!mountedRef.current || epoch !== getAuthSessionVersion()) return;
       if (resultStillPending(current)) {
         setRequestError(
@@ -1718,26 +1722,30 @@ export function RecordingPracticeSession({
               type="button"
               disabled={
                 loadingNext ||
+                workflow?.completionReady === false ||
                 (Boolean(courseId || workflow) && savingResult(analysis)) ||
                 (Boolean(courseId) && !completedRef.current)
               }
               onClick={() => setSaveReportOpen(true)}
               className="h-14 w-full rounded-full bg-[#6346f6] text-[16px] leading-6 font-bold text-white disabled:opacity-50"
             >
-              {loadingNext
-                ? "이동 중…"
-                : courseId
-                  ? isLastCourseSentence || courseFinished
-                    ? "클래스 완료"
-                    : courseExamples
-                      ? "다음 문장"
-                      : "다음 단계"
-                  : "완료하기"}
+              {workflow?.completionReady === false
+                ? (workflow.completionLabel ?? "완료 확인 중…")
+                : loadingNext
+                  ? "이동 중…"
+                  : courseId
+                    ? isLastCourseSentence || courseFinished
+                      ? "클래스 완료"
+                      : courseExamples
+                        ? "다음 문장"
+                        : "다음 단계"
+                    : "완료하기"}
             </button>
             <ReportSaveDialog
               open={saveReportOpen}
               onOpenChange={setSaveReportOpen}
               onConfirm={async (saved) => {
+                if (workflow?.completionReady === false) return;
                 if (!sessionId)
                   throw new Error("연습 기록을 확인할 수 없습니다.");
                 await reportSaves.set("SESSION", sessionId, saved);

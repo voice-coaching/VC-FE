@@ -7,7 +7,9 @@
 주요 기능 흐름을 단계별로 기록한다.
 
 ## 흐름 템플릿
+
 ### Flow Name
+
 - Actor:
 - Entry point:
 - Preconditions:
@@ -20,7 +22,6 @@
 - Side effects:
 - Related API:
 - Related DB tables:
-
 
 ## 모든 음성 문장 연습의 연속 캡처
 

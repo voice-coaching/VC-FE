@@ -1,5 +1,6 @@
 import {
   canonicalViewCompletable,
+  CanonicalProjectionError,
   type CanonicalAnalysisView,
   type CanonicalViewIdentity,
 } from "./canonical-analysis";
@@ -25,17 +26,59 @@ export function resultStillPending(view: CanonicalAnalysisView) {
 /** A failed completion command alone does not revoke a valid result. */
 export function invalidatesCanonicalResult(error: unknown) {
   return (
-    error instanceof ApiError &&
-    ([401, 403, 404, 499].includes(error.status) ||
-      (error.status === 409 &&
-        [
-          "CANONICAL_ATTEMPT_CHANGED",
-          "CANONICAL_ANALYSIS_CHANGED",
-          "CANONICAL_RESULT_UNAVAILABLE",
-          "INVALID_SESSION_STATE",
-          "RESOURCE_NOT_FOUND",
-        ].includes(error.code)))
+    error instanceof CanonicalProjectionError ||
+    (error instanceof ApiError &&
+      ([401, 403, 404, 499].includes(error.status) ||
+        (error.status === 409 &&
+          [
+            "CANONICAL_ATTEMPT_CHANGED",
+            "CANONICAL_ANALYSIS_CHANGED",
+            "CANONICAL_RESULT_UNAVAILABLE",
+            "INVALID_SESSION_STATE",
+            "RESOURCE_NOT_FOUND",
+          ].includes(error.code))))
   );
+}
+
+/** Freeze only the attempt identity; a view is not a strict lookup expectation. */
+export function canonicalLookupIdentity(
+  view: CanonicalViewIdentity,
+): CanonicalViewIdentity {
+  const { analysisId, recordingId, requestId, executionId } = view;
+  return { analysisId, recordingId, requestId, executionId };
+}
+
+/** Recover only an ambiguous server 409, never a different returned attempt or lost access. */
+export async function refreshCanonicalPersistence(
+  view: CanonicalViewIdentity,
+  signal?: AbortSignal,
+): Promise<CanonicalAnalysisView> {
+  const expected = canonicalLookupIdentity(view);
+  const epoch = getAuthSessionVersion();
+  for (let attempt = 0; ; attempt++) {
+    if (signal?.aborted || epoch !== getAuthSessionVersion())
+      throw new ApiError("요청이 변경되었습니다.", 499, "REQUEST_ABORTED");
+    try {
+      const current = await canonicalApi.get(expected, signal);
+      if (signal?.aborted || epoch !== getAuthSessionVersion())
+        throw new ApiError("요청이 변경되었습니다.", 499, "REQUEST_ABORTED");
+      return current;
+    } catch (error) {
+      if (
+        !(error instanceof ApiError) ||
+        error.status !== 409 ||
+        error.code !== "CANONICAL_ANALYSIS_CHANGED"
+      )
+        throw error;
+      if (attempt >= 2)
+        throw new ApiError(
+          "저장 상태 확인이 지연되고 있습니다. 다시 확인해 주세요.",
+          408,
+          "CANONICAL_REFRESH_WAIT_TIMEOUT",
+        );
+      await pause(500, signal ?? new AbortController().signal);
+    }
+  }
 }
 
 function pause(ms: number, signal: AbortSignal) {
@@ -59,6 +102,7 @@ export async function awaitCanonicalPersistence(
   signal: AbortSignal,
   onSnapshot: (view: CanonicalAnalysisView) => void,
 ) {
+  const identity = canonicalLookupIdentity(expected);
   const epoch = getAuthSessionVersion();
   const deadline = performance.now() + 120_000;
   while (!signal.aborted && performance.now() < deadline) {
@@ -70,7 +114,10 @@ export async function awaitCanonicalPersistence(
       Math.min(15_000, deadline - performance.now()),
     );
     try {
-      const current = await canonicalApi.get(expected, request.signal);
+      const current = await refreshCanonicalPersistence(
+        identity,
+        request.signal,
+      );
       if (signal.aborted || epoch !== getAuthSessionVersion())
         throw new ApiError(
           "로그인 상태 또는 요청이 변경되었습니다.",
@@ -84,6 +131,7 @@ export async function awaitCanonicalPersistence(
       const transient =
         request.signal.aborted ||
         (error instanceof ApiError &&
+          error.code !== "CANONICAL_REFRESH_WAIT_TIMEOUT" &&
           [0, 408, 429, 500, 502, 503, 504].includes(error.status));
       if (!transient) throw error;
     } finally {

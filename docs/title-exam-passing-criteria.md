@@ -1,5 +1,30 @@
 # 승급 시험 합격 판정 연동 보완
 
+## 저장 재조회와 채점 완료 연결 (2026-11-08)
+
+- 수동 저장 재확인과 자동 저장 대기는 `canonicalLookupIdentity`로 analysisId,
+  recordingId, requestId, executionId만 추출한다. 결과 객체 전체를 strict 조회 계약에
+  전달하지 않는다. 문장·승급 시험의 공통 녹음 화면과 입모양 연습의 저장 대기에 적용된다.
+- `refreshCanonicalPersistence`는 서버의 `409 CANONICAL_ANALYSIS_CHANGED`에만
+  500ms 간격으로 최대 두 번 추가 GET한다. 네 ID는 고정하며 분석 POST는 보내지 않는다.
+  계속 같은 409이면 기존 결과를 보존하고 수동 재확인을 안내한다.
+- 응답의 ID 불일치, 명시적인 시도 변경, 401/403/404, 인증 세션 변경 또는 취소는 중단한다.
+  기존 projection·시도 일치 검사와 학습 완료 전 선택 녹음 검사를 유지한다.
+- SAVING/RETRYING → SAVED 확인 → 학습 완료 → 승급 채점 순서로 진행한다.
+  채점 중 진행 안내를 표시하고, 오류 시 `채점 다시 확인`을 제공한다.
+  검증된 PASSED/FAILED 결과가 있어야 완료 버튼과 보고서 저장 후 이동을 허용한다.
+
+검증:
+
+```sh
+node --import tsx --test scripts/canonical-persistence.test.ts scripts/canonical-completion.test.ts scripts/title-exam-api.test.ts scripts/title-exam-resume.test.ts
+npm run dev -- --webpack --port 3132
+node scripts/verify-title-save-grade.mjs
+```
+
+브라우저 검증은 localhost의 모의 API로 수행한다. 운영 서버에 분석·채점 요청을 보내지 않는다.
+자동 저장·수동 확인·자동/수동 409 복구·다른 실행 차단·채점 지연/오류의 버튼 상태를 확인한다.
+
 ## 원인과 책임
 
 2026-11-07 확인 기준: FE main `39d8b16`, BE main `0ca81d2`.
