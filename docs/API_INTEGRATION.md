@@ -55,6 +55,8 @@ OAuth 공급자 콘솔에는 위 리다이렉트 URI를 정확히 등록해야 �
 
 ## 음성 분석 흐름
 
+업로드/분석의 응답 유실과 재접속은 [업로드·분석 연결 복구 계약](contracts/training-reconnection.md)을 따른다. 다섯 POST의 단계별 Idempotency-Key와 원본 파일을 요청 전에 IndexedDB에 보관하고 `/recovery` GET으로 기존 상태를 확인한다. 기존 canonical 결과·학습 완료·승급 채점 순서는 유지한다.
+
 1. `POST /api/training-sessions`
 2. `POST /api/training-sessions/{sessionId}/recordings/upload-url`
 3. 발급된 presigned URL에 음성 Blob을 직접 `PUT`

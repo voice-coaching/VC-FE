@@ -9,6 +9,7 @@ export async function loadTitleExamResume(
   examId: Id,
   contentId: Id,
   isCurrent: () => boolean = () => true,
+  idempotencyKey?: string,
 ) {
   const requireCurrent = () => {
     if (!isCurrent())
@@ -26,7 +27,13 @@ export async function loadTitleExamResume(
     );
   const linked =
     exam.trainingSessionId ??
-    (await createTitleExamSession(api, examId, contentId, isCurrent));
+    (await createTitleExamSession(
+      api,
+      examId,
+      contentId,
+      isCurrent,
+      idempotencyKey,
+    ));
   requireCurrent();
   try {
     return await loadPracticeResume(api, linked, contentId, true);
@@ -44,6 +51,7 @@ export async function loadTitleExamResume(
       examId,
       contentId,
       isCurrent,
+      idempotencyKey,
     );
     requireCurrent();
     if (String(resolved) === String(linked)) throw reason;

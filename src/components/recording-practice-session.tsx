@@ -63,7 +63,8 @@ import {
 import { splitSentences } from "@/lib/sentences";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
-import { uploadRecordingWithFreshUrl } from "@/lib/recording-upload";
+import { TrainingRecoveryAttempt } from "@/lib/training-recovery-attempt";
+import { useTrainingRecovery } from "@/hooks/use-training-recovery";
 import { cacheResources } from "@/lib/cache-resources";
 import {
   CLIENT_CACHE_LIVE_MAX_AGE_MS,
@@ -106,6 +107,7 @@ export type PracticeSessionWorkflow = {
   createSession: () => Promise<Id>;
   restoreSession: (
     isCurrent: () => boolean,
+    idempotencyKey?: string,
   ) => ReturnType<typeof loadPracticeResume>;
   onComplete: (analysisId: Id) => Promise<void>;
   learningFocus: PracticeContent["learningFocus"];
@@ -136,7 +138,9 @@ export function RecordingPracticeSession({
   background = false,
   submissionRetry = 0,
   onSubmissionError,
+  recoveryScope,
 }: PracticeSessionProps & {
+  recoveryScope?: string;
   workflow?: PracticeSessionWorkflow;
   sentenceIndex?: number;
   onAnalysisAdmitted?: (admission: SentenceAnalysisAdmission) => void;
@@ -206,12 +210,6 @@ export function RecordingPracticeSession({
   const selectedRecordingRef = useRef<Id | null>(null);
   const submissionBusyRef = useRef(false);
   const autoSubmittedBlobRef = useRef<Blob | null>(null);
-  const uploadedRecordingRef = useRef<{
-    source: Blob;
-    sessionId: Id;
-    recordingId: Id;
-    epoch: number;
-  } | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const completedRef = useRef(resumeType === "ANALYSIS_RESULT");
   const capabilitiesRef = useRef<AnalysisCapabilities | null>(null);
@@ -219,9 +217,43 @@ export function RecordingPracticeSession({
     sentenceIndex != null
       ? [displayedContent.scriptText]
       : splitSentences(displayedContent.scriptText);
+  const recoveryContext = JSON.stringify({
+    contentId: content.id,
+    scriptText: content.scriptText,
+    sentenceIndex,
+    courseStepId: courseExamples?.stepId ?? searchParams.get("courseStepId"),
+    titleExamId: searchParams.get("titleExamId"),
+    focus: workflow?.learningFocus ?? content.learningFocus,
+  });
+  const recovery = useTrainingRecovery(
+    recoveryContext,
+    recoveryScope,
+    localOnly,
+  );
+  const recoveredOnceRef = useRef(false);
+  const recoverOnlineRef = useRef<() => Promise<void>>(async () => {});
+  recoverOnlineRef.current = async () => {
+    if (
+      (requestFailure instanceof ApiError &&
+        [0, 408, 429, 500, 502, 503, 504].includes(requestFailure.status)) ||
+      requestFailure instanceof AnalysisConnectionUnavailable
+    )
+      await analyze();
+  };
+  useEffect(() => {
+    if (!recovery.error) return;
+    setRequestFailure(recovery.error);
+    setRequestError(
+      recovery.error instanceof Error
+        ? recovery.error.message
+        : "녹음 복구 정보를 읽지 못했습니다.",
+    );
+    setPhase("error");
+  }, [recovery.error]);
   const localRecorder = usePracticeRecorder(sentences.length);
-  const recorder = capturedRecording
-    ? { ...localRecorder, ...capturedRecording, status: "recorded" as const }
+  const activeCapture = capturedRecording ?? recovery.capture;
+  const recorder = activeCapture
+    ? { ...localRecorder, ...activeCapture, status: "recorded" as const }
     : localRecorder;
   const reviewAudioUrl = recorder.previewUrl;
   const reviewRecordingId = recorder.blob
@@ -346,6 +378,8 @@ export function RecordingPracticeSession({
 
   useEffect(() => {
     if (
+      !recovery.ready ||
+      recovery.error ||
       !autoSubmit ||
       (!capturedRecording && phase !== "review") ||
       recorder.status !== "recorded" ||
@@ -362,6 +396,8 @@ export function RecordingPracticeSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     autoSubmit,
+    recovery.ready,
+    recovery.error,
     phase,
     recorder.status,
     recorder.blob,
@@ -376,6 +412,7 @@ export function RecordingPracticeSession({
       if (
         activeSessionId &&
         authEpochRef.current === getAuthSessionVersion() &&
+        !recovery.attempt.current &&
         !completedRef.current &&
         !resumePendingRef.current &&
         !analysisPendingRef.current &&
@@ -384,10 +421,16 @@ export function RecordingPracticeSession({
         void api.training.cancel(activeSessionId).catch(() => undefined);
       }
     },
-    [],
+    [recovery.attempt],
   );
 
   useEffect(() => {
+    if (
+      !recovery.ready ||
+      recovery.error ||
+      recovery.attempt.current?.record.source
+    )
+      return;
     if (!resumedSessionId && !restoreSession) return;
 
     let active = true;
@@ -399,8 +442,13 @@ export function RecordingPracticeSession({
     void (async () => {
       try {
         const restored = restoreSession
-          ? await restoreSession(() => active)
+          ? await restoreSession(
+              () => active,
+              await recovery.restoreSessionKey(),
+            )
           : await loadPracticeResume(api, resumedSessionId!, content.id);
+        if (!active) return;
+        if (restoreSession) await recovery.finishSessionRestore();
         if (!active) return;
         resumeReadComplete = true;
         resumePendingRef.current = false;
@@ -462,32 +510,84 @@ export function RecordingPracticeSession({
       active = false;
       analysisPollRef.current?.abort();
     };
-  }, [content.id, resumeType, resumedSessionId, restoreSession, resumeRetry]);
+    // Restore belongs to the URL/capture identity; result render updates must not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    content.id,
+    resumeType,
+    resumedSessionId,
+    restoreSession,
+    resumeRetry,
+    recovery.ready,
+    recovery.error,
+  ]);
 
-  async function ensureSession() {
-    if (sessionId) return sessionId;
-    if (workflow) {
-      const createdId = await workflow.createSession();
-      setSessionId(createdId);
-      sessionIdRef.current = createdId;
-      return createdId;
-    }
-    const session = await api.training.create({
+  function sessionInput() {
+    return {
       contentId: content.id,
       courseStepId: resolvedCourseStepId || null,
-      titleExamId: null,
+      titleExamId: searchParams.get("titleExamId"),
       learningFocus: analysisLearningFocus,
       ...(sentenceIndex != null && {
         sentenceIndex,
         sentenceText: content.scriptText,
       }),
-    });
-    const createdId = session.sessionId ?? session.id;
-    if (createdId == null) throw new Error("학습 세션 ID가 응답에 없습니다.");
-    setSessionId(createdId);
-    sessionIdRef.current = createdId;
-    return createdId;
+    };
   }
+  async function durableAttempt(
+    source?: NonNullable<
+      Parameters<typeof TrainingRecoveryAttempt.open>[0]["source"]
+    >,
+  ) {
+    if (!recovery.ready || recovery.error)
+      throw recovery.error ?? new Error("녹음 복구 정보를 확인 중입니다.");
+    const userId = getAuthenticatedUserId();
+    if (!userId) throw new Error("로그인이 필요합니다.");
+    recovery.attempt.current ??= await TrainingRecoveryAttempt.open({
+      userId: String(userId),
+      scope: recovery.scope.current,
+      context: recoveryContext,
+      sessionInput: sessionInput(),
+      source,
+      sessionId: sessionIdRef.current ?? undefined,
+      recordingId: selectedRecordingRef.current ?? undefined,
+    });
+    return recovery.attempt.current;
+  }
+  useEffect(() => {
+    const reconnect = () => {
+      if (
+        recovery.attempt.current &&
+        phaseRef.current === "error" &&
+        !submissionBusyRef.current
+      )
+        void recoverOnlineRef.current();
+    };
+    window.addEventListener("online", reconnect);
+    return () => window.removeEventListener("online", reconnect);
+    // The event reads current ownership refs and only resumes an existing command.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recovery.ready]);
+  useEffect(() => {
+    if (
+      !recovery.ready ||
+      recovery.error ||
+      !recovery.capture ||
+      recoveredOnceRef.current
+    )
+      return;
+    recoveredOnceRef.current = true;
+    const record = recovery.attempt.current?.record;
+    sessionIdRef.current = record?.sessionId ?? null;
+    setSessionId(record?.sessionId ?? null);
+    selectedRecordingRef.current = record?.recordingId ?? null;
+    resumePendingRef.current = false;
+    analysisPendingRef.current = false;
+    setPhase("review");
+    // Resume the existing command, including an unacknowledged create/upload. No fresh retry is issued.
+    void analyze();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recovery.ready, recovery.error, recovery.capture]);
 
   async function getAnalysisCapabilities() {
     if (workflow?.analysisScope !== null)
@@ -610,6 +710,10 @@ export function RecordingPracticeSession({
     setCanCheckAnalysis(false);
     setPhase("analyzing");
     try {
+      if (recovery.attempt.current?.record.command) {
+        const latest = await recovery.attempt.current.admission();
+        waitingAnalysisRef.current = latest.analysisId;
+      }
       if (waitingAnalysisRef.current == null) {
         const current = await api.training.get(sessionId);
         if (analysisAdmissionMissing(current)) {
@@ -877,6 +981,8 @@ export function RecordingPracticeSession({
 
   async function analyze() {
     if (
+      !recovery.ready ||
+      recovery.error ||
       submissionBusyRef.current ||
       !mountedRef.current ||
       authEpochRef.current !== getAuthSessionVersion()
@@ -913,6 +1019,46 @@ export function RecordingPracticeSession({
     setUploadProgress(0);
     setPhase("uploading");
     try {
+      const existing = recovery.attempt.current;
+      if (existing?.record.sessionId != null) {
+        checkingAvailability = false;
+        // Existing work must remain readable even when admission/capability gates close.
+        const snapshot = await existing.inspect();
+        assertOwner();
+        if (existing.record.command || snapshot.analysis) {
+          const requested = await existing.admission();
+          assertOwner();
+          const knownSession = existing.record.sessionId;
+          const knownRecording = existing.record.recordingId;
+          if (knownRecording == null)
+            throw new ApiError(
+              "기존 녹음을 확인하지 못했습니다.",
+              409,
+              "RECORDING_UNAVAILABLE",
+            );
+          sessionIdRef.current = knownSession;
+          setSessionId(knownSession);
+          selectedRecordingRef.current = knownRecording;
+          analysisPendingRef.current = true;
+          setCanCheckAnalysis(true);
+          setPhase("analyzing");
+          if (onAnalysisAdmitted) {
+            onAnalysisAdmitted({
+              sessionId: knownSession,
+              recordingId: knownRecording,
+              analysisId: requested.analysisId,
+            });
+            return;
+          }
+          const delivered = await waitForAnalysis(
+            knownSession,
+            requested.analysisId,
+          );
+          await loadResult(knownSession, delivered.id, delivered);
+          return;
+        }
+      }
+      checkingAvailability = true;
       assertCoachingInput(displayedContent.scriptText, recorder.durationMs);
       const capabilities = await getAnalysisCapabilities();
       assertOwner();
@@ -959,59 +1105,28 @@ export function RecordingPracticeSession({
           );
         }
         assertOwner();
-        activeSessionId = await ensureSession();
+        const attempt = await durableAttempt({
+          ...prepared,
+          original: recorder.blob,
+          durationMs: recorder.durationMs,
+        });
+        const registered = await attempt.prepareRecording(setUploadProgress);
         assertOwner();
-        setPhase("uploading");
-        const previousUpload = uploadedRecordingRef.current;
-        recordingId =
-          previousUpload?.source === recorder.blob &&
-          String(previousUpload.sessionId) === String(activeSessionId) &&
-          previousUpload.epoch === getAuthSessionVersion()
-            ? previousUpload.recordingId
-            : null;
-        if (recordingId == null) {
-          const uploadInput = {
-            fileName: `recording-${Date.now()}.${prepared.extension}`,
-            mimeType: prepared.mimeType,
-            fileSizeBytes: prepared.blob.size,
-          };
-          const uploadInfo = await uploadRecordingWithFreshUrl({
-            issueUploadUrl: () => {
-              assertOwner();
-              return api.training.getUploadUrl(activeSessionId, uploadInput);
-            },
-            upload: (currentUpload) => {
-              assertOwner();
-              return api.training.uploadRecording(
-                currentUpload,
-                prepared.blob,
-                setUploadProgress,
-              );
-            },
-            onRetry: () => setUploadProgress(0),
-          });
-          assertOwner();
-          const recording = await api.training.registerRecording(
-            activeSessionId,
-            {
-              objectKey: uploadInfo.objectKey,
-              mimeType: prepared.mimeType,
-              fileSizeBytes: prepared.blob.size,
-              durationMs: recorder.durationMs,
-            },
-          );
-          assertOwner();
-          recordingId = recording.recordingId ?? recording.id ?? null;
-          if (recordingId == null)
-            throw new Error("녹음 ID가 응답에 없습니다.");
-          uploadedRecordingRef.current = {
-            source: recorder.blob,
-            sessionId: activeSessionId,
-            recordingId,
-            epoch: getAuthSessionVersion(),
-          };
-        }
+        activeSessionId = registered.sessionId;
+        recordingId = registered.recordingId;
+        sessionIdRef.current = activeSessionId;
+        setSessionId(activeSessionId);
       }
+      selectedRecordingRef.current = recordingId;
+      const attempt = await durableAttempt();
+      // A restored registered recording must still belong to this immutable capture.
+      if (String(attempt.record.recordingId) !== String(recordingId))
+        throw new ApiError(
+          "녹음 시도가 변경되었습니다.",
+          409,
+          "CANONICAL_ATTEMPT_CHANGED",
+        );
+
       const qualified = await waitForRecordingQuality(
         activeSessionId,
         recordingId,
@@ -1033,7 +1148,7 @@ export function RecordingPracticeSession({
       analysisPendingRef.current = true;
       awaitingAdmission = true;
       setCanCheckAnalysis(true);
-      const requested = await api.training.analyze(activeSessionId, consent);
+      const requested = await attempt.admission(consent);
       assertOwner();
       awaitingAdmission = false;
       setPhase("analyzing");
@@ -1075,10 +1190,6 @@ export function RecordingPracticeSession({
 
   async function retryFailedAnalysis() {
     if (!sessionId) return;
-    const expected =
-      requestFailure instanceof CanonicalResultUnavailable
-        ? requestFailure.view
-        : undefined;
     setRequestError(null);
     setRequestFailure(null);
     setCanRetryAnalysis(false);
@@ -1089,11 +1200,8 @@ export function RecordingPracticeSession({
     setCanCheckAnalysis(true);
     setPhase("analyzing");
     try {
-      const requested = await api.training.retryAnalysis(
-        sessionId,
-        await getConsentInput(),
-        expected,
-      );
+      const attempt = await durableAttempt();
+      const requested = await attempt.admission(await getConsentInput(), true);
       const deliveredResult = await waitForAnalysis(
         sessionId,
         requested.analysisId,
@@ -1140,8 +1248,8 @@ export function RecordingPracticeSession({
         setAnalysis(null);
         setSegments([]);
       }
+      await recovery.clear();
       recorder.reset();
-      uploadedRecordingRef.current = null;
       setActiveSentence(0);
       setRequestError(null);
       setRequestFailure(null);
@@ -1688,7 +1796,17 @@ export function RecordingPracticeSession({
             {!courseId && !workflow && (
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    await recovery.clear();
+                  } catch (reason) {
+                    setRequestError(
+                      reason instanceof Error
+                        ? reason.message
+                        : "이전 녹음 정리에 실패했습니다.",
+                    );
+                    return;
+                  }
                   const params = new URLSearchParams({ start: "1" });
                   const returnTo = searchParams.get("returnTo");
                   if (returnTo) params.set("returnTo", returnTo);

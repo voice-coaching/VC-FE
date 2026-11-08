@@ -423,8 +423,12 @@ export function createRemoteApi(baseUrl: string): ApiContract {
     training: {
       getAnalysisCapabilities: (signal) =>
         request("/api/analysis-capabilities", { cache: "no-store", signal }),
-      create: (input) =>
-        request("/api/training-sessions", { method: "POST", body: input }),
+      create: (input, idempotencyKey) =>
+        request("/api/training-sessions", {
+          method: "POST",
+          body: input,
+          headers: idempotencyHeaders(idempotencyKey),
+        }),
       get: (sessionId) =>
         request(`/api/training-sessions/${id(sessionId)}`, {
           cache: "no-store",
@@ -433,12 +437,13 @@ export function createRemoteApi(baseUrl: string): ApiContract {
         request(`/api/training-sessions/${id(sessionId)}/cancel`, {
           method: "POST",
         }),
-      getUploadUrl: (sessionId, input) =>
+      getUploadUrl: (sessionId, input, idempotencyKey) =>
         request(
           `/api/training-sessions/${id(sessionId)}/recordings/upload-url`,
           {
             method: "POST",
             body: input,
+            headers: idempotencyHeaders(idempotencyKey),
           },
         ),
       uploadRecording: (uploadInfo, audio, onProgress, signal) => {
@@ -452,10 +457,11 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           signal,
         );
       },
-      registerRecording: (sessionId, input) =>
+      registerRecording: (sessionId, input, idempotencyKey) =>
         request(`/api/training-sessions/${id(sessionId)}/recordings`, {
           method: "POST",
           body: input,
+          headers: idempotencyHeaders(idempotencyKey),
         }),
       async listRecordings(sessionId) {
         const data = await request<{ items: VoiceRecording[] }>(
@@ -476,7 +482,8 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           `/api/training-sessions/${id(sessionId)}/recordings/${id(recordingId)}/select`,
           { method: "PATCH" },
         ),
-      analyze: canonical.analyze,
+      analyze: (sessionId, consent, key) =>
+        canonical.analyze(sessionId, consent, undefined, key),
       async getAnalysisStatus(sessionId, signal) {
         const status = await canonical.status(sessionId, signal);
         if (status.status === "FAILED")
@@ -485,11 +492,13 @@ export function createRemoteApi(baseUrl: string): ApiContract {
           );
         return status;
       },
-      async retryAnalysis(sessionId, consent, expected) {
-        const current = await currentAnalysis(sessionId, expected);
-        if (!current.actions.canRetry || current.jobStatus !== "FAILED")
-          throw new CanonicalResultUnavailable(current);
-        return canonical.retry(sessionId, consent);
+      async retryAnalysis(sessionId, consent, expected, key) {
+        if (!key) {
+          const current = await currentAnalysis(sessionId, expected);
+          if (!current.actions.canRetry || current.jobStatus !== "FAILED")
+            throw new CanonicalResultUnavailable(current);
+        }
+        return canonical.retry(sessionId, consent, undefined, key);
       },
       async getSessionAnalysis(sessionId) {
         const view = await currentAnalysis(sessionId);

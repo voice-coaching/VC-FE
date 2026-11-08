@@ -87,7 +87,16 @@ export class BrowserVideoClient {
       scriptText: string;
       contentId: Id;
     },
-  ) {}
+    restored?: { jobId: string; executionId: string; sequence: number },
+  ) {
+    if (restored) {
+      this.identity = {
+        jobId: restored.jobId,
+        executionId: restored.executionId,
+      };
+      this.sequence = restored.sequence;
+    }
+  }
   private async authorize(
     signal: AbortSignal,
     renew = false,
