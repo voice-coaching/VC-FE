@@ -277,6 +277,7 @@ function ActiveTitleExamSession({
       analysisIdRef.current = analysisId;
       submitBusyRef.current = true;
       setSubmitting(true);
+      setResult(null);
       setError(null);
       const isCurrent = () =>
         mountedRef.current && authEpochRef.current === getAuthSessionVersion();
@@ -312,9 +313,18 @@ function ActiveTitleExamSession({
         resultTitle: "승급 시험 결과",
         restoringLabel: "승급 시험을 준비하고 있어요",
         completionHref: "/mypage",
+        completionReady: !submitting && result !== null && !error,
+        completionLabel: submitting
+          ? "승급 시험 채점 중…"
+          : "승급 채점 확인 필요",
         renderErrorDetails: renderTitleExamErrorDetails,
         resultSummary: (
           <>
+            {submitting && (
+              <p role="status" className="text-sm text-muted-foreground">
+                학습 저장을 완료했습니다. 승급 시험을 채점하고 있어요.
+              </p>
+            )}
             {result && (
               <section
                 className={`design-card border ${result.status === "PASSED" ? "border-[#84dfb7] bg-[#effcf6]" : "border-[#ffc4b8] bg-[#fff5f2]"}`}
