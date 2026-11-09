@@ -6,6 +6,10 @@
 Direct 조회/SSE는 `result.score.details`, 연습 결과는 `result.practiceResult.score.details`, 저장 이력은 각 `result.score.details`를 같은 parser로 읽는다.
 문장별 독립 연습도 기존 Direct 결과 컴포넌트를 재사용한다. 새 endpoint·분석 POST·GPT 호출은 추가하지 않는다.
 
+2026-11-09 브라우저 영상 `/summary`의 선택 `score.details`도 같은 표시 점수 파서로 읽는다.
+`browserVideoPresentation`은 성공 결과에서 `analysis.scoreDetails`로 전달하고 실패 결과에서는 제외한다.
+`AnalysisView`의 기존 6항목 컴포넌트를 사용하며 Backend 변경·점수 재계산·새 분석/GPT 요청은 없다.
+
 ## 선택 응답
 
 | 필드                       | 타입·의미                                                  |
@@ -36,4 +40,8 @@ label/reasonCode는 문자열, weight는 음성 내부 비중의 정수 %다.
 
 과거 저장 JSON에 details가 없으면 소급 생성하지 않는다. CORE·내부 검산표·hash·좌표를 UI에 추가하지 않는다.
 AI writer의 새 필드 제공과 Backend 전달 배포 뒤 실제 서버 응답 및 화면 종단 확인이 필요하다.
-자동 회귀 테스트·브라우저 자동화·실제 녹음/추론은 수행하지 않는다. 타입 검사·변경 파일 lint·정적 diff로 확인한다.
+최초 2026-11-08 구현은 타입 검사·변경 파일 lint·정적 diff로 확인했다.
+
+2026-11-09 영상 연결 보완은 요약 HTTP bytes 파싱→화면 모델→6항목 컴포넌트 표시와
+기존 작업 복구 회귀 25건을 확인했다. 성공 결과 전달·실패 제외·과거 필드 부재·잘못된
+선택 객체·총점 null·세부 0점/평가 불가를 포함한다. 실제 녹음/추론·GPT 요청과 운영 배포는 하지 않았다.

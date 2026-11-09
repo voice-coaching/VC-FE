@@ -14,6 +14,7 @@ export function browserVideoPresentation(
     transcript: null,
     sttConfidence: null,
     overallScore: failed ? null : result.score.overallScore,
+    scoreDetails: failed ? undefined : result.score.details,
     pronunciationScore: null,
     intonationScore: null,
     speedWpm: null,
