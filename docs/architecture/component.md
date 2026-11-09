@@ -12,6 +12,8 @@
 `browserVideoPresentation`은 공개 AI DTO를 화면 모델로 옮긴다. `BrowserVideoAnalysisResult`는 기존 AnalysisView와
 `LipScoreSummary`로 요약 입술점수를 표시하며 Backend canonical wrapper·정수 ID를 생성하지 않는다.
 요약 전용 score DTO는 숫자/null과 의미 문자열을 읽고 전체 결과용 canonical 점수 조건을 재사용하지 않는다.
+선택 `score.details`는 공통 표시 점수 파서로 보존하고 성공 시 `analysis.scoreDetails`로 전달해
+기존 `AnalysisScoreDetails`에서 표시한다. 실패 시 제외하며, 과거 결과에 없으면 총점·총평을 유지한다.
 영상 화면은 `AnalysisView.plainFeedback` → `AnalysisSummary.plainText`로 서버 피드백을
 공백·기호·줄바꿈 포함 일반 텍스트로 표시한다. 기존 음성 총평의 표시 방식은 유지한다.
 

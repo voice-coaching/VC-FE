@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publicScoreDetailsSchema } from "../score-details";
 import { ApiError, getAuthSessionVersion } from "./client";
 import type { Id } from "./types";
 import {
@@ -40,6 +41,7 @@ const resultSchema = z.object({
     overallScore: z.number().finite().min(0).max(100).nullable(),
     validity: z.string(),
     reason: z.string(),
+    details: publicScoreDetailsSchema.optional().catch(undefined),
   }),
   coaching: z.object({
     feedback: z.string(),

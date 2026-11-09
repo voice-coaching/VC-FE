@@ -68,6 +68,7 @@ jobId·executionId·clientRequestId·종료 상태를 현재 시도와 대조한
 | status | string/필수 | COMPLETED 또는 FAILED |
 | score.overallScore | number/필수/nullable | AI 종합점수 0~100 |
 | score.validity·score.reason | string/필수 | AI 점수 의미. 기존 전체 결과 enum으로 거절하지 않음 |
+| score.details | object/선택 | voice-coaching.score-details.v1 음성 6항목. [필드 명세](score-details.md) |
 | visual.score | number/필수/nullable | 종합점수와 별도인 입술점수 0~100 |
 | visual.scoreKind | string/필수 | CALIBRATED·PROVISIONAL·NONE |
 | visual.scoreScope | string/필수 | WHOLE_CLIP·ASSESSED_PHONES_ONLY·UNAVAILABLE |
@@ -75,6 +76,9 @@ jobId·executionId·clientRequestId·종료 상태를 현재 시도와 대조한
 | failure | object/필수/nullable | 실패 시 code:string. HTTP 200도 status/failure를 확인 |
 
 요약은 전용 DTO로 읽고 기존 전체 결과의 점수·CORE 파서를 재사용하지 않는다.
+선택 `score.details`는 공통 표시 점수 파서로 보존하고, 성공 시 `analysis.scoreDetails`로
+그대로 전달해 기존 `AnalysisScoreDetails`에서 표시한다. 실패 결과에는 세부점수를 전달하지 않는다.
+과거 결과의 필드 부재·잘못된 선택 객체는 세부점수만 생략하며 총점·피드백 표시를 막지 않는다.
 0은 유효, null은 미제공이다. 입술점수 null이어도 총점·피드백을 표시한다.
 ASSESSED_PHONES_ONLY는 ‘관찰된 부분 기준’, PROVISIONAL은 임시 참조 비교 점수로 표시한다.
 점수·가중치를 재계산하지 않고 발음별 관찰·시간·프레임·세부 조음 목록을 생성하지 않는다.

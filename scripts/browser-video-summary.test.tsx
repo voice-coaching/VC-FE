@@ -13,6 +13,11 @@ import { browserVideoPresentation } from "../src/lib/browser-video-presentation"
 import { LipScoreSummary } from "../src/components/lip-score-summary";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import {
+  scoreDetailCriterionIds,
+  type PublicScoreDetails,
+} from "../src/lib/score-details";
+import { AnalysisScoreDetails } from "../src/components/analysis-score-details";
 
 // Use the real feedback component; only CSS and Next's image renderer are stubbed for Node.
 const AnalysisSummary = new Function(
@@ -61,6 +66,41 @@ function result(): BrowserVideoResult {
   };
 }
 
+function scoreDetails(): PublicScoreDetails {
+  return {
+    schemaVersion: "voice-coaching.score-details.v1",
+    validationStatus: "EXPERT_REVIEW_PENDING",
+    aggregationMode: "AUDIO_ONLY",
+    audioScore: 76.1,
+    visualScore: null,
+    audioWeight: 100,
+    visualWeight: 0,
+    criteria: scoreDetailCriterionIds.map((criterionId, index) => ({
+      criterionId,
+      label: [
+        "발음 정확성",
+        "발음 속도",
+        "조음 속도",
+        "쉼",
+        "억양·음높이",
+        "음량·강도",
+      ][index],
+      weight: [40, 10, 10, 10, 15, 15][index],
+      ...(criterionId === "pitch"
+        ? {
+            status: "UNSCORABLE" as const,
+            score: null,
+            reasonCode: "F0_INSUFFICIENT_VALID_FRAMES",
+          }
+        : {
+            status: "SCORED" as const,
+            score: index * 10,
+            reasonCode: "SERVER_RUBRIC",
+          }),
+    })),
+  };
+}
+
 for (const scenario of [
   "success",
   "wrong-digest",
@@ -75,6 +115,10 @@ for (const scenario of [
   "long-feedback",
   "failed-feedback",
   "wrong-score",
+  "details",
+  "failed-details",
+  "invalid-details",
+  "null-overall-details",
 ] as const) {
   test(`summary ${scenario}: uses its own digest and preserves attempt binding`, async () => {
     const originalFetch = globalThis.fetch;
@@ -111,6 +155,14 @@ for (const scenario of [
       value.score.reason = "EXECUTION_INTERRUPTED";
     }
     if (scenario === "wrong-score") value.score.overallScore = 101;
+    if (scenario.includes("details")) value.score.details = scoreDetails();
+    if (scenario === "failed-details") {
+      value.status = "FAILED";
+      value.failure = { code: "EXECUTION_INTERRUPTED" };
+      value.score.overallScore = null;
+    }
+    if (scenario === "invalid-details") value.score.details!.criteria = [];
+    if (scenario === "null-overall-details") value.score.overallScore = null;
     const raw = new TextEncoder().encode(JSON.stringify(value));
     const pin = await browserVideoSha256(raw);
     let summaryGets = 0;
@@ -179,7 +231,24 @@ for (const scenario of [
         await assert.rejects(client.result(job, new AbortController().signal));
       else {
         const actual = await client.result(job, new AbortController().signal);
+        if (scenario === "invalid-details") value.score.details = undefined;
         assert.deepEqual(actual, value);
+        const view = browserVideoPresentation(actual);
+        assert.strictEqual(
+          view.scoreDetails,
+          actual.status === "FAILED" || actual.failure
+            ? undefined
+            : actual.score.details,
+        );
+        if (view.scoreDetails) {
+          const html = renderToStaticMarkup(
+            <AnalysisScoreDetails details={view.scoreDetails} />,
+          );
+          for (const row of view.scoreDetails.criteria)
+            assert.ok(html.includes(row.label));
+          assert.match(html, /0\.0/);
+          assert.match(html, /평가 불가/);
+        }
         assert.equal(
           browserVideoPresentation(actual).overallScore,
           value.score.overallScore,
