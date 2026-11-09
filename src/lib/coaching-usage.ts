@@ -35,16 +35,27 @@ export function readCoachingUsage(value: unknown): CoachingUsage {
           data.reserved === 0 &&
           data.canRequestCoaching
         )
-      : data.unlimited ||
-        data.environment !== (data.membershipType === "paid" ? "TEST" : null) ||
-        !count(data.limit) ||
-        data.limit === 0 ||
-        !count(data.remaining) ||
-        data.remaining! > data.limit! ||
-        !date(data.startsAt) ||
-        !date(data.expiresAt) ||
-        Date.parse(data.startsAt!) >= Date.parse(data.expiresAt!) ||
-        (data.canRequestCoaching && data.remaining === 0))
+      : data.membershipType === "paid" && data.environment === "TRIAL"
+        ? !(
+            data.unlimited &&
+            data.limit === null &&
+            data.remaining === null &&
+            date(data.startsAt) &&
+            date(data.expiresAt) &&
+            Date.parse(data.expiresAt!) - Date.parse(data.startsAt!) ===
+              72 * 60 * 60 * 1000
+          )
+        : data.unlimited ||
+          data.environment !==
+            (data.membershipType === "paid" ? "TEST" : null) ||
+          !count(data.limit) ||
+          data.limit === 0 ||
+          !count(data.remaining) ||
+          data.remaining! > data.limit! ||
+          !date(data.startsAt) ||
+          !date(data.expiresAt) ||
+          Date.parse(data.startsAt!) >= Date.parse(data.expiresAt!) ||
+          (data.canRequestCoaching && data.remaining === 0))
   )
     throw new ApiError(
       "코칭 사용량을 확인하지 못했어요. 다시 확인해 주세요.",

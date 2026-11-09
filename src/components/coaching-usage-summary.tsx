@@ -44,7 +44,15 @@ export function CoachingUsageSummary({
               사용 완료 {data.used}회 · 분석 중 예약 {data.reserved}회
             </p>
           )}
-          {data.unlimited ? (
+          {data.environment === "TRIAL" ? (
+            <p>
+              프리미엄 3일 체험 · 종료:{" "}
+              <time dateTime={data.expiresAt!}>
+                {coachingPeriodDate(data.expiresAt!)}
+              </time>{" "}
+              (한국 시간) · 자동 결제 없음
+            </p>
+          ) : data.unlimited ? (
             <p>테스트 관리자 · 원고 300자·음성 90초 제한은 적용돼요.</p>
           ) : (
             <>
@@ -83,7 +91,7 @@ export function CoachingUsageSummary({
               )}
             </>
           )}
-          {!compact && (
+          {!compact && !data.unlimited && (
             <p>
               분석 접수 시 1회가 예약돼요. 코칭을 제공하지 못한 분석은 반환돼요.
             </p>
