@@ -746,3 +746,10 @@
     transition: none;
   }
 }
+.sentenceEditor {
+  min-width: 0;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}

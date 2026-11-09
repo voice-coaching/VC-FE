@@ -11,6 +11,7 @@ export default async function AdminPage({
     "overview",
     "users",
     "contents",
+    "courses",
     "announcer",
     "notices",
     "inquiries",

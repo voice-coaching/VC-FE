@@ -73,7 +73,10 @@ function ScopedAdminShell({
   const active = adminNavigation.find((item) =>
     item.href === "/admin"
       ? pathname === item.href
-      : pathname.startsWith(item.href),
+      : (pathname.startsWith("/admin/courses")
+          ? "/admin/contents"
+          : pathname
+        ).startsWith(item.href),
   );
   const error = anonymous
     ? new ApiError("로그인이 필요합니다.", 401)

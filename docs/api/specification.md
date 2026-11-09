@@ -1,5 +1,9 @@
 # API 명세 - VC-FE
 
+## 관리자 클래스와 연결 문장
+
+클래스 목록과 상세, 문장 배열 전체의 등록·편집을 [관리자 클래스 문장 계약](../admin-class-contents.md)으로 연동한다. 기존 일반 콘텐츠 조회는 `excludeClassPractice=true`로 서버 페이징 전에 클래스 문장을 제외한다. 저장은 새 개정으로 적용하고 과거 학습은 유지한다.
+
 ## 2026-11-08 브라우저 원본 영상
 
 `/lip-practice`의 Backend 권한 발급과 AI 원본 접수/조회는 [직접 영상 계약](direct-video-upload.md)을 따른다.

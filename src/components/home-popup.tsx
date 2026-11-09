@@ -1,25 +1,31 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import localFont from "next/font/local";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import {
+  ApiError,
+  getAuthSessionVersion,
+  subscribeAuthSession,
+} from "@/lib/api/client";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
-import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
-import { loadActiveHomePopup, type ActiveHomePopup } from "@/lib/home-popup";
-import {
-  isHomePopupHidden,
-  hideHomePopupForWeek,
-} from "@/lib/home-popup-preferences";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "./ui/dialog";
+import { clearUserClientCache } from "@/lib/client-cache";
+import { notifyCoachingUsageChanged } from "@/lib/coaching-usage";
+import { activatePremiumTrial, loadPremiumTrial } from "@/lib/premium-trial";
+import styles from "./home-popup.module.css";
+import { Toaster } from "@/components/ui/sonner";
 
-// Ordinary dismissals belong to this page visit/login; weekly choices use a separate preference.
-const dismissed = new Set<string>();
+const notoSans = localFont({
+  src: "../assets/fonts/NotoSansKR.woff2",
+  weight: "100 900",
+  display: "swap",
+});
 
-/** Home-only notice overlay; loading/failure must not move or block the existing home content. */
+/** Only server eligibility opens the offer; viewing never grants membership. */
 export function HomePopup() {
   const epoch = useSyncExternalStore(
     subscribeAuthSession,
@@ -28,89 +34,227 @@ export function HomePopup() {
   );
   const userId = getAuthenticatedUserId();
   const scope = JSON.stringify([epoch, userId]);
-  const [snapshot, setSnapshot] = useState<{
-    scope: string;
-    popup: ActiveHomePopup;
-  } | null>(null);
+  const [openScope, setOpenScope] = useState<string | null>(null);
+  const [busyScope, setBusyScope] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const activation = useRef<AbortController | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const busy = busyScope === scope;
+
   useEffect(() => {
     if (!userId) return;
     const owner = new AbortController();
-    void loadActiveHomePopup(owner.signal)
-      .then((popup) => {
+    void loadPremiumTrial(owner.signal)
+      .then((trial) => {
         if (
-          owner.signal.aborted ||
-          epoch !== getAuthSessionVersion() ||
-          !popup ||
-          dismissed.has(`${scope}:${popup.id}`) ||
-          isHomePopupHidden(userId, popup.id)
+          !owner.signal.aborted &&
+          epoch === getAuthSessionVersion() &&
+          trial.eligible
         )
-          return;
-        setSnapshot({ scope, popup });
+          setOpenScope(scope);
       })
       .catch(() => {
-        // Announcements are optional: never replace the home with a popup API error.
+        // Do not invent eligibility or block home when the service is unavailable.
       });
-    return () => owner.abort();
+    return () => {
+      owner.abort();
+      activation.current?.abort();
+      activation.current = null;
+    };
   }, [epoch, userId, scope]);
 
-  const popup = snapshot?.scope === scope ? snapshot.popup : null;
   function close() {
-    if (popup) dismissed.add(`${scope}:${popup.id}`);
-    setSnapshot(null);
+    if (!busy) {
+      setOpenScope(null);
+      setError(null);
+    }
   }
+
+  async function startTrial() {
+    if (activation.current || !userId) return;
+    const owner = new AbortController();
+    activation.current = owner;
+    setBusyScope(scope);
+    setError(null);
+    try {
+      await activatePremiumTrial(owner.signal);
+      if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+      clearUserClientCache(userId);
+      notifyCoachingUsageChanged();
+      await api.users.getMe().catch(() => null);
+      if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+      setOpenScope(null);
+      toast.success("72시간 프리미엄 체험이 시작됐어요.");
+    } catch (reason) {
+      if (owner.signal.aborted || epoch !== getAuthSessionVersion()) return;
+      if (
+        reason instanceof ApiError &&
+        ["PREMIUM_TRIAL_ALREADY_USED", "PREMIUM_TRIAL_NOT_ELIGIBLE"].includes(
+          reason.code,
+        )
+      ) {
+        setOpenScope(null);
+        notifyCoachingUsageChanged();
+        toast.error(reason.message);
+      } else {
+        setError("체험을 시작하지 못했어요. 다시 눌러 주세요.");
+      }
+    } finally {
+      if (activation.current === owner) activation.current = null;
+      setBusyScope((current) => (current === scope ? null : current));
+    }
+  }
+
   return (
-    <Dialog
-      open={popup !== null}
-      onOpenChange={(open) => {
-        if (!open) close();
-      }}
-    >
-      {popup && (
-        <DialogContent
-          overlayClassName="bg-black/25"
-          className="top-[max(72px,12dvh)] max-h-[calc(88dvh-24px)] w-[calc(100%-40px)] max-w-[400px] translate-y-0 gap-5 overflow-y-auto rounded-[28px] border-0 bg-white p-6 text-[#191f28] sm:rounded-[28px]"
-        >
-          <div className="pr-6">
-            <p className="mb-3 text-xs font-semibold text-[#6346f6]">
-              서비스 안내
-            </p>
-            <DialogTitle className="break-words text-xl font-bold leading-7">
-              {popup.title}
-            </DialogTitle>
-          </div>
-          <DialogDescription className="whitespace-pre-wrap break-words text-sm leading-6 text-[#4e5968]">
-            {popup.body}
-          </DialogDescription>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={close}
-              className="min-h-12 flex-1 rounded-full bg-[#f2f4f6] px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
-            >
-              확인
-            </button>
-            {popup.href && (
-              <Link
-                href={popup.href}
-                onClick={close}
-                className="flex min-h-12 flex-1 items-center justify-center rounded-full bg-[#6346f6] px-4 text-sm font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6] focus-visible:ring-offset-2"
-              >
-                자세히 보기
-              </Link>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (userId) hideHomePopupForWeek(userId, popup.id);
-              close();
+    <>
+      <Toaster />
+      <Dialog.Root
+        open={openScope === scope && Boolean(userId)}
+        onOpenChange={(open) => {
+          if (!open) close();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Content
+            ref={dialogRef}
+            className={`${styles.modal} ${notoSans.className}`}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              dialogRef.current?.focus();
             }}
-            className="min-h-11 rounded-lg text-xs font-medium text-[#6b7684] underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#6346f6]"
+            onInteractOutside={(event) => event.preventDefault()}
+            onEscapeKeyDown={(event) => {
+              if (busy) event.preventDefault();
+            }}
           >
-            일주일간 보지 않기
-          </button>
-        </DialogContent>
-      )}
-    </Dialog>
+            <div className={styles.screen}>
+              <div className={styles.safeTop} />
+              <header className={styles.header}>
+                <button
+                  type="button"
+                  aria-label="닫기"
+                  className={styles.close}
+                  onClick={close}
+                  disabled={busy}
+                >
+                  <Image
+                    src="/figma/premium-trial/close.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                  />
+                </button>
+              </header>
+              <div className={styles.body}>
+                <div className={styles.headline}>
+                  <p className={styles.eyebrow}>
+                    <span>신규 가입 혜택</span>
+                  </p>
+                  <Dialog.Title className={styles.title}>
+                    <span>가입 선물로</span>
+                    <span>
+                      <strong>프리미엄 3일</strong>을 드려요
+                    </span>
+                  </Dialog.Title>
+                  <Dialog.Description className={styles.description}>
+                    코칭 횟수 제한 없이 마음껏 연습해 보세요
+                  </Dialog.Description>
+                </div>
+                <div className={styles.illustration} aria-hidden="true">
+                  <Image
+                    src="/figma/premium-trial/glow.svg"
+                    alt=""
+                    width={400}
+                    height={400}
+                    className={styles.glow}
+                  />
+                  <div className={styles.mascot}>
+                    <Image
+                      src="/figma/premium-trial/mascot.png"
+                      alt=""
+                      fill
+                      sizes="402px"
+                      priority
+                      className={styles.mascotImage}
+                    />
+                  </div>
+                </div>
+                <div className={styles.cardWrap}>
+                  <section
+                    className={styles.card}
+                    aria-label="프리미엄 체험 혜택"
+                  >
+                    <div className={styles.cardHead}>
+                      <Image
+                        src="/figma/premium-trial/crown.svg"
+                        alt=""
+                        width={22.4069}
+                        height={18}
+                      />
+                      <strong>프리미엄</strong>
+                      <p className={styles.count}>
+                        코칭 <b>무제한</b>
+                      </p>
+                    </div>
+                    <div className={styles.divider} />
+                    <dl className={styles.facts}>
+                      <div>
+                        <dt>이용 기간</dt>
+                        <dd>3일</dd>
+                      </div>
+                      <div>
+                        <dt>체험 종료 후</dt>
+                        <dd>자동 결제 없음</dd>
+                      </div>
+                      <div>
+                        <dt>이용 요금</dt>
+                        <dd>0원</dd>
+                      </div>
+                    </dl>
+                  </section>
+                  <div
+                    className={styles.note}
+                    role={error ? "alert" : undefined}
+                  >
+                    {error}
+                  </div>
+                </div>
+              </div>
+              <footer className={styles.footer}>
+                <button
+                  type="button"
+                  onClick={() => void startTrial()}
+                  className={styles.start}
+                  disabled={busy}
+                  aria-busy={busy}
+                >
+                  <Image
+                    src="/figma/premium-trial/sparkle.svg"
+                    alt=""
+                    width={20}
+                    height={20}
+                  />
+                  <span>
+                    {busy ? "프리미엄 시작 중…" : "프리미엄으로 연습 시작하기"}
+                  </span>
+                </button>
+                <Link
+                  href="/mypage/payments?view=purchase"
+                  className={styles.details}
+                  aria-disabled={busy}
+                  onClick={(event) => {
+                    if (busy) event.preventDefault();
+                    else close();
+                  }}
+                >
+                  프리미엄 혜택 자세히 보기
+                </Link>
+              </footer>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
