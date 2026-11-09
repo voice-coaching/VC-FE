@@ -81,7 +81,7 @@ export interface UserAccount {
 
 export interface CoachingUsage {
   membershipType: MembershipType;
-  environment: "TEST" | null;
+  environment: "TEST" | "TRIAL" | null;
   unlimited: boolean;
   startsAt: string | null;
   expiresAt: string | null;

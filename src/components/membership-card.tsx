@@ -41,7 +41,9 @@ export function MembershipCard({
         <strong>
           {account
             ? paid
-              ? "1개월"
+              ? account.membershipEnvironment === "TRIAL"
+                ? "3일 무료 체험"
+                : "1개월"
               : test
                 ? "테스트 이용 등급"
                 : "무료"
