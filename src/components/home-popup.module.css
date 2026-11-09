@@ -15,6 +15,12 @@
   outline: none;
 }
 .screen {
+  position: relative;
+  --close-inset: max(
+    12px,
+    env(safe-area-inset-top, 0px),
+    env(safe-area-inset-right, 0px)
+  );
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -35,6 +41,9 @@
   flex-shrink: 0;
 }
 .close {
+  position: absolute;
+  top: var(--close-inset);
+  right: var(--close-inset);
   display: flex;
   align-items: center;
   justify-content: center;
