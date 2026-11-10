@@ -8,6 +8,7 @@ import {
   saveContent,
   deleteContent,
   deleteMember,
+  changeMemberRole,
   createCampaign,
   saveCampaign,
   deleteCampaign,
@@ -52,6 +53,24 @@ function form(values: Record<string, string>): FormData {
   for (const [key, value] of Object.entries(values)) data.set(key, value);
   return data;
 }
+
+test("member role changes send expected role and validate receipt", async () => {
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url: String(url), options: options ?? {} });
+    return result({ userId: 30, role: "ADMIN" });
+  };
+  await changeMemberRole(30, "USER", "ADMIN", "운영 담당 지정");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.ok(calls[0].url.endsWith("/admin/users/30/role"));
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), {
+    expectedRole: "USER",
+    role: "ADMIN",
+    reason: "운영 담당 지정",
+  });
+  await assert.rejects(changeMemberRole(30, "ADMIN", "USER", "권한 해제"));
+  await assert.rejects(changeMemberRole(30, "USER", "OWNER", "잘못된 권한"));
+  await assert.rejects(changeMemberRole(30, "USER", "ADMIN", " "));
+});
 test("selected notification recipients are positive unique member IDs", () => {
   assert.deepEqual(parseMemberIds("12,34\n56"), [12, 34, 56]);
   for (const input of ["1,1", "0", "1 or 1=1", "9007199254740993"])

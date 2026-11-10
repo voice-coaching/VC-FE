@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { recordColumnLabel, displayRecordValue } from "../presentation";
 import { MemberDeletionPanel } from "./member-deletion";
+import { MemberRolePanel } from "./member-role";
 import { Search } from "lucide-react";
 import { useAdminQuery } from "../hooks";
 import { USER_RESOURCES } from "../types";
@@ -258,6 +259,7 @@ export function MemberDetail({ userId }: { userId: number }) {
               )}
             </Panel>
           )}
+          <MemberRolePanel member={user} />
           <MemberDeletionPanel member={user} updatedAt={account?.updatedAt} />
           <Panel
             title="관련 기록"

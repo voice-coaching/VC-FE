@@ -479,3 +479,24 @@ export async function deleteMember(
     })
     .parse(receipt);
 }
+
+export async function changeMemberRole(
+  userId: number,
+  expectedRole: string,
+  role: string,
+  reason: string,
+) {
+  validId(String(userId));
+  const roleSchema = z.enum(["USER", "ADMIN"]);
+  const input = {
+    expectedRole: roleSchema.parse(expectedRole),
+    role: roleSchema.parse(role),
+    reason: reasonSchema.parse(reason),
+  };
+  const session = getAuthSessionVersion();
+  const receipt = await adminApi.edit<unknown>(`/users/${userId}/role`, input);
+  assertSession(session);
+  return z
+    .object({ userId: z.literal(userId), role: z.literal(input.role) })
+    .parse(receipt);
+}

@@ -490,6 +490,13 @@ await context.route("**/api/backend/**", async (route) => {
       },
     });
   }
+  if (method === "PATCH" && /^\/users\/\d+\/role$/.test(path)) {
+    const member = users.find((user) => user.id === Number(path.split("/")[2]));
+    assert.equal(body.expectedRole, member.role);
+    assert.ok(body.reason.trim());
+    member.role = body.role;
+    return reply({ userId: member.id, role: member.role });
+  }
   if (method === "DELETE" && /^\/users\/\d+$/.test(path)) {
     const member = users.find((user) => user.id === Number(path.split("/")[2]));
     if (rejectMemberDeletion)
@@ -1504,7 +1511,7 @@ try {
     },
   );
   await check(
-    "inquiry answer and close are distinct allowed operations",
+    "one inquiry completion action saves the answer and marks it answered",
     async () => {
       await nav("문의 관리").click();
       await page
@@ -1515,20 +1522,69 @@ try {
         .fill("현재 문장에서 다시 녹음을 선택해 주세요.");
       await page.getByLabel("작업 사유", { exact: true }).fill("문의 답변");
       await page
-        .getByRole("button", { name: "답변 저장", exact: true })
+        .getByRole("button", { name: "문의 완료", exact: true })
         .click();
+      await page.getByText("변경사항을 저장했습니다.").waitFor();
+      assert.equal(inquiries[0].status, "ANSWERED");
+      assert.equal(
+        await page
+          .getByRole("button", { name: "처리 시작", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "답변 저장", exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        writes.filter((w) => w.path === "/inquiries/1/status").length,
+        0,
+      );
+    },
+  );
+  await check(
+    "member administrator role can be granted and revoked; self change is disabled",
+    async () => {
+      await page.goto(base + "/admin/users/30");
+      await heading("연습 회원님의 기록");
       await page
-        .getByRole("button", { name: "문의 종료", exact: true })
+        .getByRole("button", { name: "관리자 지정", exact: true })
         .click();
-      const dialog = page.getByRole("dialog");
+      let dialog = page.getByRole("dialog");
       await dialog
         .getByLabel("작업 사유", { exact: true })
-        .fill("답변 완료 확인");
+        .fill("운영 담당 지정");
       await dialog
-        .getByRole("button", { name: "문의 종료", exact: true })
+        .getByRole("button", { name: "관리자 지정", exact: true })
         .click();
-      await page.getByLabel("답변 내용", { exact: true }).waitFor();
-      assert.equal(inquiries[0].status, "CLOSED");
+      await page
+        .getByRole("button", { name: "관리자 해제", exact: true })
+        .waitFor();
+      assert.equal(users[0].role, "ADMIN");
+      await page
+        .getByRole("button", { name: "관리자 해제", exact: true })
+        .click();
+      dialog = page.getByRole("dialog");
+      await dialog
+        .getByLabel("작업 사유", { exact: true })
+        .fill("운영 담당 해제");
+      await dialog
+        .getByRole("button", { name: "관리자 해제", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "관리자 지정", exact: true })
+        .waitFor();
+      assert.equal(users[0].role, "USER");
+      await page.goto(base + "/admin/users/9001");
+      await heading("운영 관리자님의 기록");
+      assert.equal(
+        await page
+          .getByRole("button", { name: "관리자 해제", exact: true })
+          .isDisabled(),
+        true,
+      );
     },
   );
   await check(

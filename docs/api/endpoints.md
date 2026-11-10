@@ -62,3 +62,6 @@
 | PATCH  | `/api/admin/courses/{id}` | ADMIN | 클래스 설정과 문장 구성 전체 저장 |
 
 `GET /api/admin/contents`의 선택 `excludeClassPractice`를 포함한 [계약·오류·배포 순서](../admin-class-contents.md).
+
+
+| PATCH | `/api/admin/users/{userId}/role` | ADMIN | Change a member role; [contract](../admin-management-refinements.md) |

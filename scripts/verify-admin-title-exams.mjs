@@ -57,6 +57,9 @@ const ranks = [
 const titles = ["초보", "동네 아나운서", "아나운서 지망생", "아나운서"];
 const writes = [],
   reads = [];
+let holdAccess = false,
+  accessStarted,
+  releaseAccess;
 await context.route("**/api/backend/**", async (route) => {
   const req = route.request(),
     url = new URL(req.url());
@@ -86,10 +89,16 @@ await context.route("**/api/backend/**", async (route) => {
       createdAt: "2026-11-07T00:00:00Z",
       membershipType: "admin",
     });
-  if (url.pathname.endsWith("/admin/me"))
+  if (url.pathname.endsWith("/admin/me")) {
+    if (holdAccess)
+      await new Promise((resolve) => {
+        releaseAccess = resolve;
+        accessStarted?.();
+      });
     return denied
       ? reply(null, 403)
       : reply({ id: 1, nickname: "운영자", role: "ADMIN" });
+  }
   if (url.pathname.endsWith("/title-exam-policies"))
     return reply({
       items: multiplePolicies
@@ -151,12 +160,30 @@ try {
       .count(),
     1,
   );
+  holdAccess = true;
+  const accessPending = new Promise((resolve) => {
+    accessStarted = resolve;
+  });
   await page.getByRole("link", { name: "설정 변경", exact: true }).click();
-  await page
-    .getByRole("row")
-    .filter({ hasText: "새 시험" })
-    .getByRole("button", { name: "이 문장 선택" })
-    .click();
+  await accessPending;
+  await page.getByLabel("시험 문장 원문", { exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("heading", { name: "관리자 권한 확인 중", exact: true })
+      .count(),
+    0,
+  );
+  await page.getByLabel("작업 사유", { exact: true }).fill("확인 대기 중 입력");
+  const accessDone = page.waitForResponse(
+    (r) => r.url().endsWith("/api/admin/me") && r.status() === 200,
+  );
+  holdAccess = false;
+  releaseAccess();
+  await accessDone;
+  assert.equal(
+    await page.getByLabel("작업 사유", { exact: true }).inputValue(),
+    "확인 대기 중 입력",
+  );
   await page.getByLabel("합격 점수", { exact: true }).fill("80");
   await page.getByLabel("작업 사유", { exact: true }).fill("검수 후 시험 교체");
   await mkdir("test-artifacts/admin-ui", { recursive: true });
@@ -169,21 +196,19 @@ try {
     .click();
   await page.getByText("변경사항을 저장했습니다.").waitFor();
   assert.deepEqual(writes[0], {
-    practiceContentId: 20,
+    practiceContentId: 10,
     contentVersion: 2,
     passingScore: 80,
     version: 0,
     reason: "검수 후 시험 교체",
   });
-  assert.equal(reads[0].category, "TITLE_EXAM");
-  assert.equal(reads[0].status, "PUBLISHED");
-  assert.equal(reads[0].type, "SENTENCE");
+  assert.equal(reads.length, 0);
   await page.getByRole("button", { name: "닫기", exact: true }).click();
   await page.getByRole("link", { name: "설정 변경", exact: true }).click();
   const originalScript = await page
     .getByLabel("시험 문장 원문", { exact: true })
     .inputValue();
-  assert.equal(originalScript, content(20).scriptText);
+  assert.equal(originalScript, content(10).scriptText);
   await page
     .getByLabel("시험 문장 원문", { exact: true })
     .fill("수정한 승급 시험 문장입니다.");
@@ -193,7 +218,7 @@ try {
     .click();
   await page.getByText("변경사항을 저장했습니다.").waitFor();
   assert.equal(writes[1].scriptText, "수정한 승급 시험 문장입니다.");
-  assert.equal(writes[1].practiceContentId, 20);
+  assert.equal(writes[1].practiceContentId, 10);
   assert.equal(policy.practiceContentId, 30);
   await page.getByRole("button", { name: "닫기", exact: true }).click();
   await page.getByRole("link", { name: "설정 변경", exact: true }).click();
@@ -325,7 +350,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: navigation, selection/preview, versioned save, script edit/new content, conflict preserves script, unavailable/empty, access denial, mobile edit-page navigation/reload/back, invalid rank (10 scenarios)",
+    "PASS: navigation, no candidate query, versioned save, script edit/new content, conflict preserves script, unavailable, access denial, mobile edit-page navigation/reload/back, invalid rank (10 scenarios)",
   );
 } finally {
   await browser.close();
