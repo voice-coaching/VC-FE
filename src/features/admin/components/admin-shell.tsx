@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ApiError, getAccessToken } from "@/lib/api/client";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
 import { adminApi, adminErrorMessage, subscribeAdminDenial } from "../api";
@@ -58,17 +58,23 @@ function ScopedAdminShell({
   const anonymous =
     getAuthSessionSnapshot().status === "anonymous" && !getAccessToken();
   const access = useQuery({
-    queryKey: ["admin", session, "access", pathname],
+    queryKey: ["admin", session, "access"],
     queryFn: ({ signal }) => adminApi.access(signal),
-    // Preserve this session's approved shell while each route rechecks in the background.
-    // The session-keyed parent remount and denial handling prevent cross-account reuse.
-    placeholderData: keepPreviousData,
+    // UI-only approval survives route/layout observer replacement in this login session.
+    // Mount, navigation and focus still recheck; account switches and denials purge it.
     enabled: !anonymous,
     retry: false,
-    gcTime: 0,
+    gcTime: 60_000,
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
+  const previousPath = useRef(pathname);
+  const { refetch } = access;
+  useEffect(() => {
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
+    void refetch();
+  }, [pathname, refetch]);
   useEffect(() => subscribeAdminDenial(setDenial), []);
   const active = adminNavigation.find((item) =>
     item.href === "/admin"
