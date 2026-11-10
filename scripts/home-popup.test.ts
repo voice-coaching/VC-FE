@@ -34,6 +34,7 @@ test("home popup uses an authenticated no-store GET and maps the backend notific
     id: 1,
     title: popup.title,
     body: popup.body,
+    image: null,
     href: "/home/notifications",
   });
 });

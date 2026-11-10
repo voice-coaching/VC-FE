@@ -137,3 +137,8 @@ FE는 지원 범위를 녹음/업로드 전에 확인하고, 위 필드가 빠�
 ## Administrator member role changes
 
 `PATCH /api/admin/users/{userId}/role`: [fields, authentication, responses and errors](../admin-management-refinements.md).
+
+
+## Popup images
+
+POST/DELETE `/api/admin/popups/{popupId}/image` and optional popup image fields: [contract and UI behavior](../popup-images.md).

@@ -38,6 +38,11 @@ try {
     "unavailable",
     "small",
     "desktop",
+    "announcement-image",
+    "announcement-text",
+    "announcement-week",
+    "announcement-expired-image",
+    "announcement-broken-image",
   ]) {
     const viewport =
       scenario === "desktop"
@@ -54,6 +59,21 @@ try {
     );
     let posts = 0,
       activated = false;
+    const announcement = scenario.startsWith("announcement-");
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4z8AAAAASUVORK5CYII=",
+      "base64",
+    );
+    await context.route("https://images.example.invalid/**", (route) =>
+      route.fulfill({
+        status: scenario === "announcement-broken-image" ? 404 : 200,
+        contentType: "image/png",
+        body:
+          scenario === "announcement-broken-image"
+            ? Buffer.from("missing image")
+            : png,
+      }),
+    );
     const errors = [];
     await context.route("**/api/backend/**", async (route) => {
       const req = route.request(),
@@ -81,6 +101,8 @@ try {
           activated = true;
           return reply(active);
         }
+        if (announcement)
+          return reply({ ...eligible, status: "INELIGIBLE", eligible: false });
         return scenario === "unavailable"
           ? reply(null, 503)
           : reply(
@@ -93,6 +115,30 @@ try {
                     : eligible,
             );
       }
+      if (path === "/api/users/me/popup")
+        return reply(
+          announcement
+            ? {
+                id: 10,
+                title: "운영 이미지 공지",
+                body: "이미지와 함께 안내합니다.",
+                deepLink: null,
+                startsAt: "2026-11-01T00:00:00Z",
+                endsAt: "2099-11-30T00:00:00Z",
+                image:
+                  scenario === "announcement-text"
+                    ? null
+                    : {
+                        id: "00000000-0000-4000-8000-000000000001",
+                        url: "https://images.example.invalid/popup.png",
+                        expiresAt:
+                          scenario === "announcement-expired-image"
+                            ? new Date(Date.now() - 1000).toISOString()
+                            : "2099-11-30T00:00:00Z",
+                      },
+              }
+            : null,
+        );
       if (path === "/api/users/me")
         return reply({
           id: 1,
@@ -136,6 +182,10 @@ try {
       if (
         message.type() === "error" &&
         !(
+          scenario === "announcement-broken-image" &&
+          message.text().includes("404")
+        ) &&
+        !(
           ["retry", "unavailable"].includes(scenario) &&
           message.text().includes("503")
         )
@@ -148,6 +198,56 @@ try {
       .waitFor({ state: "attached" });
     assert.match(await page.title(), /SpeakAI/);
     const dialog = page.getByRole("dialog");
+    if (announcement) {
+      await dialog
+        .getByRole("heading", { name: "운영 이미지 공지", exact: true })
+        .waitFor();
+      if (
+        ![
+          "announcement-text",
+          "announcement-expired-image",
+          "announcement-broken-image",
+        ].includes(scenario)
+      ) {
+        await page
+          .getByRole("img", {
+            name: "운영 이미지 공지 안내 이미지",
+            exact: true,
+          })
+          .evaluate((img) => img.decode());
+      } else {
+        await page.waitForLoadState("networkidle");
+        assert.equal(await dialog.getByRole("img").count(), 0);
+      }
+      await page.waitForFunction(() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        return dialog && getComputedStyle(dialog).opacity === "1";
+      });
+      await page.screenshot({ path: join(artifacts, `${scenario}.png`) });
+      assert.equal(
+        await dialog.evaluate((el) => el.scrollWidth > el.clientWidth),
+        false,
+      );
+      if (scenario === "announcement-week") {
+        await dialog
+          .getByRole("button", { name: "일주일간 보지 않기", exact: true })
+          .click();
+        await page.reload();
+        await page.waitForLoadState("networkidle");
+        assert.equal(await dialog.count(), 0);
+      } else {
+        await dialog
+          .getByRole("button", { name: "닫기", exact: true })
+          .first()
+          .click();
+        await dialog.waitFor({ state: "detached" });
+      }
+      assert.equal(posts, 0);
+      assert.deepEqual(errors, []);
+      console.log(`PASS ${scenario}`);
+      await context.close();
+      continue;
+    }
     if (["paid", "expired", "unavailable"].includes(scenario)) {
       await page.waitForLoadState("networkidle");
       assert.equal(await dialog.count(), 0);

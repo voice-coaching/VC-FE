@@ -283,13 +283,23 @@ await context.route("https://storage.example.invalid/**", async (route) => {
     headers: { "access-control-allow-origin": "*" },
   });
 });
+let rejectPopupImage = false;
+const popupPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4z8AAAAASUVORK5CYII=",
+  "base64",
+);
+await context.route("https://images.example.invalid/**", (route) =>
+  route.fulfill({ contentType: "image/png", body: popupPng }),
+);
 await context.route("**/api/backend/**", async (route) => {
   const req = route.request(),
     url = new URL(req.url());
   const path = url.pathname.replace("/api/backend/api/admin", "");
   const method = req.method();
   if (method === "GET") reads.push({ path, query: url.search });
-  const body = method === "GET" ? null : req.postDataJSON();
+  const imageUpload = method === "POST" && /^\/popups\/\d+\/image$/.test(path);
+  const body =
+    method === "GET" ? null : imageUpload ? null : req.postDataJSON();
   const reply = (data) =>
     route.fulfill({
       status:
@@ -349,6 +359,36 @@ await context.route("**/api/backend/**", async (route) => {
     return;
   }
   if (method !== "GET") writes.push({ path, method, body });
+  if (/^\/popups\/\d+\/image$/.test(path)) {
+    if (rejectPopupImage) {
+      rejectPopupImage = false;
+      return route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          result: false,
+          code: "ADMIN_EDIT_CONFLICT",
+          message: "conflict",
+        }),
+      });
+    }
+    const popup = popups.find((p) => p.id === Number(path.split("/")[2]));
+    if (imageUpload) {
+      assert.ok(
+        req
+          .headers()
+          ["content-type"].startsWith("multipart/form-data; boundary="),
+      );
+      assert.ok(req.postDataBuffer().includes(Buffer.from('name="file"')));
+      popup.image = {
+        id: "00000000-0000-4000-8000-000000000001",
+        url: "https://images.example.invalid/popup.png",
+        expiresAt: popup.endsAt,
+      };
+    } else popup.image = null;
+    popup.version++;
+    return reply(popup);
+  }
   if (rejectEdit && method === "PATCH" && path === "/contents/304") {
     rejectEdit = false;
     await route.fulfill({
@@ -1208,6 +1248,94 @@ try {
       assert.equal(
         writes.find((w) => w.path === "/popups").body.popup.durationDays,
         3,
+      );
+    },
+  );
+  await check(
+    "popup image upload validates files and displays the saved image",
+    async () => {
+      // Locate controls by unique labels so the settings and image forms cannot be confused.
+      const file = page.getByLabel("이미지 파일", { exact: true });
+      await file.setInputFiles({
+        name: "bad.svg",
+        mimeType: "image/svg+xml",
+        buffer: Buffer.from("<svg/>"),
+      });
+      await page
+        .getByText("PNG 또는 JPEG 이미지를 3MB 이하로 첨부해 주세요.", {
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "이미지 첨부", exact: true })
+          .isDisabled(),
+        true,
+      );
+      await file.setInputFiles({
+        name: "popup.png",
+        mimeType: "image/png",
+        buffer: popupPng,
+      });
+      await page
+        .getByLabel("이미지 변경 사유", { exact: true })
+        .fill("이미지 첨부");
+      await page
+        .getByRole("button", { name: "이미지 첨부", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "이미지 교체", exact: true })
+        .waitFor();
+      await page.waitForFunction(() =>
+        [...document.images].some(
+          (i) => i.alt.includes("기간 팝업 검증") && i.naturalWidth > 0,
+        ),
+      );
+      await page.getByLabel("제목", { exact: true }).fill("저장 전 설정");
+      assert.equal(await file.isDisabled(), true);
+      await page.reload();
+      await file.waitFor();
+    },
+  );
+  await check(
+    "popup image conflict preserves file selection and detach retains popup text",
+    async () => {
+      await page.getByLabel("이미지 파일", { exact: true }).setInputFiles({
+        name: "replace.png",
+        mimeType: "image/png",
+        buffer: popupPng,
+      });
+      await page
+        .getByLabel("이미지 변경 사유", { exact: true })
+        .fill("이미지 교체");
+      rejectPopupImage = true;
+      const before = writes.filter((w) => w.path.endsWith("/image")).length;
+      await page
+        .getByRole("button", { name: "이미지 교체", exact: true })
+        .click();
+      await page.getByText(/다른 관리자가 수정했거나/).waitFor();
+      assert.equal(
+        await page.getByLabel("이미지 변경 사유", { exact: true }).inputValue(),
+        "이미지 교체",
+      );
+      assert.equal(
+        writes.filter((w) => w.path.endsWith("/image")).length,
+        before + 1,
+      );
+      await page
+        .getByRole("button", { name: "이미지 해제", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("작업 사유", { exact: true }).fill("첨부 해제");
+      await dialog
+        .getByRole("button", { name: "이미지 해제", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "이미지 첨부", exact: true })
+        .waitFor();
+      assert.equal(
+        await page.getByLabel("본문", { exact: true }).inputValue(),
+        "3일간 안내합니다.",
       );
     },
   );

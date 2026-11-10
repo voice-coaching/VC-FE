@@ -1,4 +1,6 @@
 "use client";
+import { PopupImagePanel } from "./popup-image-panel";
+import { PopupPicture } from "@/components/popup-picture";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -461,10 +463,13 @@ function PopupEditor({ current }: { current?: Popup }) {
   const command = useAdminCommand(["/popups", "/audit-logs"]);
   const [title, setTitle] = useState(current?.title ?? "");
   const [body, setBody] = useState(current?.body ?? "");
+  const [dirty, setDirty] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   return (
     <div className={styles.grid}>
       <Panel title="팝업 설정" padded>
         <form
+          onChange={() => setDirty(true)}
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();
@@ -475,83 +480,95 @@ function PopupEditor({ current }: { current?: Popup }) {
             );
           }}
         >
-          <Field
-            name="title"
-            label="제목"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={200}
-            required
-          />
-          <Textarea
-            name="body"
-            label="본문"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            maxLength={1000}
-            rows={5}
-            required
-          />
-          <div className={styles.formGrid}>
+          <fieldset
+            className={styles.form}
+            disabled={imageBusy || command.busy}
+          >
             <Field
-              type="datetime-local"
-              name="startsAt"
-              label="게시 시작"
-              defaultValue={localDateTime(current?.startsAt)}
+              name="title"
+              label="제목"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
               required
             />
-            <Field
-              type="number"
-              name="durationDays"
-              label="노출 일수"
-              min={1}
-              max={365}
-              defaultValue={current ? durationDays(current) : 3}
+            <Textarea
+              name="body"
+              label="본문"
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              maxLength={1000}
+              rows={5}
               required
-              hint="1~365일. 서버가 종료 시각을 계산합니다."
             />
-            <Field
-              type="number"
-              name="priority"
-              label="우선순위"
-              min={0}
-              max={100}
-              defaultValue={current?.priority ?? 10}
-              required
-              hint="숫자가 클수록 먼저 표시합니다."
+            <div className={styles.formGrid}>
+              <Field
+                type="datetime-local"
+                name="startsAt"
+                label="게시 시작"
+                defaultValue={localDateTime(current?.startsAt)}
+                required
+              />
+              <Field
+                type="number"
+                name="durationDays"
+                label="노출 일수"
+                min={1}
+                max={365}
+                defaultValue={current ? durationDays(current) : 3}
+                required
+                hint="1~365일. 서버가 종료 시각을 계산합니다."
+              />
+              <Field
+                type="number"
+                name="priority"
+                label="우선순위"
+                min={0}
+                max={100}
+                defaultValue={current?.priority ?? 10}
+                required
+                hint="숫자가 클수록 먼저 표시합니다."
+              />
+              <Select
+                name="deepLink"
+                label="버튼 클릭 시 이동"
+                defaultValue={current?.deepLink ?? ""}
+              >
+                <option value="">이동 없음</option>
+                <option value="/home">홈</option>
+                <option value="/notifications">알림함</option>
+                <option value="/mypage">마이페이지</option>
+              </Select>
+            </div>
+            <Check
+              name="enabled"
+              label="설정한 기간에 팝업 노출"
+              defaultChecked={current?.enabled ?? false}
             />
-            <Select
-              name="deepLink"
-              label="버튼 클릭 시 이동"
-              defaultValue={current?.deepLink ?? ""}
-            >
-              <option value="">이동 없음</option>
-              <option value="/home">홈</option>
-              <option value="/notifications">알림함</option>
-              <option value="/mypage">마이페이지</option>
-            </Select>
-          </div>
-          <Check
-            name="enabled"
-            label="설정한 기간에 팝업 노출"
-            defaultChecked={current?.enabled ?? false}
-          />
-          <Reason />
-          <CommandFeedback command={command} />
-          <div className={styles.formFooter}>
-            <Button type="submit" primary disabled={command.busy}>
-              팝업 저장
-            </Button>
-          </div>
+            <Reason />
+            <CommandFeedback command={command} />
+            <div className={styles.formFooter}>
+              <Button type="submit" primary disabled={command.busy}>
+                팝업 저장
+              </Button>
+            </div>
+          </fieldset>
         </form>
       </Panel>
       <Panel
         title="화면 미리보기"
-        description="문구 배치 예시입니다. 실제 사용자 팝업 화면 연결은 별도입니다."
+        description="저장된 이미지와 편집 중인 문구의 배치입니다."
         padded
       >
         <div className={styles.preview}>
           <div className={styles.previewCard}>
+            {current?.image && (
+              <PopupPicture
+                key={current.image.url}
+                image={current.image}
+                title={title}
+              />
+            )}
             <Clock3 color="#2f6bff" size={24} />
             <h3 className="mt-4">{title || "팝업 제목"}</h3>
             <p>{body || "회원에게 보여줄 안내를 작성해 주세요."}</p>
@@ -568,6 +585,11 @@ function PopupEditor({ current }: { current?: Popup }) {
           </p>
         )}
       </Panel>
+      <PopupImagePanel
+        current={current}
+        dirty={dirty || command.busy}
+        onBusyChange={setImageBusy}
+      />
     </div>
   );
 }
