@@ -23,3 +23,8 @@
 - policyLoading/policyError는 미디어 권한·로컬 촬영과 별개다. 업로드 직전 새 정책으로 재검증하고 변경된 정책에는 다시 동의한다.
 - 분석 phase는 idle → preparing → uploading → analyzing → result이며 오류/대기 중단은 error다. 업로드 전 동의·제한 검증 실패는 서버 분석을 만들지 않는다.
 - 촬영 Blob별 제출 이력은 analyze 직전에 남긴다. 명확한 접수 거절 외의 불명확한 실패/중단은 기존 분석 확인으로 안내한다. 로그인 변경 시 동의·결과·제출 이력과 이전 계정의 content cache를 비운다.
+
+
+## Administrator denial and token rotation
+
+Current-session 401/403 latches denial separately from query cache, disables automatic admission checks and discards cached administrator data. Only a manual recheck or new login context resumes admission. USER access claims can reject early; positive admission always requires the server. Rotation preserves UI scope only when issuer/sub/sid/role match. [Contract and reproduction](../admin-access-boundary.md).

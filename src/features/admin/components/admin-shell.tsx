@@ -5,9 +5,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, getAccessToken } from "@/lib/api/client";
 import { getAuthSessionSnapshot } from "@/lib/auth-session";
-import { adminApi, adminErrorMessage, subscribeAdminDenial } from "../api";
+import {
+  adminApi,
+  adminErrorMessage,
+  subscribeAdminDenial,
+  clearAdminDenial,
+} from "../api";
 import { AdminActorContext } from "../actor";
-import { useAdminSession } from "../hooks";
+import { useAdminSession, useAdminClientReady } from "../hooks";
+import { tokenDisallowsAdmin } from "../token";
 import {
   LayoutDashboard,
   Users,
@@ -54,15 +60,19 @@ function ScopedAdminShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const clientReady = useAdminClientReady();
   const [denial, setDenial] = useState<ApiError | null>(null);
+  const userToken = clientReady && tokenDisallowsAdmin(getAccessToken());
   const anonymous =
-    getAuthSessionSnapshot().status === "anonymous" && !getAccessToken();
+    clientReady &&
+    getAuthSessionSnapshot().status === "anonymous" &&
+    !getAccessToken();
   const access = useQuery({
     queryKey: ["admin", session, "access"],
     queryFn: ({ signal }) => adminApi.access(signal),
     // UI-only approval survives route/layout observer replacement in this login session.
     // Mount, navigation and focus still recheck; account switches and denials purge it.
-    enabled: !anonymous,
+    enabled: clientReady && !anonymous && !denial && !userToken,
     retry: false,
     gcTime: 60_000,
     staleTime: 0,
@@ -73,8 +83,9 @@ function ScopedAdminShell({
   useEffect(() => {
     if (previousPath.current === pathname) return;
     previousPath.current = pathname;
+    if (denial || userToken || anonymous) return;
     void refetch();
-  }, [pathname, refetch]);
+  }, [pathname, refetch, denial, userToken, anonymous]);
   useEffect(() => subscribeAdminDenial(setDenial), []);
   const active = adminNavigation.find((item) =>
     item.href === "/admin"
@@ -86,7 +97,9 @@ function ScopedAdminShell({
   );
   const error = anonymous
     ? new ApiError("로그인이 필요합니다.", 401)
-    : (denial ?? access.error);
+    : userToken
+      ? new ApiError("일반 회원은 관리자 화면에 접근할 수 없습니다.", 403)
+      : (denial ?? access.error);
   if (error || !access.data)
     return (
       <main className={styles.gate}>
@@ -108,7 +121,9 @@ function ScopedAdminShell({
             </ButtonLink>
             {error && !anonymous && (
               <Button
+                disabled={access.isFetching}
                 onClick={() => {
+                  clearAdminDenial();
                   void access.refetch().then((result) => {
                     if (result.data && !result.error) setDenial(null);
                   });
