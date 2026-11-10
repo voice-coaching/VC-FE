@@ -1,7 +1,10 @@
 "use client";
 
-import { canonicalApi, canonicalDatabaseId } from "@/lib/api/canonical";
-import { isTitleExamCategory } from "@/lib/catalog-visibility";
+import {
+  historyContentKinds,
+  visibleHistoryItems,
+  type HistoryContentKind,
+} from "@/lib/history-visibility";
 import { DirectHistory } from "@/components/direct-history";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
@@ -68,9 +71,9 @@ export default function LearningHistory() {
     (filter) => filter.value === params.get("type"),
   )?.value;
   const kind = filterValue === "CUSTOM" ? "SENTENCE" : filterValue;
-  const [origins, setOrigins] = useState<
-    Record<string, "custom" | "catalog" | "error">
-  >({});
+  const [origins, setOrigins] = useState<Record<string, HistoryContentKind>>(
+    {},
+  );
   const userId = getAuthenticatedUserId();
   const [initialHistory] = useState(() =>
     readUserClientCache<HistoryCache>(userId, historyCacheResource(kind)),
@@ -78,7 +81,6 @@ export default function LearningHistory() {
   const [items, setItems] = useState<TrainingHistoryItem[]>(
     initialHistory?.items ?? [],
   );
-  const [eligible, setEligible] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [loading, setLoading] = useState(initialHistory === null);
@@ -179,90 +181,23 @@ export default function LearningHistory() {
 
   useEffect(() => {
     let active = true;
-    const candidates = [
-      ...new Map(
-        items
-          .filter((item) => item.contentType === "SENTENCE")
-          .map((item) => [String(item.contentId), item]),
-      ).values(),
-    ];
-    void Promise.all(
-      candidates.map(async (item) => {
-        const resource = cacheResources.practiceContent(item.contentId);
-        try {
-          const content =
-            readUserClientCache<PracticeContent>(userId, resource) ??
-            (await api.content.get(item.contentId));
-          writeUserClientCache(userId, resource, content);
-          return [
-            String(item.contentId),
-            content.origin === "USER_INPUT" ? "custom" : "catalog",
-          ] as const;
-        } catch {
-          return [String(item.contentId), "error"] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (active) setOrigins(Object.fromEntries(entries));
+    void historyContentKinds(items, async (id) => {
+      const resource = cacheResources.practiceContent(id);
+      const content =
+        readUserClientCache<PracticeContent>(userId, resource) ??
+        (await api.content.get(id));
+      writeUserClientCache(userId, resource, content);
+      return content;
+    }).then((kinds) => {
+      if (active) setOrigins(kinds);
     });
     return () => {
       active = false;
     };
   }, [items, userId, retry]);
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setEligible({});
-    void Promise.all(
-      items.map(async (item) => {
-        try {
-          const content = await api.content.get(item.contentId);
-          if (isTitleExamCategory(content.category))
-            return [String(item.sessionId), false] as const;
-          const detail = await api.myPage.getTrainingSession(item.sessionId);
-          if (!detail.analysis?.id || !detail.recording?.id)
-            return [String(item.sessionId), false] as const;
-          const view = await canonicalApi.get(
-            {
-              analysisId: canonicalDatabaseId(detail.analysis.id),
-              recordingId: canonicalDatabaseId(detail.recording.id),
-            },
-            controller.signal,
-          );
-          const core = view.canonicalAnalysis;
-          const hasFeedback =
-            view.jobStatus === "COMPLETED" &&
-            core?.decision.status === "ACCEPT" &&
-            core.feedbackDeliveryAllowed &&
-            core.coaching?.adapterStatus === "READY" &&
-            core.coaching.items.some((entry) =>
-              Boolean(entry.expression.action.trim()),
-            );
-          return [String(item.sessionId), Boolean(hasFeedback)] as const;
-        } catch {
-          return [String(item.sessionId), false] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (active) setEligible(Object.fromEntries(entries));
-    });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [items, retry]);
-  const eligibilityPending = items.some(
-    (item) => eligible[String(item.sessionId)] === undefined,
-  );
   const visibleItems = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          eligible[String(item.sessionId)] &&
-          (filterValue !== "CUSTOM" ||
-            origins[String(item.contentId)] === "custom"),
-      ),
-    [items, origins, filterValue, eligible],
+    () => visibleHistoryItems(items, origins, filterValue === "CUSTOM"),
+    [items, origins, filterValue],
   );
   const originsPending =
     filterValue === "CUSTOM" &&
@@ -387,7 +322,7 @@ export default function LearningHistory() {
               </button>
             </div>
           ) : null}
-          {loadingList || originsPending || eligibilityPending ? (
+          {loadingList || originsPending ? (
             <HistoryListSkeleton />
           ) : error ? null : groups.length ? (
             <div className="mt-5 space-y-7">
@@ -462,10 +397,11 @@ export default function LearningHistory() {
               아직 저장된 학습 기록이 없어요.
             </p>
           )}
-          {filterValue === "CUSTOM" &&
-          items.some((item) => origins[String(item.contentId)] === "error") ? (
+          {items.some((item) => origins[String(item.contentId)] === "error") ? (
             <p role="alert" className="mt-3 text-xs text-[#6b7684]">
-              일부 내 문장 기록을 확인하지 못했어요.
+              {filterValue === "CUSTOM"
+                ? "일부 내 문장 분류를 확인하지 못했어요."
+                : "일부 기록의 분류를 확인하지 못했어요. 완료된 기록은 계속 표시합니다."}
               <button
                 className="ml-2 min-h-11 text-primary"
                 onClick={() => setRetry((value) => value + 1)}

@@ -1,4 +1,6 @@
 "use client";
+
+import { hasDirectHistoryFeedback } from "@/lib/history-visibility";
 import { reportSaves } from "@/lib/report-saves";
 
 import Image from "next/image";
@@ -68,7 +70,7 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
         .filter(
           (item) =>
             (!savedOnly || savedIds.includes(item.jobId)) &&
-            Boolean(item.result?.coaching.feedback?.trim()),
+            hasDirectHistoryFeedback(item.result),
         )
         .map((item) => (
           <details

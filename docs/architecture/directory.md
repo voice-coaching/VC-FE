@@ -92,3 +92,8 @@ UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은
 
 
 `src/features/admin/popup-images.ts` validates image commands and receipts; `components/popup-image-panel.tsx` composes the attachment controls. `src/components/admin-home-popup.tsx` renders administrator notices after the existing premium offer. `popup-picture.tsx` handles signed-image rendering, failures and expiration. `src/lib/popup-image.ts` holds the image contract. [Behavior](../popup-images.md).
+# 학습 기록 표시 보완
+
+- `src/lib/history-visibility.ts`: 완료 목록의 분류 조회 중복 제거, 표시 정책 및 직접 분석 피드백 표시 판단.
+- `scripts/history-visibility.test.ts`, `scripts/verify-history-visibility.mjs`: 분류 실패·재시도, 두 피드백 형식, 목록 진입 요청 수 및 상세 지연 조회 회귀 검증.
+- `docs/history-visibility.md`: 학습 기록 표시와 요청 범위.
