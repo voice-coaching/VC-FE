@@ -9,7 +9,6 @@ import {
   deleteNotice,
   localDateTime,
   answerInquiry,
-  transitionInquiry,
 } from "../services";
 import type { AdminPage, Notice, Inquiry, Query } from "../types";
 import {
@@ -466,47 +465,12 @@ export function InquiryDetail({ inquiryId }: { inquiryId: number }) {
                   <CommandFeedback command={command} />
                   <div className={styles.formFooter}>
                     <Button type="submit" primary disabled={command.busy}>
-                      답변 저장
+                      {command.busy ? "처리 중…" : "문의 완료"}
                     </Button>
                   </div>
                 </>
               )}
             </form>
-            <div className="mt-5">
-              {current.status === "RECEIVED" && (
-                <ConfirmAction
-                  invalidationPaths={["/inquiries", "/audit-logs"]}
-                  title="문의를 처리 중으로 변경할까요?"
-                  description="문의의 담당 처리를 시작합니다."
-                  buttonLabel="처리 시작"
-                  action={(reason) =>
-                    transitionInquiry(
-                      current.id,
-                      current.version,
-                      "IN_PROGRESS",
-                      reason,
-                    )
-                  }
-                />
-              )}{" "}
-              {current.status === "ANSWERED" && (
-                <ConfirmAction
-                  invalidationPaths={["/inquiries", "/audit-logs"]}
-                  title="이 문의를 종료할까요?"
-                  description="종료한 문의는 다시 열거나 답변을 수정할 수 없습니다."
-                  buttonLabel="문의 종료"
-                  danger
-                  action={(reason) =>
-                    transitionInquiry(
-                      current.id,
-                      current.version,
-                      "CLOSED",
-                      reason,
-                    )
-                  }
-                />
-              )}
-            </div>
           </Panel>
         </>
       )}

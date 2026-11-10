@@ -54,7 +54,7 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
         description={
           announcer
             ? "연습 문장을 등록하고 아나운서 기준 음성을 연결하세요."
-            : "클래스는 묶음으로, 일반 콘텐츠는 문장별로 관리하세요."
+            : "클래스의 문장은 클래스 설정 안에서, 독립 콘텐츠는 아래 목록에서 관리하세요."
         }
       >
         <ButtonLink href={`${base}/new`} primary>
@@ -63,7 +63,14 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
         </ButtonLink>
       </Heading>
       {!announcer && <CoursesPanel />}
-      <Panel>
+      <Panel
+        title={announcer ? undefined : "독립 콘텐츠"}
+        description={
+          announcer
+            ? undefined
+            : "클래스에 연결된 문장은 클래스 설정에서 수정·삭제할 수 있습니다."
+        }
+      >
         <form
           className={styles.filters}
           onSubmit={(event) => {
@@ -90,13 +97,11 @@ export function ContentsPage({ announcer = false }: { announcer?: boolean }) {
           {!announcer && (
             <Select name="type" label="콘텐츠 유형">
               <option value="">전체 유형</option>
-              {["SENTENCE", "ANNOUNCER", "NEWS", "CLASS_PRACTICE"].map(
-                (value) => (
-                  <option key={value} value={value}>
-                    {label(value)}
-                  </option>
-                ),
-              )}
+              {["SENTENCE", "ANNOUNCER", "NEWS"].map((value) => (
+                <option key={value} value={value}>
+                  {label(value)}
+                </option>
+              ))}
             </Select>
           )}
           <Select name="status" label="공개 상태">

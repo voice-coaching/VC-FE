@@ -86,3 +86,6 @@ UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은
 | `src/components/lip-processing-consent.tsx` | 현재 영상·음성 처리 목적과 필요한 동의 항목 표시 |
 | `src/lib/canonical-lip.ts` | 입술 PROVISIONAL·선택 하위 점수와 측정 근거 계약 파싱 |
 | `docs/contracts/lip-provisional-score-v1.md` | 서버 소유 종합점수와 입술 근거 소비 계약 |
+
+
+`src/features/admin/components/member-role.tsx` composes role confirmation UI; `services.ts` validates role requests and receipts. See [management behavior](../admin-management-refinements.md).

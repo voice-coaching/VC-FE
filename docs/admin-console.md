@@ -2,7 +2,7 @@
 
 ## 클래스별 문장 관리
 
-`/admin/contents` 상단은 개별 클래스 문장 대신 실제 클래스를 한 행씩 표시한다. `/admin/courses/{id}`에서 연결 문장 전체를 추가·수정·삭제하고 함께 저장한다. 일반 콘텐츠 목록은 CLASS_PRACTICE를 서버 페이징 전에 제외한다. [사용 흐름·API·검증·백엔드 선행 배포](admin-class-contents.md).
+`/admin/contents` 상단은 실제 클래스를 한 행씩 표시한다. `/admin/courses/{id}`에서 연결 문장 전체를 추가·수정·제외하고 함께 저장한다. 독립 콘텐츠 목록은 CLASS_PRACTICE와 실제 클래스 예문에 연결된 문장을 서버 페이징 전에 제외한다. [최신 문의·시험·권한 관리 동작](admin-management-refinements.md), [클래스 계약](admin-class-contents.md).
 
 ## 기준과 구현 범위
 
@@ -24,7 +24,7 @@
 | /admin/announcer/new                                                      | ANNOUNCER 초안 작성 후 음성 등록 화면으로 이동                    |
 | /admin/announcer/{id}                                                     | 기준 음성 업로드·등록·미리듣기·대표 지정                          |
 | /admin/notices, /admin/notices/new, /admin/notices/{id}                   | 구역·문단 공지 작성, 공개 예약·비공개·상단 고정                   |
-| /admin/inquiries, /admin/inquiries/{id}                                   | 문의 조회·답변·처리 시작·종료                                     |
+| /admin/inquiries, /admin/inquiries/{id}                                   | 문의 조회·답변 입력 후 문의 완료(ANSWERED)                         |
 | /admin/notifications, /admin/notifications/new, /admin/notifications/{id} | 전체/선택 회원·일반/요금제 안내 초안 → 내용·대상 검토 → 수동 발송 |
 | /admin/popups, /admin/popups/new, /admin/popups/{id}                      | 시작 시각·1~365일·우선순위·활성 설정, 문구 미리보기               |
 | /admin/audit                                                              | 관리자·작업·대상·기간별 성공 변경 기록 조회                       |

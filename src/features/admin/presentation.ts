@@ -134,6 +134,7 @@ export const adminLabels: Record<string, string> = {
   NOTIFICATION_DELETE: "알림 초안 삭제",
   NOTIFICATION_DISPATCH: "알림 발송",
   USER_DELETE: "회원 및 업무 기록 삭제",
+  USER_ROLE_CHANGE: "회원 관리자 권한 변경",
   ABSOLUTE_BEGINNER: "완전 초보",
   BEGINNER_SPEAKER: "초보 말하기",
   SPEAKING_BEGINNER: "말하기 입문",
