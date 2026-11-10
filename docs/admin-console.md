@@ -163,3 +163,7 @@ FE main 50e2802에서 새 브랜치로 작업했다. BE #180의 탈퇴/삭제 �
 ## Popup image attachments
 
 Popup edit supports image upload/replacement/detach after saving the popup. The home announcement now displays the image while preserving the premium trial offer and text-only notices. [Contract, UI behavior and deployment](popup-images.md).
+
+## Administrator access hardening
+
+USER claims reject entry early, while ADMIN claims still need server approval. Denied admission no longer repeats after cache removal or focus/navigation changes. Role/account changes during token rotation purge old administrator state. [Details](admin-access-boundary.md).

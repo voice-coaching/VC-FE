@@ -166,14 +166,14 @@ function persistAccessToken(value: string | null) {
 }
 
 export function saveAccessToken(value: string) {
-  const token = storeAccessToken(value);
+  const token = storeAccessToken(value, false);
   sessionVersion += 1;
   notifySessionChange();
   return token;
 }
 
-// Renewing a token keeps the same session; login/logout starts a new one.
-function storeAccessToken(value: string) {
+// Renewal preserves UI state only while the account, login session and role match.
+function storeAccessToken(value: string, detectIdentityChange = true) {
   const normalized = value
     .trim()
     .replace(/^Bearer\s+/i, "")
@@ -185,8 +185,20 @@ function storeAccessToken(value: string) {
       "INVALID_AUTH_RESPONSE",
     );
   }
+  const previousIdentity = loginIdentity(accessToken);
+  const nextIdentity = loginIdentity(normalized);
   accessToken = normalized;
   persistAccessToken(normalized);
+  // Renewal is the same UI session only while account, login session and role all match.
+  if (
+    detectIdentityChange &&
+    previousIdentity &&
+    nextIdentity &&
+    previousIdentity !== nextIdentity
+  ) {
+    sessionVersion += 1;
+    notifySessionChange();
+  }
   return normalized;
 }
 

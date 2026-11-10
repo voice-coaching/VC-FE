@@ -13,6 +13,16 @@ const accessSchema = z.object({
   role: z.literal("ADMIN"),
 });
 const accessListeners = new Set<(error: ApiError) => void>();
+let deniedAccess: { session: number; error: ApiError } | null = null;
+function currentDenial() {
+  return deniedAccess?.session === getAuthSessionVersion()
+    ? deniedAccess.error
+    : null;
+}
+/** Only an explicit user recheck clears a denial in the current login session. */
+export function clearAdminDenial() {
+  deniedAccess = null;
+}
 export function subscribeAdminDenial(listener: (error: ApiError) => void) {
   accessListeners.add(listener);
   return () => {
@@ -42,14 +52,22 @@ async function request<T>(
       getAuthSessionVersion() === session &&
       error instanceof ApiError &&
       (error.status === 401 || error.status === 403)
-    )
+    ) {
+      deniedAccess = { session, error };
       accessListeners.forEach((listener) => listener(error));
+    }
     throw error;
   }
 }
 export const adminApi = {
   async access(signal?: AbortSignal): Promise<AdminAccess> {
-    return accessSchema.parse(await request("/me", { signal }));
+    const denied = currentDenial();
+    if (denied) throw denied;
+    const approved = accessSchema.parse(await request("/me", { signal }));
+    // A late 200 must not override a denial received from another in-flight admin request.
+    const lateDenial = currentDenial();
+    if (lateDenial) throw lateDenial;
+    return approved;
   },
   read<T>(path: string, query: Query = {}, signal?: AbortSignal): Promise<T> {
     return request<T>(path + queryString(query), { signal });

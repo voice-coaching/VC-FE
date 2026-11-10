@@ -9,6 +9,8 @@ import {
   saveAccessToken,
   subscribeAuthSession,
 } from "../src/lib/api/client";
+import { QueryClient } from "@tanstack/react-query";
+import { installAdminCacheLifecycle } from "../src/features/admin/cache";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -28,10 +30,60 @@ afterEach(() => {
   }
 });
 
-function jwt(sid: string, exp: number, sub = "7") {
-  return `header.${Buffer.from(JSON.stringify({ iss: "voice-test", sub, sid, role: "USER", type: "access", exp })).toString("base64url")}.signature`;
+function jwt(sid: string, exp: number, sub = "7", role = "USER") {
+  return `header.${Buffer.from(JSON.stringify({ iss: "voice-test", sub, sid, role, type: "access", exp })).toString("base64url")}.signature`;
 }
 const json = (data: unknown) => Response.json({ result: true, data });
+
+test("refresh role downgrade clears administrator approval and private data immediately", async () => {
+  browser();
+  saveAccessToken(jwt("same-login", 9999999999, "7", "ADMIN"));
+  const version = getAuthSessionVersion(),
+    queries = new QueryClient(),
+    stop = installAdminCacheLifecycle(queries);
+  queries.setQueryData(["admin", version, "access"], { id: 7, role: "ADMIN" });
+  queries.setQueryData(["admin", version, "/users", {}], {
+    private: "member-data",
+  });
+  const renewed = jwt("same-login", 9999999999, "7", "USER");
+  globalThis.fetch = async () =>
+    json({ accessToken: renewed, tokenType: "Bearer", expiresIn: 600 });
+  try {
+    await createHttpClient("/api/backend").refreshAccessToken();
+    assert.equal(getAuthSessionVersion(), version + 1);
+    assert.equal(getAccessToken(), renewed);
+    assert.equal(queries.getQueryData(["admin", version, "access"]), undefined);
+    assert.equal(
+      queries.getQueryData(["admin", version, "/users", {}]),
+      undefined,
+    );
+  } finally {
+    stop();
+    queries.clear();
+  }
+});
+test("same-account same-role rotation retains its scope, but another account header cannot reuse it", async () => {
+  browser();
+  saveAccessToken(jwt("same-login", 9999999999, "7", "ADMIN"));
+  const version = getAuthSessionVersion();
+  const same = jwt("same-login", 9999999998, "7", "ADMIN");
+  globalThis.fetch = async () =>
+    json({ accessToken: same, tokenType: "Bearer", expiresIn: 600 });
+  const client = createHttpClient("/api/backend");
+  await client.refreshAccessToken();
+  assert.equal(getAuthSessionVersion(), version);
+  const other = jwt("other-login", 9999999999, "8", "USER");
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ result: true, data: { ok: true } }), {
+      headers: {
+        "content-type": "application/json",
+        "x-new-access-token": other,
+      },
+    });
+  await client.request("/api/home");
+  assert.equal(getAuthSessionVersion(), version + 1);
+  assert.equal(getAccessToken(), other);
+});
 
 function browser() {
   const storage = new Map<string, string>();

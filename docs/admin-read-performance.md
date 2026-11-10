@@ -53,3 +53,8 @@ staleTime은 이 시간 뒤에 화면이 자동으로 갱신된다는 뜻이 아
 ## 권한 확인 화면 반복 표시 개선 (#102)
 
 같은 세션의 메뉴 이동은 이전 승인 화면을 유지하면서 매번 백그라운드로 서버 권한을 재확인한다. 최초 진입의 확인 대기, 권한 거절 차단, 계정 변경 시 캐시 제거는 유지한다. 권한 캐시 유효시간을 늘리거나 서버 검사를 생략하지 않는다. 회원의 평가번호 검색 UI는 제거하고 기존 keyword 기반 이름(닉네임) 검색을 사용한다. [상세](admin-navigation-and-member-search.md).
+
+
+## Stop denied admission requests
+
+After 401/403, AdminShell and the settings entry stop automatic access queries, including focus/navigation checks. Query-cache removal must not restart HTTP admission. A session-scoped denial latch and explicit manual recheck enforce this. [Reproduction and validation](admin-access-boundary.md).

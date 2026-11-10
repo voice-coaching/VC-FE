@@ -5,6 +5,15 @@ import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
 import { adminApi, adminErrorMessage } from "./api";
 import { adminReadPolicy, affectedAdminRead } from "./cache";
 import type { Query } from "./types";
+const subscribeToHydration = () => () => {};
+/** Keep SSR and first hydration output identical; never request admission before reading browser credentials. */
+export function useAdminClientReady() {
+  return useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+}
 export function useAdminSession(): number {
   return useSyncExternalStore(
     subscribeAuthSession,
