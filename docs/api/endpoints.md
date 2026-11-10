@@ -65,3 +65,9 @@
 
 
 | PATCH | `/api/admin/users/{userId}/role` | ADMIN | Change a member role; [contract](../admin-management-refinements.md) |
+
+
+| POST | `/api/admin/popups/{popupId}/image` | ADMIN | Attach or replace popup image |
+| DELETE | `/api/admin/popups/{popupId}/image` | ADMIN | Detach popup image |
+
+[Popup image contract](../popup-images.md).

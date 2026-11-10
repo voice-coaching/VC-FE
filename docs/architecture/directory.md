@@ -89,3 +89,6 @@ UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은
 
 
 `src/features/admin/components/member-role.tsx` composes role confirmation UI; `services.ts` validates role requests and receipts. See [management behavior](../admin-management-refinements.md).
+
+
+`src/features/admin/popup-images.ts` validates image commands and receipts; `components/popup-image-panel.tsx` composes the attachment controls. `src/components/admin-home-popup.tsx` renders administrator notices after the existing premium offer. `popup-picture.tsx` handles signed-image rendering, failures and expiration. `src/lib/popup-image.ts` holds the image contract. [Behavior](../popup-images.md).

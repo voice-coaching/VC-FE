@@ -1,4 +1,5 @@
 "use client";
+import { AdminHomePopup } from "./admin-home-popup";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -35,6 +36,7 @@ export function HomePopup() {
   const userId = getAuthenticatedUserId();
   const scope = JSON.stringify([epoch, userId]);
   const [openScope, setOpenScope] = useState<string | null>(null);
+  const [checkedScope, setCheckedScope] = useState<string | null>(null);
   const [busyScope, setBusyScope] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activation = useRef<AbortController | null>(null);
@@ -55,6 +57,10 @@ export function HomePopup() {
       })
       .catch(() => {
         // Do not invent eligibility or block home when the service is unavailable.
+      })
+      .finally(() => {
+        if (!owner.signal.aborted && epoch === getAuthSessionVersion())
+          setCheckedScope(scope);
       });
     return () => {
       owner.abort();
@@ -108,6 +114,7 @@ export function HomePopup() {
   return (
     <>
       <Toaster />
+      <AdminHomePopup enabled={checkedScope === scope && openScope !== scope} />
       <Dialog.Root
         open={openScope === scope && Boolean(userId)}
         onOpenChange={(open) => {

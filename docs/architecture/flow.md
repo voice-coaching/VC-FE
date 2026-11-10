@@ -50,3 +50,8 @@ UI는 촬영·동의·진행·결과를 조립한다. Backend VIDEO gate/영상 
 서버 총평의 기호·공백·줄바꿈을 일반 텍스트로 보존하고, 음소별 측정이나 교정 목록은 생성하지 않는다.
 요약 점수의 validity/reason은 문자열로 보존하며 기존 전체 결과의 검증 조건을 적용하지 않는다.
 [계약·검증 범위](../api/direct-video-upload.md).
+
+
+## Popup image flow
+
+Save popup settings first, then upload/replace/detach an image with the displayed version and a reason. The image panel and settings form cannot be edited together during upload; dirty settings must be saved first. Home keeps the premium offer first and requests the administrator notice only after it is closed or ineligible. Signed image failure/expiry leaves the announcement text and dismissal usable. [Contract](../popup-images.md).

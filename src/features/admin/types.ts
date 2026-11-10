@@ -97,6 +97,7 @@ export type Popup = {
   endsAt: string;
   enabled: boolean;
   createdAt: string;
+  image?: import("@/lib/popup-image").PopupImage | null;
 };
 export type Audit = {
   id: number;

@@ -158,3 +158,8 @@ FE main 50e2802에서 새 브랜치로 작업했다. BE #180의 탈퇴/삭제 �
 ## 메뉴 전환·이름 검색 개선 (#102)
 
 관리자 메뉴 이동의 권한 재확인은 유지하되 동일 세션의 승인된 화면을 조회 대기 중에도 표시한다. 매번 전체 확인 화면으로 바뀌는 현상을 줄였다. 401/403·계정 전환 차단은 유지하며 평가번호 검색은 이름(닉네임) 검색으로 정리했다. [동작·보안·검증](admin-navigation-and-member-search.md).
+
+
+## Popup image attachments
+
+Popup edit supports image upload/replacement/detach after saving the popup. The home announcement now displays the image while preserving the premium trial offer and text-only notices. [Contract, UI behavior and deployment](popup-images.md).

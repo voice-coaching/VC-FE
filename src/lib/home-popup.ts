@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createHttpClient } from "./api/client";
+import { popupImageSchema, type PopupImage } from "./popup-image";
 
 const activePopupSchema = z
   .object({
@@ -13,6 +14,7 @@ const activePopupSchema = z
     deepLink: z.enum(["/home", "/notifications", "/mypage"]).nullable(),
     startsAt: z.string().datetime({ offset: true }),
     endsAt: z.string().datetime({ offset: true }),
+    image: popupImageSchema.nullable().optional(),
   })
   .refine((value) => Date.parse(value.endsAt) > Date.parse(value.startsAt));
 
@@ -20,6 +22,7 @@ export type ActiveHomePopup = {
   id: number;
   title: string;
   body: string;
+  image?: PopupImage | null;
   href: "/home" | "/home/notifications" | "/mypage" | null;
 };
 const { request } = createHttpClient("/api/backend");
@@ -40,6 +43,7 @@ export async function loadActiveHomePopup(
         id: popup.id,
         title: popup.title,
         body: popup.body,
+        image: popup.image ?? null,
         href:
           popup.deepLink === "/notifications"
             ? "/home/notifications"
