@@ -1,5 +1,7 @@
 "use client";
 
+import { notificationHref } from "@/lib/notification-link";
+
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Image from "next/image";
 import Link from "next/link";
@@ -86,6 +88,7 @@ export function NotificationList({
             {group.label}
           </h2>
           {group.items.map((item) => {
+            const href = notificationHref(item.href);
             const content = (
               <span className="flex min-w-0 flex-col gap-1.5 break-words">
                 <span
@@ -102,9 +105,9 @@ export function NotificationList({
               </span>
             );
 
-            return item.href ? (
+            return href ? (
               <Link
-                href={item.href}
+                href={href}
                 key={item.id}
                 onClick={() => onRead?.(item.id)}
                 className={`block px-5 py-3.5 ${item.read ? "bg-white" : "bg-[#f8f6ff]"}`}
@@ -171,7 +174,7 @@ export default function HomeNotifications() {
           title: item.title,
           body: item.body,
           createdAt: item.createdAt,
-          href: item.deepLink?.startsWith("/") ? item.deepLink : undefined,
+          href: notificationHref(item.deepLink),
           read: item.readAt !== null,
         }));
         setNotifications(items);

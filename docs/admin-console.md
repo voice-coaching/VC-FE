@@ -167,3 +167,7 @@ Popup edit supports image upload/replacement/detach after saving the popup. The 
 ## Administrator access hardening
 
 USER claims reject entry early, while ADMIN claims still need server approval. Denied admission no longer repeats after cache removal or focus/navigation changes. Role/account changes during token rotation purge old administrator state. [Details](admin-access-boundary.md).
+
+## 알림 링크·발송 대상 선택
+
+선택 회원 발송은 활성 회원 체크박스 목록과 페이지별 선택·검색·선택 해제를 제공한다. 기존 `/notifications` 링크는 사용자 알림함에서 실제 경로로 변환한다. [동작과 검증](notification-links-and-recipients.md).

@@ -1198,7 +1198,12 @@ try {
       await page
         .getByLabel("발송 대상", { exact: true })
         .selectOption("SELECTED_USERS");
-      await page.getByLabel("회원 번호", { exact: true }).fill("30,31");
+      await page
+        .getByRole("checkbox", { name: "연습 회원 #30", exact: true })
+        .check();
+      await page
+        .getByRole("checkbox", { name: "발음 연습생 #31", exact: true })
+        .check();
       await page
         .getByLabel("알림 제목", { exact: true })
         .fill("UI 검증용 요금제 안내");
@@ -1417,7 +1422,14 @@ try {
       await page
         .getByLabel("발송 대상", { exact: true })
         .selectOption("SELECTED_USERS");
-      await page.getByLabel("회원 번호", { exact: true }).fill("31");
+      const clearRecipients = page.getByRole("button", {
+        name: "선택 비우기",
+        exact: true,
+      });
+      if (await clearRecipients.isEnabled()) await clearRecipients.click();
+      await page
+        .getByRole("checkbox", { name: "발음 연습생 #31", exact: true })
+        .check();
       await page
         .getByLabel("작업 사유", { exact: true })
         .fill("내용과 대상 정정");

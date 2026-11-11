@@ -97,3 +97,5 @@ UI → hook → HTTP/storage adapter 방향으로 연결한다. 연속 녹음은
 - `src/lib/history-visibility.ts`: 완료 목록의 분류 조회 중복 제거, 표시 정책 및 직접 분석 피드백 표시 판단.
 - `scripts/history-visibility.test.ts`, `scripts/verify-history-visibility.mjs`: 분류 실패·재시도, 두 피드백 형식, 목록 진입 요청 수 및 상세 지연 조회 회귀 검증.
 - `docs/history-visibility.md`: 학습 기록 표시와 요청 범위.
+
+알림 UI: `src/lib/notification-link.ts`는 저장된 알림 경로를 실제 페이지로 변환하며, `src/features/admin/recipient-selection.ts`와 `components/campaign-recipient-picker.tsx`는 발송 대상 선택 정책과 활성 회원 체크박스 UI를 담당한다. 상세는 [알림 링크·회원 선택](../notification-links-and-recipients.md)을 따른다.
