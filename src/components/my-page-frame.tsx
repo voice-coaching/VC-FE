@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useLayoutEffect, useRef, useState } from "react";
 import { NicknameEditor } from "@/components/nickname-editor";
 import { MembershipCard } from "@/components/membership-card";
+import { SkeletonBlock } from "@/components/skeleton-block";
 import type { Statistics, UserAccount, UserTitleProgress } from "@/lib/api";
 import { USER_TITLE_LEVELS } from "@/lib/user-title";
 import styles from "./my-page-layout.module.css";
@@ -101,16 +103,16 @@ export function MyProfileBand({
           </span>
         </div>
         <div className="flex max-w-full flex-col items-center gap-1.5 pt-1">
-          <span className={styles.titleBadge} data-level={level}>
-            <b>Lv.{level}</b>
-            <span>
-              {titleProgress
-                ? titleLabels[level - 1]
-                : loading
-                  ? "불러오는 중"
-                  : "칭호 확인 필요"}
+          {!titleProgress && loading ? (
+            <SkeletonBlock className="h-6 w-[88px] bg-white/60" />
+          ) : (
+            <span className={styles.titleBadge} data-level={level}>
+              <b>Lv.{level}</b>
+              <span>
+                {titleProgress ? titleLabels[level - 1] : "칭호 확인 필요"}
+              </span>
             </span>
-          </span>
+          )}
           <NicknameEditor
             account={account}
             fallbackName={fallbackName}
@@ -240,29 +242,120 @@ export function MyPageHead({
             </button>
           </section>
         </div>
+      ) : !titleProgress && loading ? (
+        <PromotionSkeleton />
       ) : !titleProgress ? (
         <div className={styles.promotionWrap}>
           <p
             className={`${styles.promotion} justify-center text-sm text-[#6b7684]`}
           >
-            {loading ? "칭호를 불러오는 중…" : "칭호 정보를 확인하지 못했어요"}
+            칭호 정보를 확인하지 못했어요
           </p>
         </div>
       ) : null}
-      <nav aria-label="마이페이지 메뉴" className={styles.tabs}>
-        {[
-          ["summary", "/mypage", "요약"],
-          ["plan", "/mypage/plan", "계획"],
-        ].map(([key, href, label]) => (
-          <Link
-            key={key}
-            href={href}
-            aria-current={active === key ? "page" : undefined}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <MyPageTabs active={active} />
     </>
+  );
+}
+
+function PromotionSkeleton() {
+  return (
+    <div
+      className={styles.promotionWrap}
+      role="status"
+      aria-label="칭호를 불러오는 중"
+    >
+      <div className={styles.promotion}>
+        <div className="min-w-0 flex-1">
+          <SkeletonBlock className="h-4 w-32" />
+          <SkeletonBlock className="mt-2 h-3 w-44" />
+        </div>
+        <SkeletonBlock className="h-10 w-[92px] shrink-0" />
+      </div>
+    </div>
+  );
+}
+
+/** Profile band placeholder for route fallbacks (no nickname editor/hooks). */
+export function MyProfileBandSkeleton() {
+  return (
+    <div className={styles.profileBand} aria-hidden="true">
+      <header className="grid h-10 grid-cols-[24px_1fr_24px] items-center px-5">
+        <span />
+        <h1 className="text-center text-[17px] leading-6 font-bold">마이</h1>
+        <span />
+      </header>
+      <section className={styles.profile}>
+        <SkeletonBlock className="size-[104px] bg-white/60" />
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          <SkeletonBlock className="h-6 w-[88px] bg-white/60" />
+          <SkeletonBlock className="h-7 w-24 bg-white/60" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const MY_TABS = [
+  ["summary", "/mypage", "요약"],
+  ["plan", "/mypage/plan", "계획"],
+] as const;
+// Survives the route change between tabs, so the underline can start from
+// where it was instead of appearing under the new tab.
+let lastTab: string | null = null;
+
+/** Summary / plan tabs with an underline that slides between them. */
+function MyPageTabs({ active }: { active: string }) {
+  const nav = useRef<HTMLElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+  const [animate, setAnimate] = useState(false);
+  useLayoutEffect(() => {
+    const element = nav.current;
+    if (!element) return;
+    const measure = (key: string) => {
+      const link = element.querySelector<HTMLElement>(`[data-tab="${key}"]`);
+      return link ? { left: link.offsetLeft, width: link.offsetWidth } : null;
+    };
+    const target = measure(active);
+    const from = lastTab && lastTab !== active ? measure(lastTab) : null;
+    lastTab = active;
+    if (
+      from &&
+      target &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setAnimate(false);
+      setBar(from);
+      const frame = requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setAnimate(true);
+          setBar(target);
+        }),
+      );
+      return () => cancelAnimationFrame(frame);
+    }
+    setBar(target);
+  }, [active]);
+  return (
+    <nav ref={nav} aria-label="마이페이지 메뉴" className={styles.tabs}>
+      {MY_TABS.map(([key, href, label]) => (
+        <Link
+          key={key}
+          href={href}
+          data-tab={key}
+          aria-current={active === key ? "page" : undefined}
+        >
+          {label}
+        </Link>
+      ))}
+      {bar && (
+        <span
+          aria-hidden="true"
+          className={styles.tabBar}
+          data-animate={animate}
+          style={{ transform: `translateX(${bar.left}px)`, width: bar.width }}
+        />
+      )}
+    </nav>
   );
 }

@@ -100,20 +100,19 @@ export function NewsReviewPreview({
             return (
               <li
                 key={index}
-                className={`flex items-center gap-2 rounded-[12px] py-3 pr-2 pl-3 ${selected ? "bg-[linear-gradient(90deg,#eee9ff,#edf2ff)]" : ""}`}
+                className="review-row"
+                data-active={selected}
+                data-upcoming={playing && index > active}
               >
-                {selected && (
-                  <span className="w-[3px] shrink-0 self-stretch rounded-[2px] bg-[linear-gradient(180deg,#7347f2,#5b7bfa)]" />
-                )}
-                <p
-                  className={`min-w-0 flex-1 text-[15px] leading-[22px] [overflow-wrap:anywhere] ${selected ? "font-bold text-[#191f28]" : playing && index > active ? "font-medium text-[#8b95a1]" : "font-medium text-[#333d4b]"}`}
-                >
+                {/* Always mounted: the bar and tint hand over instead of popping. */}
+                <span className="review-row-bar" aria-hidden="true" />
+                <p className="review-row-text min-w-0 flex-1 text-[15px] leading-[22px] [overflow-wrap:anywhere]">
                   {sentence}
                 </p>
                 <button
                   type="button"
                   aria-label={`${index + 1}문장 ${selected ? "일시정지" : "듣기"}`}
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-full ${selected ? "bg-[#6346f6] text-white" : "bg-[#ece8ff]"}`}
+                  className="review-row-play flex size-8 shrink-0 items-center justify-center rounded-full"
                   onClick={() => {
                     if (selected) setPlaying(false);
                     else {

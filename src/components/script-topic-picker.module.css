@@ -21,7 +21,6 @@
   inset: 0;
   z-index: 60;
   background: rgb(0 0 0 / 40%);
-  animation: fade 180ms ease-out;
 }
 .sheet,
 .modal {
@@ -41,7 +40,6 @@
   flex-direction: column;
   border-radius: 24px 24px 0 0;
   padding: 12px 16px max(34px, env(safe-area-inset-bottom));
-  animation: fade 180ms ease-out;
 }
 .handle {
   width: 36px;

@@ -658,9 +658,9 @@ function EditBottomSheet({
         style={
           dragY > 0 ? { opacity: Math.max(0, 1 - dragY / 320) } : undefined
         }
-        className="absolute inset-0 bg-[rgba(25,31,40,0.45)] onboarding-scrim-enter"
+        className="app-scrim absolute inset-0 bg-[rgba(25,31,40,0.45)]"
       />
-      <div className="absolute bottom-0 left-0 w-full onboarding-sheet-enter">
+      <div className="app-sheet absolute bottom-0 left-0 w-full">
         <div
           className="flex max-h-[90dvh] w-full flex-col items-center overflow-x-hidden overflow-y-auto overscroll-contain rounded-t-3xl bg-white px-6 pb-[env(safe-area-inset-bottom,0px)] shadow-[0_-12px_36px_rgba(25,31,40,0.08)]"
           style={{

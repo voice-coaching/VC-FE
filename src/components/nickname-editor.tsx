@@ -17,6 +17,9 @@ import { updateMyPageOverviewCache } from "@/lib/my-page-cache";
 import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { navigationEntryId } from "@/lib/navigation-history";
 
+/** Longest nickname the editor accepts. */
+const NICKNAME_MAX = 20;
+
 export function NicknameEditor({
   account,
   fallbackName,
@@ -41,10 +44,11 @@ export function NicknameEditor({
   const displayName = savedName ?? account?.nickname ?? fallbackName;
   const draft = editedDraft ?? displayName ?? "";
   const nickname = draft.trim();
+  const tooLong = draft.length > NICKNAME_MAX;
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy.current || !nickname || nickname.length > 10) return;
+    if (busy.current || !nickname || nickname.length > NICKNAME_MAX) return;
     busy.current = true;
     setSaving(true);
     setError(null);
@@ -154,7 +158,7 @@ export function NicknameEditor({
         <DialogHeader>
           <DialogTitle>닉네임 변경</DialogTitle>
           <DialogDescription>
-            사용할 닉네임을 10자 이내로 입력해 주세요.
+            사용할 닉네임을 {NICKNAME_MAX}자 이내로 입력해 주세요.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -170,17 +174,28 @@ export function NicknameEditor({
               id={inputId}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              maxLength={10}
               disabled={saving}
               autoComplete="nickname"
+              aria-invalid={tooLong}
               aria-describedby={`${inputId}-count`}
-              className="mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#191f28] outline-none focus:ring-2 focus:ring-primary"
+              className={`mt-2 h-14 w-full rounded-xl bg-[#f7f8fa] px-4 text-[#191f28] outline-none ${tooLong ? "ring-2 ring-[#f04452]" : "focus:ring-2 focus:ring-primary"}`}
             />
+            {/* Over the limit: red outline and message, and saving stays off. */}
             <p
               id={`${inputId}-count`}
-              className="mt-2 text-right text-xs text-[#8b95a1]"
+              className="mt-2 flex justify-between gap-2 text-xs"
             >
-              {draft.length}/10
+              <span
+                role={tooLong ? "alert" : undefined}
+                className="text-[#f04452]"
+              >
+                {tooLong ? `${NICKNAME_MAX}자까지 입력할 수 있어요` : ""}
+              </span>
+              <span
+                className={`shrink-0 tabular-nums ${tooLong ? "font-semibold text-[#f04452]" : "text-[#8b95a1]"}`}
+              >
+                {draft.length}/{NICKNAME_MAX}
+              </span>
             </p>
           </div>
           {error && (
@@ -202,7 +217,7 @@ export function NicknameEditor({
               disabled={
                 saving ||
                 !nickname ||
-                nickname.length > 10 ||
+                nickname.length > NICKNAME_MAX ||
                 nickname === displayName
               }
               className="min-h-12 rounded-full bg-primary font-semibold text-white disabled:opacity-50"

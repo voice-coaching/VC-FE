@@ -26,6 +26,7 @@ import { NewsRecordingControls, NewsRecordingReader } from "./news-recording";
 import { ReferencePlayer } from "@/components/reference-player";
 import { AnalysisView } from "@/components/analysis-view";
 import { PracticeAnalysisLoading } from "./practice-analysis-loading";
+import { useAnalysisFinish } from "@/hooks/use-analysis-finish";
 import { courseResultProgress } from "@/lib/course-result-progress";
 import { classPracticeHref } from "@/lib/class-practice";
 import { safeInternalPath } from "@/lib/navigation";
@@ -180,6 +181,10 @@ export function RecordingPracticeSession({
   const resumePendingRef = useRef(needsSessionRestore);
   const [sessionId, setSessionId] = useState<Id | null>(resumedSessionId);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const analysisFinishing = useAnalysisFinish(
+    phase === "uploading" || phase === "analyzing",
+    phase === "result" && analysis != null,
+  );
   const [segments, setSegments] = useState<AnalysisSegment[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -1568,8 +1573,11 @@ export function RecordingPracticeSession({
       .toString()
       .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
   };
-  const stepProgress =
-    phase === "uploading"
+  // Hold the finished check briefly before the report replaces the loader.
+  const finishingAnalysis = analysisFinishing;
+  const stepProgress = finishingAnalysis
+    ? 100
+    : phase === "uploading"
       ? Math.min(32, Math.round(uploadProgress / 3))
       : Math.max(34, analysisProgress);
 
@@ -1597,7 +1605,7 @@ export function RecordingPracticeSession({
         />
       )}
 
-      {phase !== "result" ? (
+      {phase !== "result" || finishingAnalysis ? (
         <div className="flex min-h-0 flex-1 flex-col">
           {(phase === "idle" || phase === "recording") && (
             <RecordingControls
@@ -1717,9 +1725,11 @@ export function RecordingPracticeSession({
             </>
           )}
 
-          {(phase === "uploading" || phase === "analyzing") && (
+          {(phase === "uploading" ||
+            phase === "analyzing" ||
+            finishingAnalysis) && (
             <PracticeAnalysisLoading
-              uploading={phase === "uploading"}
+              uploading={phase === "uploading" && !finishingAnalysis}
               connectionRecovering={connectionRecovering}
               stepProgress={stepProgress}
             />
@@ -1783,6 +1793,7 @@ export function RecordingPracticeSession({
             segments={segments}
             content={displayedContent}
             recordingUrl={recorder.previewUrl ?? resultAudioUrl}
+            sessionId={sessionId}
           />
           {requestError && (
             <p

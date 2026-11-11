@@ -12,32 +12,32 @@
 </g>
 <defs>
 <linearGradient id="paint0_linear_0_31" x1="7.51355" y1="32.7499" x2="7.51355" y2="35" gradientUnits="userSpaceOnUse">
-<stop stop-color="#5A82FF"/>
-<stop offset="1" stop-color="#2F6BFF"/>
+<stop stop-color="#8F80FF"/>
+<stop offset="1" stop-color="#6346F6"/>
 </linearGradient>
 <linearGradient id="paint1_linear_0_31" x1="7.50445" y1="16.6969" x2="7.50445" y2="27.141" gradientUnits="userSpaceOnUse">
-<stop stop-color="#86A0FF"/>
-<stop offset="1" stop-color="#3D63F2"/>
+<stop stop-color="#A99BFF"/>
+<stop offset="1" stop-color="#5B4CF9"/>
 </linearGradient>
 <linearGradient id="paint2_linear_0_31" x1="7.50622" y1="27.6631" x2="7.50622" y2="32.8138" gradientUnits="userSpaceOnUse">
-<stop stop-color="#86A0FF"/>
-<stop offset="1" stop-color="#3D63F2"/>
+<stop stop-color="#A99BFF"/>
+<stop offset="1" stop-color="#5B4CF9"/>
 </linearGradient>
 <linearGradient id="paint3_linear_0_31" x1="7.49867" y1="0" x2="7.49867" y2="17.2214" gradientUnits="userSpaceOnUse">
-<stop stop-color="#EEF1FF"/>
-<stop offset="1" stop-color="#B7C6FF"/>
+<stop stop-color="#F3F0FF"/>
+<stop offset="1" stop-color="#C5C0FD"/>
 </linearGradient>
 <linearGradient id="paint4_linear_0_31" x1="7.50289" y1="8.83815" x2="7.50289" y2="10.5404" gradientUnits="userSpaceOnUse">
-<stop stop-color="#5A82FF"/>
-<stop offset="1" stop-color="#2F6BFF"/>
+<stop stop-color="#8F80FF"/>
+<stop offset="1" stop-color="#6346F6"/>
 </linearGradient>
 <linearGradient id="paint5_linear_0_31" x1="7.50131" y1="5.5915" x2="7.50131" y2="7.30783" gradientUnits="userSpaceOnUse">
-<stop stop-color="#5A82FF"/>
-<stop offset="1" stop-color="#2F6BFF"/>
+<stop stop-color="#8F80FF"/>
+<stop offset="1" stop-color="#6346F6"/>
 </linearGradient>
 <linearGradient id="paint6_linear_0_31" x1="7.49429" y1="12.0883" x2="7.49429" y2="13.7958" gradientUnits="userSpaceOnUse">
-<stop stop-color="#5A82FF"/>
-<stop offset="1" stop-color="#2F6BFF"/>
+<stop stop-color="#8F80FF"/>
+<stop offset="1" stop-color="#6346F6"/>
 </linearGradient>
 <clipPath id="clip0_0_31">
 <rect width="15" height="35" fill="white"/>

@@ -1,11 +1,13 @@
 "use client";
 
+import { CalendarCheck2, Flame, Trophy } from "lucide-react";
 import Image from "next/image";
 import * as Dialog from "@radix-ui/react-dialog";
 import styles from "./home-streak.module.css";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { api, type Statistics, type TrainingHistoryItem } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { cacheResources } from "@/lib/cache-resources";
@@ -350,31 +352,50 @@ export default function HomeStreak() {
                   />
                 </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-[22px] leading-[30px] font-bold tracking-[-0.44px] max-[360px]:text-[18px]">
-                  <span className="text-[#6346f6]">
-                    {allSessions ? currentRun.size : consecutiveDays}일
-                  </span>{" "}
-                  연속 연습 중
-                </p>
-                <p className="mt-0.5 text-sm leading-5 font-medium tracking-[-0.21px] text-[#4e5968] max-[360px]:text-xs">
-                  <strong className="text-[#6346f6]">오늘</strong>{" "}
-                  {practicedToday
-                    ? "연습을 완료했어요"
-                    : "연습이 아직 남았어요"}
-                </p>
-              </div>
+              {allSessions === null && !summaryError ? (
+                <div
+                  role="status"
+                  aria-label="연속 기록 불러오는 중"
+                  className="min-w-0 flex-1"
+                >
+                  <SkeletonBlock className="h-6 w-40 bg-white/80" />
+                  <SkeletonBlock className="mt-2.5 h-4 w-32 bg-white/80" />
+                </div>
+              ) : (
+                <div className="min-w-0">
+                  <p className="text-[22px] leading-[30px] font-bold tracking-[-0.44px] max-[360px]:text-[18px]">
+                    <span className="text-[#6346f6]">
+                      {allSessions ? currentRun.size : consecutiveDays}일
+                    </span>{" "}
+                    연속 연습 중
+                  </p>
+                  <p className="mt-0.5 text-sm leading-5 font-medium tracking-[-0.21px] text-[#4e5968] max-[360px]:text-xs">
+                    <strong className="font-semibold text-[#191f28]">
+                      오늘
+                    </strong>{" "}
+                    {practicedToday
+                      ? "연습을 완료했어요"
+                      : "연습이 아직 남았어요"}
+                  </p>
+                </div>
+              )}
             </div>
             <div className={styles.stats}>
               <SummaryStat
                 icon="best"
                 label="최고 기록"
-                value={allSessions ? `${bestRun}일` : "—"}
+                value={allSessions ? `${bestRun}일` : summaryError ? "—" : null}
               />
               <SummaryStat
                 icon="total"
                 label="총 연습"
-                value={allSessions ? `${historyDays.size}일` : "—"}
+                value={
+                  allSessions
+                    ? `${historyDays.size}일`
+                    : summaryError
+                      ? "—"
+                      : null
+                }
               />
               <SummaryStat
                 icon="month"
@@ -384,7 +405,7 @@ export default function HomeStreak() {
                     ? "이번 달"
                     : `${visibleMonth.getMonth() + 1}월`
                 }
-                value={loading || error ? "—" : `${monthCompletedDays}일`}
+                value={loading ? null : error ? "—" : `${monthCompletedDays}일`}
               />
             </div>
             {summaryError ? (
@@ -410,9 +431,13 @@ export default function HomeStreak() {
                   이번 주 목표
                 </h2>
                 <p className="mt-0.5 flex items-baseline gap-0.5">
-                  <strong className="text-[26px] leading-[34px] tracking-[-0.52px] text-[#6346f6]">
-                    {weeklyCompleted}
-                  </strong>
+                  {loading ? (
+                    <SkeletonBlock className="mr-1 h-6 w-5 self-center" />
+                  ) : (
+                    <strong className="text-[26px] leading-[34px] tracking-[-0.52px] text-[#6346f6]">
+                      {weeklyCompleted}
+                    </strong>
+                  )}
                   <span className="text-[15px] leading-[22px] font-medium text-[#8b95a1]">
                     {weeklyGoal ? `/ ${weeklyGoal}일` : "일 연습"}
                   </span>
@@ -572,14 +597,7 @@ export default function HomeStreak() {
                 오늘
               </span>
             </div>
-            {loading ? (
-              <p
-                role="status"
-                className="mt-3 text-center text-xs text-[#8b95a1]"
-              >
-                기록을 불러오는 중…
-              </p>
-            ) : error ? (
+            {error ? (
               <div
                 role="alert"
                 className="mt-3 text-center text-xs text-[#d91b34]"
@@ -599,9 +617,9 @@ export default function HomeStreak() {
 
       <Dialog.Root open={monthSheet} onOpenChange={setMonthSheet}>
         <Dialog.Portal>
-          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Overlay className={`app-scrim ${styles.overlay}`} />
           <Dialog.Content
-            className={`${styles.sheet} ${styles.monthSheet}`}
+            className={`app-sheet ${styles.sheet} ${styles.monthSheet}`}
             aria-describedby={undefined}
           >
             <span className={styles.grab} />
@@ -667,8 +685,8 @@ export default function HomeStreak() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className={styles.overlay} />
-          <Dialog.Content className={styles.sheet}>
+          <Dialog.Overlay className={`app-scrim ${styles.overlay}`} />
+          <Dialog.Content className={`app-sheet ${styles.sheet}`}>
             <span className={styles.grab} />
             <Dialog.Title className="mt-5 text-xl leading-7 font-bold tracking-[-0.3px]">
               일주일에 며칠 연습할까요?
@@ -747,31 +765,37 @@ function StreakIcon({
   );
 }
 
+const STAT_ICONS = { best: Trophy, total: CalendarCheck2, month: Flame };
+
 function SummaryStat({
   icon,
   label,
   value,
 }: {
-  icon: string;
+  icon: keyof typeof STAT_ICONS;
   label: string;
-  value: string;
+  /** null while loading: show a value-shaped placeholder, not a fake value. */
+  value: string | null;
 }) {
+  const Icon = STAT_ICONS[icon];
   return (
     <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-      <span className="flex items-center gap-1 text-xs leading-4 font-medium tracking-[-0.18px] text-[#4e5968]">
-        <span className="flex size-4 items-center justify-center">
-          <Image
-            src={`/figma/streak-phase4/${icon}.svg`}
-            alt=""
-            width={icon === "total" ? 16.2652 : icon === "month" ? 13.5243 : 16}
-            height={icon === "total" ? 16.0243 : 16}
-          />
-        </span>
+      <span className="flex items-center gap-1 text-xs leading-4 font-medium tracking-[-0.18px] text-[#6b7684]">
+        <Icon
+          size={14}
+          strokeWidth={2.25}
+          className="shrink-0 text-[#8b7cf8]"
+          aria-hidden="true"
+        />
         {label}
       </span>
-      <strong className="text-lg leading-[26px] tracking-[-0.27px]">
-        {value}
-      </strong>
+      {value === null ? (
+        <SkeletonBlock className="my-[5px] h-4 w-10 bg-[#f2f4f6]" />
+      ) : (
+        <strong className="text-lg leading-[26px] tracking-[-0.27px] text-[#191f28]">
+          {value}
+        </strong>
+      )}
     </div>
   );
 }

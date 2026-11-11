@@ -1,11 +1,20 @@
 import { categoryLabel } from "./content-labels";
 
+// The catalog's numbered practice prefix, e.g. "경제 뉴스 연습 4 - ".
+const PRACTICE_PREFIX =
+  /^\s*((?:[가-힣A-Za-z]+\s+)?뉴스\s*연습)\s*\d+\s*[-–—:：·]\s*/u;
+
 // Strip only the catalog's numbered practice prefix, never a genuine headline.
 export function newsHeadline(title: string) {
-  const cleaned = title
-    .replace(/^\s*(?:[가-힣A-Za-z]+\s+)?뉴스\s*연습\s*\d+\s*[-–—:：·]\s*/u, "")
-    .trim();
+  const cleaned = title.replace(PRACTICE_PREFIX, "").trim();
   return cleaned || title.trim();
+}
+
+/** The practice series without its number ("경제 뉴스 연습"), or null for real headlines. */
+export function newsSeries(title: string) {
+  const match = title.match(PRACTICE_PREFIX);
+  if (!match || newsHeadline(title) === title.trim()) return null;
+  return match[1].replace(/\s+/gu, " ").trim();
 }
 
 const topics: Array<[string, RegExp]> = [

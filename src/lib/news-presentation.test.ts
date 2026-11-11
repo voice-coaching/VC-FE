@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { newsHeadline, newsCategoryTags } from "./news-presentation";
+import {
+  newsCategoryTags,
+  newsHeadline,
+  newsSeries,
+} from "./news-presentation";
 
 test("removes numbered practice labels without altering genuine news headlines", () => {
   assert.equal(newsHeadline("경제 뉴스 연습 6 - 창업 상담"), "창업 상담");
@@ -31,4 +35,15 @@ test("classifies headline topics and preserves the server's filter category", ()
       category: expected[0],
       topic: expected[1],
     });
+});
+
+test("series label comes only from the numbered practice prefix", () => {
+  assert.equal(
+    newsSeries("경제 뉴스 연습 4 - 농산물 직거래"),
+    "경제 뉴스 연습",
+  );
+  assert.equal(newsSeries("사회 뉴스 연습 7 – 청년 봉사단"), "사회 뉴스 연습");
+  assert.equal(newsSeries("경제 성장률 6% - 전망과 과제"), null);
+  assert.equal(newsSeries("경제 뉴스 연습 6 - "), null);
+  assert.equal(newsSeries("받침 발음 기초"), null);
 });

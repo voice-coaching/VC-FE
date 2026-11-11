@@ -1,5 +1,6 @@
 "use client";
 
+import frameStyles from "@/components/my-page-layout.module.css";
 import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import Image from "next/image";
@@ -218,7 +219,7 @@ export default function MyPage() {
           onExam={() => void startTitleExam()}
           loading={loading}
         />
-        <div className="space-y-3 px-5 pt-4 pb-6">
+        <div className={`${frameStyles.tabPanel} space-y-3 px-5 pt-4 pb-6`}>
           {error ? (
             <div className="rounded-2xl bg-white p-4 text-[13px] leading-[18px] text-destructive">
               <p role="alert">{error}</p>
@@ -385,13 +386,13 @@ function ReportRow({
           items.map((item) => (
             <span
               key={item}
-              className={`rounded-full px-2 py-[3px] text-xs leading-4 font-medium ${tone === "strength" ? "bg-[#e6f7ee] text-[#0e7a47]" : tone === "weakness" ? "bg-[#ffedee] text-[#c9303d]" : "bg-[#eeeaff] text-primary"}`}
+              className={`rounded-[6px] px-2 py-[3px] text-xs leading-4 font-medium ${tone === "strength" ? "bg-[#e6f7ee] text-[#0e7a47]" : tone === "weakness" ? "bg-[#ffedee] text-[#c9303d]" : "bg-[#eeeaff] text-primary"}`}
             >
               {item}
             </span>
           ))
         ) : (
-          <span className="rounded-full bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 text-[#8b95a1]">
+          <span className="rounded-[6px] bg-[#f2f4f6] px-2.5 py-1 text-[12px] leading-4 text-[#8b95a1]">
             {pending
               ? "불러오는 중"
               : failed

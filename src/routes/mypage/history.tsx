@@ -8,9 +8,10 @@ import {
 import { DirectHistory } from "@/components/direct-history";
 
 import { SkeletonBlock } from "@/components/skeleton-block";
+import { NotebookPen } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import {
   api,
@@ -285,24 +286,11 @@ export default function LearningHistory() {
         className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
       >
         <div className="overflow-hidden px-5 pb-6">
-          <div className="-mx-5 flex gap-5 overflow-x-auto border-b border-[#f2f4f6] px-5 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.map((filter) => (
-              <button
-                key={filter.label}
-                type="button"
-                onClick={() => setKind(filter.value)}
-                aria-pressed={filterValue === filter.value}
-                className={cn(
-                  "shrink-0 border-b-2 pb-2.5 text-[15px] leading-[18px] tracking-[-0.225px] font-medium transition-colors",
-                  filterValue === filter.value
-                    ? "border-[#191f28] font-bold text-[#191f28]"
-                    : "border-transparent text-[#8b95a1]",
-                )}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+          <HistoryFilterTabs
+            filters={FILTERS}
+            active={filterValue}
+            onSelect={setKind}
+          />
 
           {error ? (
             <div className="mt-4 rounded-2xl bg-white p-4">
@@ -325,7 +313,10 @@ export default function LearningHistory() {
           {loadingList || originsPending ? (
             <HistoryListSkeleton />
           ) : error ? null : groups.length ? (
-            <div className="mt-5 space-y-7">
+            <div
+              key={String(filterValue)}
+              className="app-tab-panel mt-5 space-y-7"
+            >
               {groups.map((group) => (
                 <section key={group.label}>
                   <h2 className="mb-1 flex items-center gap-1 text-[14px] leading-[18px] font-bold text-[#191f28]">
@@ -393,9 +384,9 @@ export default function LearningHistory() {
               ) : null}
             </div>
           ) : (
-            <p className="py-12 text-center text-[13px] text-[#8b95a1]">
-              아직 저장된 학습 기록이 없어요.
-            </p>
+            <div key={String(filterValue)} className="app-tab-panel">
+              <HistoryEmpty filter={filterValue} />
+            </div>
           )}
           {items.some((item) => origins[String(item.contentId)] === "error") ? (
             <p role="alert" className="mt-3 text-xs text-[#6b7684]">
@@ -428,27 +419,157 @@ export default function LearningHistory() {
   );
 }
 
-function HistoryListSkeleton() {
+// Mirrors a date group: heading, then divided rows of title / type + date / score.
+export function HistoryListSkeleton() {
   return (
-    <div role="status" aria-busy="true" className="mt-3">
+    <div role="status" aria-busy="true" className="mt-5">
       <span className="sr-only">기록을 불러오는 중</span>
-      <div className="px-1 pt-2 pb-2">
-        <SkeletonBlock className="h-3 w-14 bg-[#e5e8eb]" />
-      </div>
-      <div className="space-y-2.5">
-        {[0, 1, 2, 3].map((index) => (
+      <SkeletonBlock className="mb-1 h-[18px] w-16" />
+      <div className="divide-y divide-[#f2f4f6]">
+        {[0, 1, 2, 3, 4].map((index) => (
           <div
             key={index}
-            className="flex min-h-[68px] flex-col justify-center rounded-2xl bg-white py-3.5 pr-3.5 pl-4"
+            className="flex min-h-[86px] items-center gap-3 py-[18px]"
           >
-            <div className="flex items-center gap-1.5">
-              <SkeletonBlock className="h-[18px] w-9" />
-              <SkeletonBlock className="h-4 w-2/5" />
+            <div className="min-w-0 flex-1">
+              <SkeletonBlock
+                className={`h-[18px] ${index % 2 ? "w-1/2" : "w-3/5"}`}
+              />
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <SkeletonBlock className="h-5 w-10 rounded-[6px]" />
+                <SkeletonBlock className="h-3 w-12" />
+              </div>
             </div>
-            <SkeletonBlock className="mt-2 h-3 w-14" />
+            <SkeletonBlock className="h-5 w-10" />
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const EMPTY_COPY: Record<
+  string,
+  { title: string; body: string; href: string; cta: string }
+> = {
+  ALL: {
+    title: "아직 연습 기록이 없어요",
+    body: "첫 연습을 마치면 점수와 피드백이 여기에 쌓여요",
+    href: "/home",
+    cta: "첫 연습 시작하기",
+  },
+  NEWS: {
+    title: "아직 뉴스 연습 기록이 없어요",
+    body: "오늘의 뉴스를 소리 내어 읽어 보세요",
+    href: "/news",
+    cta: "뉴스 연습하러 가기",
+  },
+  SENTENCE: {
+    title: "아직 문장 연습 기록이 없어요",
+    body: "짧은 문장부터 가볍게 시작해 보세요",
+    href: "/sentences",
+    cta: "문장 연습하러 가기",
+  },
+  ANNOUNCER: {
+    title: "아직 아나운서 연습 기록이 없어요",
+    body: "아나운서 멘트를 따라 읽어 보세요",
+    href: "/announcer",
+    cta: "따라 읽으러 가기",
+  },
+  CUSTOM: {
+    title: "아직 내 문장 연습 기록이 없어요",
+    body: "직접 쓴 문장으로 연습해 보세요",
+    href: "/my-script",
+    cta: "내 문장 만들러 가기",
+  },
+  CLASS_PRACTICE: {
+    title: "아직 클래스 연습 기록이 없어요",
+    body: "발음과 억양 클래스를 하나씩 들어 보세요",
+    href: "/class",
+    cta: "클래스 보러 가기",
+  },
+};
+
+/** Empty history: an icon, a line about what will appear, and a way to start. */
+function HistoryEmpty({ filter }: { filter?: string }) {
+  const copy = EMPTY_COPY[filter ?? "ALL"] ?? EMPTY_COPY.ALL;
+  return (
+    <div className="flex flex-col items-center px-6 pt-20 pb-12 text-center">
+      {/* Quiet on purpose: the copy and button carry the message. */}
+      <NotebookPen
+        size={44}
+        strokeWidth={1.6}
+        className="text-[#c9ced4]"
+        aria-hidden="true"
+      />
+      <h2 className="mt-4 text-[17px] leading-6 font-bold text-[#191f28]">
+        {copy.title}
+      </h2>
+      <p className="mt-1.5 text-[14px] leading-5 break-keep text-[#8b95a1]">
+        {copy.body}
+      </p>
+      <Link
+        href={copy.href}
+        className="mt-6 inline-flex h-11 items-center rounded-full bg-[#f1edff] px-5 text-[14px] font-bold text-[#6346f6]"
+      >
+        {copy.cta}
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * Filter tabs with one underline that glides between items: the same motion
+ * as the class and My page tabs (360ms, ease-out), so every tab bar matches.
+ */
+function HistoryFilterTabs<T>({
+  filters,
+  active,
+  onSelect,
+}: {
+  filters: Array<{ value?: T; label: string }>;
+  active?: T;
+  onSelect: (value?: T) => void;
+}) {
+  const strip = useRef<HTMLDivElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+  const activeIndex = Math.max(
+    0,
+    filters.findIndex((filter) => filter.value === active),
+  );
+  useLayoutEffect(() => {
+    const button = strip.current?.querySelector<HTMLElement>(
+      `[data-index="${activeIndex}"]`,
+    );
+    if (button) setBar({ left: button.offsetLeft, width: button.offsetWidth });
+  }, [activeIndex]);
+  return (
+    <div
+      ref={strip}
+      className="relative -mx-5 flex gap-5 overflow-x-auto border-b border-[#f2f4f6] px-5 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {filters.map((filter, index) => (
+        <button
+          key={filter.label}
+          type="button"
+          data-index={index}
+          onClick={() => onSelect(filter.value)}
+          aria-pressed={index === activeIndex}
+          className={cn(
+            "shrink-0 pb-2.5 text-[15px] leading-[18px] font-bold tracking-[-0.225px] transition-colors duration-[260ms] motion-reduce:transition-none",
+            index === activeIndex ? "text-[#191f28]" : "text-[#8b95a1]",
+          )}
+        >
+          {filter.label}
+        </button>
+      ))}
+      {bar && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 h-0.5 bg-[#191f28] transition-[transform,width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+          style={{ transform: `translateX(${bar.left}px)`, width: bar.width }}
+        />
+      )}
     </div>
   );
 }

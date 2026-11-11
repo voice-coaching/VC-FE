@@ -22,6 +22,7 @@ import {
 import { loadTitleExamResume } from "@/lib/title-exam-resume";
 import { invalidateLearningCaches } from "@/lib/learning-cache";
 import { LoadingOverlay } from "./loading-overlay";
+import { TitleExamIntro } from "./title-exam-intro";
 
 /** Owns the exam lifecycle and grading; recording and analysis stay shared. */
 export function TitleExamSession({
@@ -43,6 +44,8 @@ export function TitleExamSession({
   const epoch = useRef(getAuthSessionVersion());
   const newExamKey = useRef<string | null>(null);
   const [resumeApproved, setResumeApproved] = useState(false);
+  // Fresh attempts see the exam explained first; resumes skip straight in.
+  const [introSeen, setIntroSeen] = useState(false);
   const requireChoice = useCallback(() => {
     setReady(false);
     setChecking((value) => value + 1);
@@ -141,6 +144,15 @@ export function TitleExamSession({
     }
   }
 
+  if (ready && entry && !entry.needsChoice && !introSeen)
+    return (
+      <TitleExamIntro
+        exam={entry.exam}
+        content={content}
+        onStart={() => setIntroSeen(true)}
+        onLater={() => router.push("/mypage")}
+      />
+    );
   if (ready && entry)
     return (
       <ActiveTitleExamSession
@@ -326,33 +338,7 @@ function ActiveTitleExamSession({
                 학습 저장을 완료했습니다. 승급 시험을 채점하고 있어요.
               </p>
             )}
-            {result && (
-              <section
-                className={`design-card border ${result.status === "PASSED" ? "border-[#84dfb7] bg-[#effcf6]" : "border-[#ffc4b8] bg-[#fff5f2]"}`}
-                aria-label="승급 시험 결과"
-              >
-                <p className="text-xs font-semibold text-[#6b7684]">
-                  승급 시험 {result.score}점 · 합격 기준 {result.passingScore}점
-                </p>
-                <h2 className="mt-2 text-xl font-bold">
-                  {result.status === "PASSED"
-                    ? `${result.currentTitle} 칭호로 승급했어요!`
-                    : "아쉽게도 이번에는 불합격이에요"}
-                </h2>
-                <p className="mt-2 text-sm text-[#6b7684]">
-                  {result.status === "PASSED"
-                    ? "새 칭호는 마이페이지에 바로 반영됩니다."
-                    : "마이페이지에서 다음 응시 가능 여부를 확인해 주세요."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => router.push("/mypage")}
-                  className="mt-4 min-h-11 w-full rounded-full bg-primary text-sm font-semibold text-white"
-                >
-                  마이페이지에서 칭호 확인
-                </button>
-              </section>
-            )}
+            {result && <TitleExamResultCard result={result} />}
             {error && (
               <div
                 role="alert"
@@ -405,4 +391,81 @@ function renderTitleExamErrorDetails(reason: unknown) {
       </pre>
     </section>
   );
+}
+
+/** Pass or fail at a glance: score against the passing line, then the title. */
+export function TitleExamResultCard({
+  result,
+}: {
+  result: UserTitleExamResult;
+}) {
+  const router = useRouter();
+  const passed = result.status === "PASSED";
+  const gap = Math.max(
+    0,
+    Math.ceil((result.passingScore - result.score) * 10) / 10,
+  );
+  const clamp = (value: number) => Math.min(100, Math.max(0, value));
+  return (
+    <section
+      className="title-exam-result"
+      data-passed={passed}
+      aria-label="승급 시험 결과"
+    >
+      <p className="text-xs leading-4 font-bold text-[#6346f6]">
+        {passed ? "승급 성공" : "이번에는 아쉬워요"}
+      </p>
+      <h2 className="mt-2 text-[22px] leading-[30px] font-bold tracking-[-0.02em] break-keep text-[#191f28]">
+        {passed
+          ? `${result.currentTitle} 칭호를 얻었어요!`
+          : `합격까지 ${gap}점 남았어요`}
+      </h2>
+      <div className="mt-5" aria-hidden="true">
+        <div className="title-exam-track">
+          <span
+            className="title-exam-fill"
+            style={{ width: `${clamp(result.score)}%` }}
+          />
+          <span
+            className="title-exam-pass"
+            style={{ left: `${clamp(result.passingScore)}%` }}
+          />
+        </div>
+      </div>
+      <dl className="mt-3 flex justify-between text-[13px] tabular-nums">
+        <div>
+          <dt className="text-[#8b95a1]">내 점수</dt>
+          <dd className="mt-0.5 text-[20px] leading-7 font-bold text-[#191f28]">
+            {result.score}점
+          </dd>
+        </div>
+        <div className="text-right">
+          <dt className="text-[#8b95a1]">합격 기준</dt>
+          <dd className="mt-0.5 text-[20px] leading-7 font-bold text-[#6346f6]">
+            {result.passingScore}점
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-4 text-[13px] leading-5 break-keep text-[#6b7684]">
+        {passed
+          ? `${result.previousTitle}에서 ${result.currentTitle}${directionParticle(result.currentTitle)} 올랐어요. 마이페이지에 바로 반영돼요.`
+          : "아래 피드백으로 약한 부분을 연습한 뒤 마이페이지에서 다시 도전해 보세요."}
+      </p>
+      <button
+        type="button"
+        onClick={() => router.push("/mypage")}
+        className="mt-4 min-h-12 w-full rounded-full bg-[#6346f6] text-[15px] font-bold text-white"
+      >
+        {passed ? "새 칭호 확인하기" : "마이페이지로 가기"}
+      </button>
+    </section>
+  );
+}
+
+/** 로/으로: 으로 after a final consonant other than ㄹ. */
+function directionParticle(word: string) {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  const final = code % 28;
+  return final === 0 || final === 8 ? "로" : "으로";
 }

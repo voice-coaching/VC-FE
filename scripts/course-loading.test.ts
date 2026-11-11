@@ -33,7 +33,7 @@ const examples = {
 test("class introduction is available synchronously before any backend response", () => {
   assert.equal(
     courseIntroduction(course),
-    "문장 끝 억양과 기본 높낮이를 익히는 초급 클래스입니다.",
+    "문장 끝 억양과 기본 높낮이를 익혀요.",
   );
   assert.match(
     courseIntroduction({

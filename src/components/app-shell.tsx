@@ -2,7 +2,9 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   type CSSProperties,
   type ReactNode,
   type Ref,
@@ -30,6 +32,11 @@ const tabFlowPrefixes = [
 ];
 
 // These views share the same profile header and should switch without sliding it.
+/** Section shown last under the bottom nav; survives page remounts. */
+let lastNavSection: string | null = null;
+const navSection = (path: string) =>
+  path.startsWith("/mypage/history") ? "/history" : `/${path.split("/")[1]}`;
+
 const staticMyPageTabs = new Set([
   "/mypage",
   "/mypage/history",
@@ -70,7 +77,31 @@ export function AppShell({
     tabFlowPrefixes.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
-  const animateContent = animateTabFlow && !staticMyPageTabs.has(pathname);
+  // Bottom-nav screens all share one switch effect (below), so the per-route
+  // slide never runs there; every tab change looks identical.
+  const animateContent =
+    animateTabFlow && !nav && !staticMyPageTabs.has(pathname);
+  const shellMain = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!nav) return;
+    const section = navSection(pathname);
+    const changed = lastNavSection !== null && lastNavSection !== section;
+    lastNavSection = section;
+    const element = shellMain.current;
+    if (
+      !changed ||
+      !element ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    element.animate(
+      [
+        { opacity: 0, transform: "translate3d(0, 8px, 0)" },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 280, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }, [nav, pathname]);
   const transitionDirection = useMemo(() => {
     void pathname;
     return getTabTransitionDirection();
@@ -99,7 +130,12 @@ export function AppShell({
       )}
     >
       <main
-        ref={mainRef}
+        ref={(element) => {
+          shellMain.current = element;
+          if (typeof mainRef === "function") mainRef(element);
+          else if (mainRef)
+            (mainRef as { current: HTMLElement | null }).current = element;
+        }}
         key={animateTabFlow ? pathname : undefined}
         onClickCapture={
           animateTabFlow ? () => setTabTransitionDirection("right") : undefined

@@ -340,8 +340,11 @@ export function LipQuickStart({
       )}
       <Dialog.Root open={settings} onOpenChange={setSettings}>
         <Dialog.Portal>
-          <Dialog.Overlay className={styles.overlay} />
-          <Dialog.Content className={styles.sheet} aria-describedby={undefined}>
+          <Dialog.Overlay className={`app-scrim ${styles.overlay}`} />
+          <Dialog.Content
+            className={`app-sheet ${styles.sheet}`}
+            aria-describedby={undefined}
+          >
             <div className={styles.handle} />
             <div className={styles.sheetHeader}>
               <Dialog.Title>연습 설정</Dialog.Title>

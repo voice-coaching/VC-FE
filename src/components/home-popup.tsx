@@ -1,9 +1,9 @@
 "use client";
+import { Crown } from "lucide-react";
 import { AdminHomePopup } from "./admin-home-popup";
 
 import Image from "next/image";
 import Link from "next/link";
-import localFont from "next/font/local";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { toast } from "sonner";
@@ -19,12 +19,6 @@ import { notifyCoachingUsageChanged } from "@/lib/coaching-usage";
 import { activatePremiumTrial, loadPremiumTrial } from "@/lib/premium-trial";
 import styles from "./home-popup.module.css";
 import { Toaster } from "@/components/ui/sonner";
-
-const notoSans = localFont({
-  src: "../assets/fonts/NotoSansKR.woff2",
-  weight: "100 900",
-  display: "swap",
-});
 
 /** Only server eligibility opens the offer; viewing never grants membership. */
 export function HomePopup() {
@@ -125,7 +119,7 @@ export function HomePopup() {
           <Dialog.Overlay className={styles.overlay} />
           <Dialog.Content
             ref={dialogRef}
-            className={`${styles.modal} ${notoSans.className}`}
+            className={styles.modal}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               dialogRef.current?.focus();
@@ -177,15 +171,9 @@ export function HomePopup() {
                       height={400}
                       className={styles.glow}
                     />
-                    <div className={styles.mascot}>
-                      <Image
-                        src="/figma/premium-trial/mascot.png"
-                        alt=""
-                        fill
-                        sizes="(max-width: 767px) 100vw, 402px"
-                        priority
-                        className={styles.mascotImage}
-                      />
+                    {/* Brand badge in place of character art. */}
+                    <div className={styles.badge}>
+                      <Crown size={56} strokeWidth={1.75} />
                     </div>
                   </div>
                   <div className={styles.cardWrap}>

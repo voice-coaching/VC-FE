@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import styles from "./home-popular-news.module.css";
 import {
   Carousel,
   CarouselContent,
@@ -58,6 +59,41 @@ export function HomePopularNews() {
       document.removeEventListener("visibilitychange", restart);
     };
   }, [carousel, items.length]);
+  // Tie each row's fade/scale to the live scroll position so the outgoing
+  // headline dissolves while the next one rises in, instead of a hard slide.
+  useEffect(() => {
+    if (!carousel) return;
+    const apply = () => {
+      const engine = carousel.internalEngine();
+      const snaps = carousel.scrollSnapList();
+      const step = snaps.length > 1 ? snaps[1] - snaps[0] : 1;
+      const progress = carousel.scrollProgress();
+      const slides = carousel.slideNodes();
+      snaps.forEach((snap, index) => {
+        let diff = snap - progress;
+        if (engine.options.loop) {
+          for (const point of engine.slideLooper.loopPoints) {
+            const target = point.target();
+            if (point.index === index && target !== 0) {
+              diff =
+                Math.sign(target) < 0
+                  ? snap - (1 + progress)
+                  : snap + (1 - progress);
+            }
+          }
+        }
+        const active = Math.max(0, 1 - Math.abs(diff) / step);
+        slides[index]?.style.setProperty("--active", active.toFixed(3));
+      });
+    };
+    apply();
+    carousel.on("scroll", apply);
+    carousel.on("reInit", apply);
+    return () => {
+      carousel.off("scroll", apply);
+      carousel.off("reInit", apply);
+    };
+  }, [carousel, items.length]);
   return (
     <section className="mt-7" aria-label="인기 뉴스">
       <div className="mb-3 flex items-end gap-2">
@@ -91,16 +127,16 @@ export function HomePopularNews() {
           orientation="vertical"
           ref={container}
           setApi={setCarousel}
-          opts={{ align: "start", loop: items.length > 1, duration: 28 }}
-          className="h-[54px] overflow-hidden rounded-[20px] bg-white px-4 py-1"
+          opts={{ align: "start", loop: items.length > 1, duration: 34 }}
+          className={`${styles.ticker} h-[54px] overflow-hidden rounded-[20px] bg-white px-4 py-1`}
           aria-label="인기 뉴스 TOP 10, 위아래로 넘겨 순위 보기"
         >
           <CarouselContent className="mt-0 h-[46px]">
             {items.map((item) => (
-              <CarouselItem key={item.id} className="pt-0">
+              <CarouselItem key={item.id} className={`${styles.slide} pt-0`}>
                 <Link
                   href={practiceDetailHref(item.id, "/home")}
-                  className="flex h-[46px] items-center gap-3"
+                  className={`${styles.row} flex h-[46px] items-center gap-3`}
                   aria-label={`${item.rank}위 ${newsHeadline(item.title)}`}
                 >
                   <span className="w-5 shrink-0 whitespace-nowrap text-center text-base leading-[22px] font-bold text-[#6346f6]">

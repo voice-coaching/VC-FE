@@ -1,5 +1,7 @@
 "use client";
 
+import frameStyles from "@/components/my-page-layout.module.css";
+import { PencilLine } from "lucide-react";
 import { prepareTitleExam, titleExamErrorMessage } from "@/lib/title-exam";
 
 import Image from "next/image";
@@ -7,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CompactCard, DetailedCard } from "@/components/plan-choice-card";
 import { AppShell } from "@/components/app-shell";
+import { SkeletonBlock } from "@/components/skeleton-block";
 import { MyPageHead, MyProfileBand } from "@/components/my-page-frame";
 import layout from "@/components/my-page-layout.module.css";
 import {
@@ -131,9 +134,26 @@ export default function PracticePlan() {
     };
   }, [initialOverview, retry]);
 
+  // Slide the sheet up on open; on close, play the exit first, then close.
   useEffect(() => {
-    if (editing) dialog.current?.showModal();
-    else dialog.current?.close();
+    const element = dialog.current;
+    if (!element) return;
+    if (editing) {
+      element.removeAttribute("data-closing");
+      if (!element.open) element.showModal();
+      return;
+    }
+    if (!element.open) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      element.close();
+      return;
+    }
+    element.setAttribute("data-closing", "");
+    const timer = window.setTimeout(() => {
+      element.removeAttribute("data-closing");
+      element.close();
+    }, 260);
+    return () => window.clearTimeout(timer);
   }, [editing]);
 
   const options =
@@ -296,21 +316,37 @@ export default function PracticePlan() {
           examStarting={examStarting}
           onExam={() => void startTitleExam()}
         />
-        <div className="px-5 pt-1 pb-6">
+        <div className={`${frameStyles.tabPanel} px-5 pt-1 pb-6`}>
           <div className="mb-3 flex items-center justify-between pt-2">
             <h2 className="text-[17px] leading-6 font-bold">내 연습 계획</h2>
             <button
               disabled={!draft}
               onClick={() => open("purpose")}
-              className="rounded-full bg-white px-3 py-1.5 text-[13px] leading-[18px] text-[#4e5968]"
+              className="inline-flex h-8 items-center gap-1 rounded-[8px] bg-[#f1edff] px-2.5 text-[13px] leading-[18px] font-semibold text-[#6346f6] transition-opacity disabled:opacity-40"
             >
+              <PencilLine size={14} strokeWidth={2.25} aria-hidden="true" />
               수정
             </button>
           </div>
           {!hydrated ? (
-            <p className="rounded-[20px] bg-white py-12 text-center text-[13px] text-[#8b95a1]">
-              계획을 불러오는 중…
-            </p>
+            <div
+              role="status"
+              aria-label="계획을 불러오는 중"
+              className="rounded-[20px] bg-[#f7f8fa] py-1 pr-4 pl-5"
+            >
+              {[0, 1, 2, 3].map((index) => (
+                <div
+                  key={index}
+                  className="flex min-h-[68px] items-center gap-3 py-3.5"
+                >
+                  <SkeletonBlock className="size-8 shrink-0 rounded-[10px] bg-white" />
+                  <div className="min-w-0 flex-1">
+                    <SkeletonBlock className="h-3 w-12 bg-white" />
+                    <SkeletonBlock className="mt-2 h-4 w-3/5 bg-white" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : rows.length ? (
             <div className="rounded-[20px] bg-[#f7f8fa] py-1 pl-5 pr-4">
               {rows.map((row, index) => (
@@ -384,7 +420,7 @@ export default function PracticePlan() {
             setEditing(null);
           }
         }}
-        className="fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[90dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain rounded-t-[24px] border-0 bg-white px-6 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-[rgba(25,31,40,0.45)]"
+        className="app-sheet fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[90dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain rounded-t-[24px] border-0 bg-white px-6 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))] text-[#191f28] backdrop:bg-[rgba(25,31,40,0.45)]"
       >
         <div
           className="mx-auto mb-5 h-1 w-10 rounded-full bg-[#e5e8eb]"

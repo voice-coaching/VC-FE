@@ -12,7 +12,6 @@ import {
   selectedPlanOptions,
   type PracticePlan,
 } from "@/lib/practice-plan";
-import styles from "./practice-plan-editor.module.css";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,16 +134,14 @@ export function PracticePlanEditor({
             저장하기
           </button>
         </footer>
-        <Dialog.Overlay
-          className={`absolute inset-0 z-30 bg-[#191f28]/45 ${styles.scrim}`}
-        />
+        <Dialog.Overlay className="app-scrim absolute inset-0 z-30 bg-[#191f28]/45" />
         <Dialog.Content
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             activeTrigger.current?.focus();
           }}
           aria-describedby={multiple ? "plan-choice-hint" : undefined}
-          className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[90%] flex-col rounded-t-3xl bg-white px-6 pt-3 pb-[34px] outline-none ${styles.sheet}`}
+          className={`absolute inset-x-0 bottom-0 z-40 flex max-h-[90%] flex-col rounded-t-3xl bg-white px-6 pt-3 pb-[34px] outline-none app-sheet`}
         >
           <div
             className="mx-auto mb-5 h-1 w-10 shrink-0 rounded-full bg-[#e5e8eb]"
