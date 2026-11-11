@@ -1,5 +1,7 @@
 "use client";
 import { PopupImagePanel } from "./popup-image-panel";
+import { CampaignRecipientPicker } from "./campaign-recipient-picker";
+import type { SelectedRecipient } from "../recipient-selection";
 import { PopupPicture } from "@/components/popup-picture";
 import { useState } from "react";
 import Link from "next/link";
@@ -166,6 +168,9 @@ function CampaignEditor({
   // Keep the opened version even if background reads refresh while the operator edits.
   const [baseline] = useState(current);
   const [audience, setAudience] = useState(current?.audience ?? "ALL_ACTIVE");
+  const [recipients, setRecipients] = useState<SelectedRecipient[]>(() =>
+    (current?.userIds ?? []).map((id) => ({ id })),
+  );
   return (
     <div className={styles.grid}>
       <Panel title="알림 내용" padded>
@@ -203,14 +208,10 @@ function CampaignEditor({
             <option value="SELECTED_USERS">선택 회원</option>
           </Select>
           {audience === "SELECTED_USERS" && (
-            <Textarea
-              label="회원 번호"
-              name="userIds"
-              defaultValue={baseline?.userIds.join(", ") ?? ""}
-              required
-              placeholder="예: 12, 34, 56"
-              hint="회원 관리에서 확인한 회원 번호를 쉼표나 줄바꿈으로 구분합니다. 최대 500명까지 선택할 수 있습니다."
-              rows={3}
+            <CampaignRecipientPicker
+              selected={recipients}
+              onChange={setRecipients}
+              disabled={command.busy}
             />
           )}
           <Field
@@ -245,7 +246,14 @@ function CampaignEditor({
                 편집 취소
               </Button>
             )}
-            <Button type="submit" primary disabled={command.busy}>
+            <Button
+              type="submit"
+              primary
+              disabled={
+                command.busy ||
+                (audience === "SELECTED_USERS" && recipients.length === 0)
+              }
+            >
               {command.busy
                 ? "저장 중…"
                 : baseline
