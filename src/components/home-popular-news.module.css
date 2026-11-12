@@ -1,0 +1,32 @@
+/* --active (0..1) is written per slide from the scroll position. */
+.slide {
+  --active: 0;
+}
+.slide:first-child {
+  --active: 1;
+}
+
+/* Soft top/bottom edges so headlines dissolve instead of being clipped. */
+.ticker > div {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 22%,
+    black 78%,
+    transparent 100%
+  );
+}
+
+.row {
+  opacity: calc(var(--active) * var(--active));
+  transform: scale(calc(0.96 + 0.04 * var(--active)));
+  transform-origin: left center;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    opacity: 1;
+    transform: none;
+  }
+}

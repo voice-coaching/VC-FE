@@ -341,8 +341,8 @@ function NotificationListSkeleton() {
       {[0, 1, 2, 3].map((index) => (
         <div key={index} className="px-5 py-3.5">
           <SkeletonBlock className="h-3.5 w-24" />
-          <SkeletonBlock className="mt-2.5 h-4 w-4/5" />
-          <SkeletonBlock className="mt-2.5 h-3 w-12" />
+          <SkeletonBlock className="mt-3 h-4 w-4/5" />
+          <SkeletonBlock className="mt-3 h-3 w-12" />
         </div>
       ))}
     </div>

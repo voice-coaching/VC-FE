@@ -142,17 +142,22 @@
   transform: translate(-50%, -50%);
   max-width: none;
 }
-.mascot {
+.badge {
   position: absolute;
-  width: calc(100cqw * 402 / 402);
-  max-width: 100%;
-  height: calc(100cqw * 558 / 402);
   left: 50%;
-  top: calc(50% - calc(100cqw * 5.5 / 402));
+  top: 50%;
+  display: flex;
+  width: calc(100cqw * 132 / 402);
+  height: calc(100cqw * 132 / 402);
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b6cff, #5b6ffa);
+  box-shadow:
+    0 0 0 calc(100cqw * 14 / 402) rgb(255 255 255 / 12%),
+    0 18px 40px -12px rgb(91 111 250 / 60%);
+  color: white;
   transform: translate(-50%, -50%);
-}
-.mascotImage {
-  object-fit: contain;
 }
 .cardWrap {
   position: relative;

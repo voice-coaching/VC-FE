@@ -4,7 +4,7 @@
 .iconButton { width:40px; height:40px; flex-shrink:0; display:grid; place-items:center; }
 .content { display:flex; flex:1; min-height:0; flex-direction:column; gap:20px; padding:12px 20px 20px; overflow-y:auto; }
 .head { display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
-.badge { display:flex; align-items:center; gap:4px; background:#f1edff; color:#6346f6; border-radius:999px; justify-content:center; padding:6px 12px 6px 10px; line-height:16px; font-size:11px; font-weight:700; }
+.badge { display:flex; align-items:center; gap:4px; background:#f1edff; color:#6346f6; border-radius:6px; justify-content:center; padding:6px 12px 6px 10px; line-height:16px; font-size:11px; font-weight:700; }
 .head h2 { font-size:20px; line-height:28px; font-weight:700; letter-spacing:-.24px; }
 .head p { margin-top:6px; color:#8b95a1; font-size:14px; line-height:1.55; font-weight:500; }
 .preview { height:230px; flex-shrink:0; display:flex; justify-content:center; align-items:center; }
@@ -47,8 +47,8 @@
 .pickFooter .toast { position:absolute; bottom:calc(100% + 16px); align-self:center; border-radius:10px; background:#191f28; color:white; padding:10px 16px; white-space:nowrap; }
 .empty { margin:32px 0; text-align:center; color:#8b95a1; font-size:14px; }
 .empty button { margin-top:12px; color:#6346f6; }
-.overlay { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); animation:fade-in 180ms ease-out; }
-.sheet { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:402px; max-height:90dvh; overflow-y:auto; background:white; border-radius:24px 24px 0 0; padding:10px 20px 42px; z-index:61; animation:sheet-in 300ms cubic-bezier(.22,1,.36,1); }
+.overlay { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45); }
+.sheet { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:402px; max-height:90dvh; overflow-y:auto; background:white; border-radius:24px 24px 0 0; padding:10px 20px 42px; z-index:61; }
 .handle { width:40px; height:4px; background:#e5e8eb; border-radius:999px; margin:auto; }
 .sheetHeader { display:flex; justify-content:space-between; align-items:center; padding:14px 0 18px; font-size:18px; font-weight:700; }
 .settingLabel { color:#4e5968; font-size:14px; font-weight:700; margin-bottom:12px; }

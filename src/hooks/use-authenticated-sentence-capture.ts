@@ -181,6 +181,19 @@ export function useAuthenticatedSentenceCapture(
         if (index != null) void recorder.start(index);
       }
     },
+    /** Drop one sentence's local audio so the next start records it again. */
+    retake: (index: number) => {
+      if (!run.current) return;
+      raw.current.delete(index);
+      failures.current.delete(index);
+      setRecorded([...raw.current.keys()]);
+      setFiles((current) => {
+        const next = { ...current };
+        delete next[index];
+        return next;
+      });
+      void sentenceRecordings.remove(storageKey(index)).catch(() => {});
+    },
     retrySave: () => {
       if (failedSave != null) {
         const blob = raw.current.get(failedSave);

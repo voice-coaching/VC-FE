@@ -11,6 +11,7 @@ import { AnalysisView } from "@/components/analysis-view";
 import { AppShell } from "@/components/app-shell";
 import { ReferencePlayer } from "@/components/reference-player";
 import { TopBar } from "@/components/top-bar";
+import { SegmentTabs } from "@/components/segment-tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -227,24 +228,19 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
             bundle ? contentLabels[bundle.content.contentType] : "연습 기록"
           }
         />
-        <div className="flex px-5">
-          <button
-            type="button"
-            onClick={() => setTab("recording")}
-            className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "recording" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
-          >
-            녹음
-          </button>
-          {bundle?.result && (
-            <button
-              type="button"
-              onClick={() => setTab("report")}
-              className={`h-[52px] flex-1 border-b text-[15px] leading-[22px] ${tab === "report" ? "border-b-2 border-[#191f28] font-bold text-[#191f28]" : "border-[#e5e8eb] font-medium text-[#8b95a1]"}`}
-            >
-              AI 리포트
-            </button>
-          )}
-        </div>
+        <SegmentTabs
+          className="mx-5"
+          tabs={
+            bundle?.result
+              ? ([
+                  ["recording", "녹음"],
+                  ["report", "AI 리포트"],
+                ] as const)
+              : ([["recording", "녹음"]] as const)
+          }
+          active={tab}
+          onSelect={setTab}
+        />
       </div>
 
       {error && (
@@ -266,7 +262,7 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
 
       {bundle && tab === "recording" && (
         <>
-          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pt-4 pb-6 [overflow-wrap:anywhere]">
+          <div className="app-tab-panel min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pt-4 pb-6 [overflow-wrap:anywhere]">
             <section className="space-y-3.5 rounded-[20px] bg-white p-[18px] text-[16px] leading-[1.6]">
               {sentences.map((sentence, index) => (
                 <p
@@ -294,7 +290,7 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
               {deleting ? "삭제 중…" : "연습 기록 삭제"}
             </button>
           </div>
-          <div className="shrink-0 px-5 pb-4">
+          <div className="app-tab-panel shrink-0 px-5 pb-4">
             <ReferencePlayer
               recordingId={bundle.detail.recording.id}
               title="내 녹음 듣기"
@@ -306,13 +302,14 @@ function HistoryDetail({ sessionId }: { sessionId: string }) {
       )}
 
       {bundle?.result && tab === "report" && (
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="app-tab-panel min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <AnalysisView
             key={String(bundle.result.id)}
             analysis={bundle.result}
             segments={bundle.segments}
             content={bundle.content}
             recordingId={bundle.detail.recording.id}
+            sessionId={bundle.detail.session.id}
             courseMode={bundle.content.contentType === "CLASS_PRACTICE"}
           />
         </div>

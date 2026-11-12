@@ -4,9 +4,18 @@ import { SkeletonBlock } from "@/components/skeleton-block";
 import { AppShell } from "@/components/app-shell";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   api,
+  type ContentType,
   type CourseDetail,
   type HomeDashboard,
   type PracticeContentSummary,
@@ -16,20 +25,25 @@ import {
 } from "@/lib/api";
 import { getAuthenticatedUserId } from "@/lib/auth-session";
 import { readUserClientCache, updateUserClientCache } from "@/lib/client-cache";
+import { newsHeadline, newsSeries } from "@/lib/news-presentation";
 import styles from "./home.module.css";
 import { HomePopularNews } from "@/components/home-popular-news";
 import { HomePopup } from "@/components/home-popup";
 import {
+  HOME_HEADER_HEIGHT,
+  settleHomeHeader,
   updateHomeHeader,
   type HeaderScrollState,
 } from "@/lib/home-header-scroll";
 
 type RecommendationCard = Pick<
   Recommendation,
-  "contentId" | "title" | "reason"
+  "contentId" | "title" | "reason" | "contentType"
 >;
 
 type PracticeCard = {
+  /** Icon's own colour, used for the soft glow behind it. */
+  tint: string;
   href: string;
   title: string;
   description: React.ReactNode;
@@ -67,6 +81,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home-phase4/practice-news.svg",
+    tint: "#2e8df8",
     iconWidth: 32.0002,
     iconHeight: 36.8005,
   },
@@ -81,6 +96,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home-phase4/practice-sentence.svg",
+    tint: "#4665e1",
     iconWidth: 38.7998,
     iconHeight: 37.2006,
   },
@@ -95,6 +111,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home-phase4/practice-follow.svg",
+    tint: "#6346f6",
     iconWidth: 20,
     iconHeight: 41.0008,
   },
@@ -109,6 +126,7 @@ const PRACTICE_CARDS: PracticeCard[] = [
       </>
     ),
     icon: "/figma/home-phase4/practice-custom.svg",
+    tint: "#9360fa",
     iconWidth: 35.2005,
     iconHeight: 33.6,
   },
@@ -120,8 +138,28 @@ function generalRecommendations(
   return items.map((item) => ({
     contentId: item.id,
     title: item.title,
+    contentType: item.contentType,
     reason: "지금 바로 시작할 수 있는 학습이에요.",
   }));
+}
+
+/** Names and verbs for the content type the user picked at onboarding. */
+const TODAY_TYPE_LABEL: Record<ContentType, string> = {
+  NEWS: "뉴스",
+  SENTENCE: "문장",
+  ANNOUNCER: "아나운서 문장",
+  CLASS_PRACTICE: "클래스",
+};
+const TODAY_CTA: Record<ContentType, string> = {
+  NEWS: "뉴스 읽기",
+  SENTENCE: "연습하기",
+  ANNOUNCER: "따라 읽기",
+  CLASS_PRACTICE: "연습하기",
+};
+
+/** News practice titles: same rule as the news list (topic large, series small). */
+function splitTodayTitle(title: string) {
+  return { series: newsSeries(title), topic: newsHeadline(title) };
 }
 
 function combineRecommendations(
@@ -181,11 +219,22 @@ export default function Home() {
   );
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const headerScroll = useRef<HeaderScrollState>({
-    top: 0,
-    travel: 0,
-    hidden: false,
-  });
+  const headerRef = useRef<HTMLElement>(null);
+  const headerScroll = useRef<HeaderScrollState>({ top: 0, offset: 0 });
+  const headerSettle = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Written straight to the element so the header tracks the finger per frame.
+  const placeHeader = (offset: number, animate: boolean) => {
+    const header = headerRef.current;
+    if (!header) return;
+    header.dataset.settling = animate ? "true" : "false";
+    header.style.setProperty("--offset", `${offset}px`);
+    header.style.setProperty(
+      "--hide",
+      (offset / HOME_HEADER_HEIGHT).toFixed(3),
+    );
+    setHeaderCollapsed(offset >= HOME_HEADER_HEIGHT * 0.75);
+  };
+  useEffect(() => () => clearTimeout(headerSettle.current), []);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [coursesLoading, setCoursesLoading] = useState(true);
@@ -372,6 +421,11 @@ export default function Home() {
   const today = dashboard?.today ?? EMPTY_DASHBOARD.today;
   const dailyDone =
     today.goalCount > 0 && today.completedCount >= today.goalCount;
+  const todayTitle = splitTodayTitle(
+    firstRecommendation?.title ?? "오늘 읽을 뉴스를 골라볼까요",
+  );
+  const todayInProgress =
+    !dailyDone && today.goalCount > 0 && today.completedCount > 0;
   const todayHref = firstRecommendation
     ? `/practice/${firstRecommendation.contentId}?returnTo=%2Fhome&start=1`
     : "/news";
@@ -406,6 +460,7 @@ export default function Home() {
     >
       <HomePopup />
       <header
+        ref={headerRef}
         className={`${styles.homeHeader} z-20`}
         data-state={headerCollapsed ? "hidden" : "visible"}
         inert={headerCollapsed}
@@ -449,13 +504,13 @@ export default function Home() {
                 <span className="text-[13px] leading-[18px] font-medium tracking-[0.2522px]">
                   연속 연습
                 </span>
-                <strong className="text-sm leading-5 tracking-[0.203px]">
-                  {statistics
-                    ? `${streakDays}일째`
-                    : statisticsLoading
-                      ? "불러오는 중"
-                      : "—"}
-                </strong>
+                {statistics || !statisticsLoading ? (
+                  <strong className="text-sm leading-5 tracking-[0.203px]">
+                    {statistics ? `${streakDays}일째` : "—"}
+                  </strong>
+                ) : (
+                  <SkeletonBlock className="h-3.5 w-9 self-center bg-white/30" />
+                )}
               </span>
               <span className="mt-2 flex justify-between">
                 {weekDates.map((day) => {
@@ -518,7 +573,15 @@ export default function Home() {
             element.scrollHeight - element.clientHeight,
           );
           headerScroll.current = next;
-          setHeaderCollapsed(next.hidden);
+          placeHeader(next.offset, false);
+          // Once the scroll comes to rest, resolve a half-shown header.
+          clearTimeout(headerSettle.current);
+          headerSettle.current = setTimeout(() => {
+            const target = settleHomeHeader(headerScroll.current);
+            if (target === headerScroll.current.offset) return;
+            headerScroll.current = { ...headerScroll.current, offset: target };
+            placeHeader(target, true);
+          }, 140);
         }}
         className="relative h-full min-h-0 overflow-y-auto overscroll-y-contain bg-[#f2f4f6] text-[#191f28] [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
@@ -544,40 +607,58 @@ export default function Home() {
               ) : null}
 
               {dashboardLoading && !dashboard ? (
-                <div role="status" aria-label="오늘의 학습 불러오는 중">
-                  <SkeletonBlock className="h-[200px] w-full rounded-[20px] bg-[#e5e8eb]" />
+                <div
+                  role="status"
+                  aria-label="오늘의 학습 불러오는 중"
+                  className={`${styles.todayCard} relative h-[180px] overflow-hidden rounded-[20px] p-5`}
+                >
+                  <SkeletonBlock className="mt-1.5 h-3.5 w-20 bg-white/70" />
+                  <SkeletonBlock className="mt-[22px] h-5 w-32 bg-white/70" />
+                  <SkeletonBlock className="mt-2.5 h-5 w-40 bg-white/70" />
+                  <SkeletonBlock className="absolute bottom-5 left-5 h-12 w-[min(150px,calc((100%-56px)/2))] bg-white/70" />
+                  <SkeletonBlock className="absolute right-6 bottom-6 size-[112px] bg-white/50" />
                 </div>
               ) : (
                 <section
-                  className={`${styles.todayCard} relative h-[200px] overflow-hidden rounded-[20px] p-5`}
+                  className={`${styles.todayCard} relative flex min-h-[180px] flex-col overflow-hidden rounded-[20px] p-5`}
                 >
-                  <span className="inline-flex h-[26px] items-center rounded-full pr-3 pl-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
-                    {dashboard?.courseProgress
-                      ? dashboard.courseProgress.title
-                      : "오늘의 추천"}
-                  </span>
-                  <h1 className="mt-3 text-xl leading-7 font-bold tracking-[-0.24px]">
-                    {dailyDone ? (
-                      <>
-                        오늘 연습을 마쳤어요
-                        <br />
-                        내일 다시 만나요
-                      </>
-                    ) : (
-                      <>
-                        오늘은 뉴스예요
-                        <br />
-                        {today.goalCount > 0
-                          ? `${today.goalCount}문장이면 끝나요`
-                          : "가볍게 시작해 봐요"}
-                      </>
+                  {/* Text column stays clear of the illustration on the right. */}
+                  <div className="relative z-10 flex max-w-[calc(100%-132px)] min-w-0 flex-col pb-4">
+                    <span className="text-xs leading-4 font-bold text-[#6346f6]">
+                      {dailyDone
+                        ? "오늘 연습 완료"
+                        : `오늘의 추천 ${TODAY_TYPE_LABEL[firstRecommendation?.contentType ?? "NEWS"] ?? "콘텐츠"}`}
+                    </span>
+                    {/* "경제 뉴스 연습 4 - 농산물 직거래": the topic leads, the series becomes a tag. */}
+                    <h1 className="mt-2.5 line-clamp-2 break-keep text-[21px] leading-[29px] font-bold tracking-[-0.02em] text-[#191f28]">
+                      {dailyDone ? "오늘 목표를 다 채웠어요" : todayTitle.topic}
+                    </h1>
+                    {/* Just the series name (episode number dropped); the topic above leads. */}
+                    {(dailyDone || todayTitle.series) && (
+                      <p className="mt-0.5 text-[13px] leading-[18px] font-medium text-[#6b7684]">
+                        {dailyDone
+                          ? "내일 새 콘텐츠를 추천해 드릴게요"
+                          : todayTitle.series}
+                      </p>
                     )}
-                  </h1>
+                  </div>
                   <Link
                     href={dailyDone ? "/mypage/history" : todayHref}
-                    className="absolute bottom-5 left-5 z-10 flex h-12 w-[min(150px,calc((100%-56px)/2))] items-center justify-center rounded-full bg-linear-to-r from-[#6346f6] to-[#775ef8] text-base leading-6 font-bold text-white active:brightness-95"
+                    className="relative z-10 mt-auto inline-flex h-11 w-fit items-center gap-1 rounded-full bg-linear-to-r from-[#6346f6] to-[#775ef8] pr-4 pl-5 text-[15px] leading-6 font-bold text-white shadow-[0_6px_14px_-6px_rgb(99_70_246/55%)] active:brightness-95"
                   >
-                    {dailyDone ? "기록 보기" : "시작하기"}
+                    {dailyDone
+                      ? "기록 보기"
+                      : todayInProgress
+                        ? "이어서 하기"
+                        : firstRecommendation
+                          ? (TODAY_CTA[firstRecommendation.contentType] ??
+                            "시작하기")
+                          : "뉴스 보러 가기"}
+                    <ChevronRight
+                      size={16}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
                   </Link>
                   <span className="absolute right-4 bottom-0 aspect-[154/148] w-[min(154px,calc((100%-56px)/2))] overflow-hidden">
                     <Image
@@ -620,7 +701,7 @@ export default function Home() {
                       <strong className="text-[15px] leading-[22px]">
                         입 모양을 보며 연습
                       </strong>
-                      <span className="shrink-0 rounded-full bg-[#f0edff] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6346f6]">
+                      <span className="shrink-0 rounded-[6px] bg-[#f0edff] px-[7px] py-0.5 text-[11px] leading-[14px] font-medium text-[#6346f6]">
                         카메라 사용
                       </span>
                     </span>
@@ -669,11 +750,7 @@ export default function Home() {
                       iconHeight={
                         course.courseType === "INTONATION" ? 17.0023 : 17.0005
                       }
-                      ringArc={
-                        course.courseType === "INTONATION"
-                          ? "intonation"
-                          : "pronunciation"
-                      }
+                      progress={Math.round(course.progress.progressPercent)}
                       badgeColor="#f5f6f8"
                       chevron={
                         course.courseType === "INTONATION"
@@ -683,7 +760,29 @@ export default function Home() {
                       count={`${Math.round(course.progress.progressPercent)}%`}
                     />
                   ))}
-                  {ongoingCourses.length === 0 ? (
+                  {ongoingCourses.length === 0 &&
+                  !(error || coursesUnavailable) &&
+                  (!dashboard || coursesLoading) ? (
+                    <div
+                      role="status"
+                      aria-label="진행 중인 클래스 불러오는 중"
+                      className="space-y-2"
+                    >
+                      {[0, 1].map((index) => (
+                        <div
+                          key={index}
+                          className="flex h-[76px] items-center gap-[14px] rounded-[18px] bg-white py-[14px] pr-3 pl-[14px] shadow-[0_2px_3px_rgba(26,33,48,0.05)]"
+                        >
+                          <SkeletonBlock className="size-12 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <SkeletonBlock className="h-3.5 w-20" />
+                            <SkeletonBlock className="mt-2 h-3 w-32" />
+                          </div>
+                          <SkeletonBlock className="h-3.5 w-9" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : ongoingCourses.length === 0 ? (
                     <div
                       className="rounded-[18px] bg-white px-5 py-6 text-center text-sm leading-6 text-[#6b7684]"
                       role="status"
@@ -731,11 +830,13 @@ function PracticeTile({
   icon,
   iconWidth,
   iconHeight,
+  tint,
 }: PracticeCard) {
   return (
     <Link
       href={href}
-      className={`${styles.practiceTile} relative flex h-[136px] min-w-0 flex-col overflow-hidden rounded-[18px] p-4 active:scale-[0.98]`}
+      style={{ "--tile-tint": tint } as CSSProperties}
+      className={`${styles.practiceTile} relative flex h-[136px] min-w-0 flex-col overflow-hidden rounded-[18px] p-4`}
     >
       <h3 className="text-[17px] leading-6 font-bold">{title}</h3>
       <p className="mt-1 text-xs leading-4 tracking-[0.3024px] text-[#6b7684]">
@@ -748,13 +849,47 @@ function PracticeTile({
   );
 }
 
+// Drawn from the real course progress; the old Figma arc image was a fixed
+// quarter ring that showed progress even at 0%.
+function ProgressArc({ percent }: { percent: number }) {
+  const gradientId = useId();
+  const value = Math.min(100, Math.max(0, percent));
+  if (value <= 0) return null;
+  const radius = 22.56;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 48 48"
+      className="absolute inset-0 size-12 -rotate-90"
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#5b6bfa" />
+          <stop offset="1" stopColor="#7347f2" />
+        </linearGradient>
+      </defs>
+      <circle
+        cx="24"
+        cy="24"
+        r={radius}
+        fill="none"
+        stroke={`url(#${gradientId})`}
+        strokeWidth="2.88"
+        strokeLinecap="round"
+        strokeDasharray={`${(circumference * value) / 100} ${circumference}`}
+      />
+    </svg>
+  );
+}
+
 function ContinueCard({
   href,
   title,
   detail,
   badge,
   ring,
-  ringArc,
+  progress,
   icon,
   iconWidth,
   iconHeight,
@@ -767,7 +902,7 @@ function ContinueCard({
   detail: string;
   badge?: string;
   ring: string;
-  ringArc: "intonation" | "pronunciation";
+  progress: number;
   icon: string;
   iconWidth: number;
   iconHeight: number;
@@ -782,13 +917,7 @@ function ContinueCard({
     >
       <span className="relative size-12 shrink-0">
         <Image src={ring} alt="" width={48} height={48} />
-        <Image
-          src={`/figma/home-phase4/class-${ringArc}-arc.png`}
-          alt=""
-          width={ringArc === "intonation" ? 22.825 : 24}
-          height={ringArc === "intonation" ? 17.474 : 36}
-          className="absolute top-0 left-6"
-        />
+        <ProgressArc percent={progress} />
         <span
           className="absolute top-[7px] left-[7px] flex size-[34px] items-center justify-center overflow-hidden rounded-[17px]"
           style={{ backgroundColor: badgeColor }}
@@ -800,7 +929,7 @@ function ContinueCard({
         <span className="flex items-center gap-1.5">
           <strong className="truncate text-sm leading-5">{title}</strong>
           {badge ? (
-            <span className="shrink-0 rounded-full bg-[#f0edff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
+            <span className="shrink-0 rounded-[6px] bg-[#f0edff] px-1.5 py-0.5 text-[11px] leading-[14px] font-bold tracking-[0.3421px] text-primary">
               {badge}
             </span>
           ) : null}

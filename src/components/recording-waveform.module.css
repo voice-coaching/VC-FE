@@ -1,20 +1,23 @@
 .waveform {
   display: flex;
-  height: 64px;
+  height: 52px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
 }
+/* Height and opacity are written every frame; only the hue eases here, so
+   pausing fades purple to grey instead of switching. */
 .bar {
   display: block;
   width: 4px;
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
-  background: #c5cbd3;
-  transition: background-color 240ms ease-out;
-}
-.waveform[data-active="true"] .bar {
   background: #6346f6;
+  transition: background-color 420ms ease;
+  will-change: height;
+}
+.waveform[data-paused="true"] .bar {
+  background: #d1d6db;
 }
 @media (prefers-reduced-motion: reduce) {
   .bar {

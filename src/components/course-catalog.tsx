@@ -4,6 +4,7 @@ import { CourseLesson } from "./course-lesson";
 import { SkeletonBlock } from "@/components/skeleton-block";
 import Link from "next/link";
 import Image from "next/image";
+import { ChevronRight } from "lucide-react";
 import {
   Suspense,
   useEffect,
@@ -836,42 +837,41 @@ function CourseCatalogView({
                         if (event.pointerType === "touch")
                           prefetchCourse(course);
                       }}
-                      className="flex min-h-[118px] w-full items-start gap-3.5 bg-white py-5 text-left"
+                      className="flex w-full items-center gap-3.5 bg-white py-[18px] text-left"
                     >
-                      <CourseIcon
-                        title={course.title}
-                        pronunciation={activeType === "PRONUNCIATION"}
-                      />
+                      <TopicIcon type={course.courseType} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <h2 className="text-[15px] leading-[22px] font-bold">
-                            {course.title}
-                          </h2>
-                          <span
-                            className={`shrink-0 text-xs ${progress > 0 ? "text-primary" : "text-muted-foreground"}`}
-                          >
-                            {courseSteps ? (
-                              <>
-                                {completedCount}
-                                <span className="text-[#8b95a1]">
-                                  /{courseSteps.length}
-                                </span>
-                              </>
-                            ) : (
-                              `${Math.round(progress)}%`
-                            )}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-xs leading-4 text-[#8b95a1]">
+                        <h2 className="text-[16px] leading-[22px] font-bold text-[#191f28]">
+                          {course.title}
+                        </h2>
+                        <p className="mt-1 line-clamp-2 break-keep text-[13px] leading-[19px] text-[#6b7684]">
                           {courseIntroduction(course, detail)}
                         </p>
-                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dfe3e7]">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
+                        {/* Plain facts split by a hairline; status only once started. */}
+                        <p className="mt-2 flex items-center gap-2 text-xs leading-4 text-[#8b95a1] [&>span+span]:before:mr-2 [&>span+span]:before:inline-block [&>span+span]:before:h-2.5 [&>span+span]:before:w-px [&>span+span]:before:bg-[#d1d6db] [&>span+span]:before:align-[-1px] [&>span+span]:before:content-['']">
+                          <span className="font-semibold text-[#6346f6]">
+                            {level(course.difficulty)}
+                          </span>
+                          {course.estimatedMinutes ? (
+                            <span>약 {course.estimatedMinutes}분</span>
+                          ) : null}
+                          {progress >= 100 ? (
+                            <span className="font-semibold text-[#6346f6]">
+                              완료
+                            </span>
+                          ) : progress > 0 && courseSteps ? (
+                            <span className="font-semibold text-[#6346f6] tabular-nums">
+                              {completedCount}/{courseSteps.length} 진행 중
+                            </span>
+                          ) : null}
+                        </p>
                       </div>
+                      <ChevronRight
+                        size={18}
+                        strokeWidth={2}
+                        className="shrink-0 text-[#c9ced4]"
+                        aria-hidden="true"
+                      />
                     </button>
                   );
                 })}
@@ -962,51 +962,26 @@ function CourseListSkeleton() {
   );
 }
 
-function CourseIcon({
-  title,
-  pronunciation,
-}: {
-  title: string;
-  pronunciation: boolean;
-}) {
-  const kind = /받침/.test(title)
-    ? "final"
-    : /된소리/.test(title)
-      ? "tense"
-      : /모음/.test(title)
-        ? "vowel"
-        : "consonant";
+/** One calm icon per class topic, on a soft lavender tile. */
+/** The same lips / pitch marks the home "continue" card uses for each class type. */
+function TopicIcon({ type }: { type: CourseSummary["courseType"] }) {
+  const intonation = type === "INTONATION";
   return (
-    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#f1edff]">
-      {pronunciation ? (
-        kind === "final" ? (
-          <span className="relative h-[17.643px] w-[26px]">
-            <Image
-              src="/figma/class-purple/final-left.svg"
-              alt=""
-              width={15.1504}
-              height={17.6432}
-              className="absolute left-0 top-0"
-            />
-            <Image
-              src="/figma/class-purple/final-right.svg"
-              alt=""
-              width={12.6105}
-              height={17.5037}
-              className="absolute right-0 top-0"
-            />
-          </span>
-        ) : (
-          <Image
-            src={`/figma/class-purple/${kind}.svg`}
-            alt=""
-            width={kind === "vowel" ? 17.4474 : 26}
-            height={kind === "vowel" ? 26 : kind === "tense" ? 15.6 : 21.84}
-          />
-        )
-      ) : (
-        <span className="size-7 bg-[#6346f6] [mask:url('/figma/class/falling.svg')_center/contain_no-repeat]" />
-      )}
+    <span
+      aria-hidden="true"
+      className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[#f5f6f8]"
+    >
+      <Image
+        src={
+          intonation
+            ? "/figma/home-phase4/class-intonation.svg"
+            : "/figma/home-phase4/class-pronunciation.svg"
+        }
+        alt=""
+        width={intonation ? 34 : 26}
+        height={intonation ? 20.4 : 21.3}
+        className="block"
+      />
     </span>
   );
 }

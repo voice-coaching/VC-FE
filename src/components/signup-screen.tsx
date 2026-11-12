@@ -42,8 +42,9 @@ export function SignupScreen() {
   const passwordValid = PASSWORD_PATTERN.test(password);
   const passwordsMatch =
     passwordConfirm.length > 0 && passwordConfirm === password;
+  const nicknameTooLong = nickname.length > 20;
   const nicknameValid =
-    nickname.trim().length > 0 && nickname.trim().length <= 10;
+    nickname.trim().length > 0 && nickname.trim().length <= 20;
 
   const emailMessage = getEmailMessage({
     email: normalizedEmail,
@@ -68,9 +69,11 @@ export function SignupScreen() {
       : null;
   const nicknameMessage = nicknameError
     ? { tone: "error" as const, text: nicknameError }
-    : nicknameTouched && nicknameValid
-      ? { tone: "success" as const, text: "사용할 수 있는 닉네임이에요" }
-      : null;
+    : nicknameTooLong
+      ? { tone: "error" as const, text: "20자까지 입력할 수 있어요" }
+      : nicknameTouched && nicknameValid
+        ? { tone: "success" as const, text: "사용할 수 있는 닉네임이에요" }
+        : null;
 
   const emailStatus = getFieldStatus(
     focusedField === "email",
@@ -274,8 +277,7 @@ export function SignupScreen() {
                 value={nickname}
                 placeholder="닉네임을 입력해 주세요"
                 autoComplete="nickname"
-                maxLength={10}
-                suffix={`${nickname.length}/10`}
+                suffix={`${nickname.length}/20`}
                 status={nicknameStatus}
                 message={nicknameMessage}
                 onFocus={() => setFocusedField("nickname")}

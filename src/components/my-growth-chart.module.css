@@ -47,10 +47,16 @@
   font-size: 11px;
   line-height: 16px;
 }
-.menuItem[data-state="checked"],
-.menuItem[data-highlighted] {
+/* Selected and hovered rows must read as separate states, never one merged block. */
+.menuItem + .menuItem {
+  margin-top: 4px;
+}
+.menuItem[data-state="checked"] {
   background: #f5f2ff;
   color: #6346f6;
+}
+.menuItem[data-highlighted]:not([data-state="checked"]) {
+  background: #f7f8fa;
 }
 .chart {
   display: flex;

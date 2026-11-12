@@ -25,7 +25,7 @@ import {
 import { splitSentences } from "@/lib/sentences";
 import { ScriptTopicPicker } from "@/components/script-topic-picker";
 import { DEFAULT_SCRIPT_TOPICS, type ScriptTopics } from "@/lib/script-topics";
-import { Settings, Check } from "lucide-react";
+import { Settings, Check, NotebookPen } from "lucide-react";
 import {
   scriptLibrary,
   type ScriptTopic,
@@ -371,7 +371,9 @@ export function MyScriptScreen() {
           onBack={editMode ? finishEditing : undefined}
           right={
             !libraryLoading &&
-            !libraryError && (
+            !libraryError &&
+            // Nothing to edit yet on an empty library.
+            (scripts.length > 0 || editMode) && (
               <button
                 className={`px-3 py-2 text-[14px] font-bold ${editMode ? "text-[#6346f6]" : "text-[#4e5968]"}`}
                 onClick={() => {
@@ -411,14 +413,13 @@ export function MyScriptScreen() {
             </button>
           </div>
         ) : scripts.length === 0 && !editMode ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-5 pt-2 pb-20 text-center">
-            <Image
-              src="/figma/my-script/empty-purple.png"
-              alt=""
-              width={140}
-              height={140}
-              priority
-              className="shrink-0"
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto px-5 pt-2 pb-20 text-center">
+            {/* Quiet grey icon; the copy and the create button lead. */}
+            <NotebookPen
+              size={44}
+              strokeWidth={1.6}
+              className="text-[#c9ced4]"
+              aria-hidden="true"
             />
             <div>
               <h2 className="text-[17px] leading-6 font-bold text-[#191f28]">
@@ -429,12 +430,6 @@ export function MyScriptScreen() {
                 <br />
                 나만의 연습 문장을 만들어요
               </p>
-              <button
-                className="mt-4 px-3 py-2 text-[13px] text-[#6b7684]"
-                onClick={() => setStage("topics")}
-              >
-                주제 관리
-              </button>
             </div>
           </div>
         ) : (
@@ -526,21 +521,29 @@ export function MyScriptScreen() {
                   className="flex w-full items-center gap-3 border-b border-[#f2f4f6] bg-white py-4 text-left last:border-b-0 disabled:opacity-50"
                 >
                   <span className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-                    <span className="rounded-full bg-[#f0edff] px-2 py-0.5 text-[11px] leading-[14px] font-bold text-[#6346f6]">
+                    <span className="rounded-[6px] bg-[#f0edff] px-2 py-0.5 text-[11px] leading-[14px] font-bold text-[#6346f6]">
                       {topicData.assignments[String(script.id)] ?? "미분류"}
                     </span>
                     <span className="break-words text-[15px] leading-[22px] font-bold text-[#191f28]">
                       {script.title}
                     </span>
-                    <span className="text-[12px] leading-4 text-[#8b95a1]">
-                      {script.sentenceCount != null
-                        ? `${script.sentenceCount}문장`
-                        : "문장 보기"}
-                      {savedNotice?.content.id === script.id
-                        ? " · 방금"
-                        : script.createdAt
-                          ? ` · ${new Date(script.createdAt).toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}`
-                          : ""}
+                    {/* Count and date split by a thin vertical rule, no dot. */}
+                    <span className="flex items-center gap-2 text-[12px] leading-4 text-[#8b95a1] [&>span+span]:before:mr-2 [&>span+span]:before:inline-block [&>span+span]:before:h-2.5 [&>span+span]:before:w-px [&>span+span]:before:bg-[#d1d6db] [&>span+span]:before:align-[-1px] [&>span+span]:before:content-['']">
+                      <span>
+                        {script.sentenceCount != null
+                          ? `${script.sentenceCount}문장`
+                          : "문장 보기"}
+                      </span>
+                      {savedNotice?.content.id === script.id ? (
+                        <span>방금</span>
+                      ) : script.createdAt ? (
+                        <span>
+                          {new Date(script.createdAt).toLocaleDateString(
+                            "ko-KR",
+                            { month: "long", day: "numeric" },
+                          )}
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                   {editMode ? (
@@ -567,13 +570,12 @@ export function MyScriptScreen() {
                     (topicData.assignments[String(script.id)] ?? "미분류") ===
                     libraryTopic,
                 ) && (
-                  <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
-                    <Image
-                      src="/figma/my-script/empty-purple.png"
-                      alt=""
-                      width={140}
-                      height={140}
-                      className="shrink-0"
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 py-8 text-center">
+                    <NotebookPen
+                      size={44}
+                      strokeWidth={1.6}
+                      className="text-[#c9ced4]"
+                      aria-hidden="true"
                     />
                     <div>
                       <h2 className="text-[17px] leading-6 font-bold text-[#191f28]">

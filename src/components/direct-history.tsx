@@ -80,7 +80,7 @@ export function DirectHistory({ savedOnly = false }: { savedOnly?: boolean }) {
             <summary className="flex min-h-[68px] cursor-pointer list-none items-center gap-3 py-3.5 pr-3.5 pl-4 marker:hidden">
               <span className="min-w-0 flex-1">
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 rounded-full bg-[#edf2ff] px-[7px] py-0.5 text-[11px] leading-[14px] font-bold text-primary">
+                  <span className="shrink-0 rounded-[6px] bg-[#edf2ff] px-[7px] py-0.5 text-[11px] leading-[14px] font-bold text-primary">
                     문장 연습
                   </span>
                   <strong className="truncate text-[15px] leading-[22px] font-bold text-[#191f28]">

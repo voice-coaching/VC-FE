@@ -31,6 +31,7 @@ import {
   type ReactNode,
 } from "react";
 import { PracticeAnalysisLoading } from "@/components/practice-analysis-loading";
+import { useAnalysisFinish } from "@/hooks/use-analysis-finish";
 import { AppShell } from "@/components/app-shell";
 import { BackButton } from "@/components/back-button";
 import { getAuthSessionVersion, subscribeAuthSession } from "@/lib/api/client";
@@ -473,6 +474,11 @@ export default function LipPractice() {
   const currentClip = clips.find((clip) => clip.promptIndex === promptIndex);
   const reportClip = clips.find((clip) => clip.promptIndex === selectedClip);
   const selectedAnalysis = analyses[selectedClip];
+  // Hold the finished check briefly before the lip report replaces the loader.
+  const lipFinishing = useAnalysisFinish(
+    analysisBusy,
+    analysisPhase === "result" && Boolean(selectedAnalysis),
+  );
 
   function analyzeCurrentClip() {
     if (!currentClip || analysisBusyRef.current) return;
@@ -600,7 +606,7 @@ export default function LipPractice() {
       </AppShell>
     );
 
-  if (step === "complete" && analysisBusy)
+  if (step === "complete" && (analysisBusy || lipFinishing))
     return (
       <AppShell
         nav={false}
@@ -628,12 +634,15 @@ export default function LipPractice() {
           </button>
           <PracticeAnalysisLoading
             uploading={
-              analysisPhase === "preparing" || analysisPhase === "uploading"
+              !lipFinishing &&
+              (analysisPhase === "preparing" || analysisPhase === "uploading")
             }
             stepProgress={
-              analysisPhase === "uploading"
-                ? Math.min(32, uploadProgress * 0.32)
-                : analysisProgress
+              lipFinishing
+                ? 100
+                : analysisPhase === "uploading"
+                  ? Math.min(32, uploadProgress * 0.32)
+                  : analysisProgress
             }
           />
         </div>
@@ -889,14 +898,17 @@ export default function LipPractice() {
 
             {!selectedAnalysis && !analysisBusy ? consentFields : null}
 
-            {analysisTarget === selectedClip && analysisBusy ? (
+            {analysisTarget === selectedClip &&
+            (analysisBusy || lipFinishing) ? (
               <PracticeAnalysisLoading
                 stepProgress={
-                  analysisPhase === "uploading"
-                    ? Math.min(32, uploadProgress * 0.32)
-                    : analysisProgress
+                  lipFinishing
+                    ? 100
+                    : analysisPhase === "uploading"
+                      ? Math.min(32, uploadProgress * 0.32)
+                      : analysisProgress
                 }
-                uploading={analysisPhase === "uploading"}
+                uploading={!lipFinishing && analysisPhase === "uploading"}
               />
             ) : analysisPhase === "error" && analysisError ? (
               <section

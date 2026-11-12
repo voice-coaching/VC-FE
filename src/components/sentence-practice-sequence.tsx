@@ -16,11 +16,28 @@ import { MicrophonePermissionNotice } from "./microphone-permission-notice";
 import { useAuthenticatedSentenceCapture } from "@/hooks/use-authenticated-sentence-capture";
 import { useRecordingDiscardGuard } from "@/hooks/use-recording-discard-guard";
 import { ReportSaveDialog } from "./report-save-dialog";
+import { RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  SentenceResultError,
+  SentenceResultPending,
+  SentenceResultTabs,
+} from "./sentence-result-tabs";
 import { NextPracticeContentButton } from "./next-practice-content-button";
 import { api, type AnalysisResult } from "@/lib/api";
 import { observeSentenceAnalysis } from "@/lib/sentence-analysis";
 import {
   appendSentenceAdmission,
+  releaseSentenceAdmission,
   sentencePracticeItems,
   type SentenceAnalysisAdmission,
 } from "@/lib/sentence-sequence";
@@ -69,6 +86,19 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
   );
   const resource = `sentence-sequence-v1:${courseId ?? content.id}:${courseExamples?.revision ?? "content"}:${courseExampleIndex ?? 0}`;
   const [ready, setReady] = useState(!resumeRequested);
+  const [activeResult, setActiveResult] = useState(0);
+  // A single sentence being recorded again after results were shown.
+  const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
+  const [retakeConfirm, setRetakeConfirm] = useState<number | null>(null);
+  // Bumped per retake so the background submitter starts a fresh attempt
+  // instead of restoring the previous one's recovery state.
+  const [retakeRounds, setRetakeRounds] = useState<Record<number, number>>({});
+  // Score of the take a retake replaced, so the new result can show the change.
+  const [previousTakes, setPreviousTakes] = useState<Record<number, number>>(
+    {},
+  );
+  // Sessions of replaced takes; with the live admissions they make up this run.
+  const [retiredSessions, setRetiredSessions] = useState<string[]>([]);
   const [admissions, setAdmissions] = useState<
     (SentenceAnalysisAdmission | null)[]
   >([]);
@@ -122,6 +152,27 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       capture.recordedCount > 0 ||
       admissions.length > 0);
   const guard = useRecordingDiscardGuard(shouldConfirmExit, true);
+  // When results arrive while the user watched the loading screen, hold its
+  // finished state (check, "분석이 끝났어요") briefly, then reveal the report.
+  // Restored sessions that open already finished skip the hold.
+  const sawWaiting = useRef(false);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!allResultsReady) {
+      if (waiting) sawWaiting.current = true;
+      setRevealed(false);
+      return;
+    }
+    if (!sawWaiting.current) {
+      setRevealed(true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      sawWaiting.current = false;
+      setRevealed(true);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [allResultsReady, waiting]);
   useEffect(() => {
     if (error) capture.recorder.reset();
   }, [error, capture.recorder.reset]);
@@ -247,6 +298,54 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     [observe, resource, userId],
   );
 
+  const retake = useCallback(
+    (index: number) => {
+      if (!mounted.current || authEpoch.current !== getAuthSessionVersion())
+        return;
+      owners.current.get(index)?.abort();
+      owners.current.delete(index);
+      const replaced = results[index]?.result?.overallScore;
+      if (replaced != null)
+        setPreviousTakes((current) => ({ ...current, [index]: replaced }));
+      const replacedSession = admissionsRef.current[index]?.sessionId;
+      if (replacedSession != null)
+        setRetiredSessions((current) => [...current, String(replacedSession)]);
+      const next = releaseSentenceAdmission(admissionsRef.current, index);
+      admissionsRef.current = next;
+      writeUserClientCache(userId, resource, next);
+      setAdmissions(next);
+      setResults((current) => {
+        const rest = { ...current };
+        delete rest[index];
+        return rest;
+      });
+      setRetakeRounds((current) => ({
+        ...current,
+        [index]: (current[index] ?? 0) + 1,
+      }));
+      setSubmissionError(null);
+      capture.retake(index);
+      setActiveResult(index);
+      setRetakeIndex(index);
+    },
+    [capture, resource, results, userId],
+  );
+  // The retake is over once that sentence has a fresh result.
+  useEffect(() => {
+    if (retakeIndex != null && results[retakeIndex]?.result)
+      setRetakeIndex(null);
+  }, [retakeIndex, results]);
+  // Every session this run created; other sentences are never "earlier".
+  const runSessions = useMemo(
+    () => [
+      ...retiredSessions,
+      ...admissions.flatMap((admission) =>
+        admission ? [String(admission.sessionId)] : [],
+      ),
+    ],
+    [admissions, retiredSessions],
+  );
+
   useEffect(() => {
     onTitleChange?.(waiting ? "문장별 분석 결과" : "연습하기");
   }, [waiting, onTitleChange]);
@@ -275,7 +374,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         : null;
     return (
       <RecordingPracticeSession
-        key={current.key}
+        key={`${current.key}:${retakeRounds[index] ?? 0}`}
         {...props}
         content={{
           ...content,
@@ -288,7 +387,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         capturedRecording={capture.files[index]}
         recoveryScope={
           capture.recoveryScope
-            ? `${capture.recoveryScope}:${index}`
+            ? `${capture.recoveryScope}:${index}${retakeRounds[index] ? `:retake${retakeRounds[index]}` : ""}`
             : undefined
         }
         background
@@ -303,7 +402,7 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
       />
     );
   });
-  if (!allResultsReady || recording) {
+  if (!allResultsReady || !revealed || recording) {
     const active = recording
       ? capture.recorder.index
       : Math.max(0, capture.nextIndex);
@@ -315,21 +414,29 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
         {!waiting && (
           <NewsRecordingReader
             label={
-              content.contentType === "NEWS"
-                ? "뉴스 읽기"
-                : content.contentType === "ANNOUNCER"
-                  ? "따라 읽기"
-                  : content.origin === "USER_INPUT"
-                    ? "내 문장 연습"
-                    : "문장 연습"
+              retakeIndex != null
+                ? "다시 녹음"
+                : content.contentType === "NEWS"
+                  ? "뉴스 읽기"
+                  : content.contentType === "ANNOUNCER"
+                    ? "따라 읽기"
+                    : content.origin === "USER_INPUT"
+                      ? "내 문장 연습"
+                      : "문장 연습"
             }
-            sentences={items.map((item) => item.text)}
-            active={active}
+            sentences={
+              retakeIndex != null
+                ? [items[retakeIndex].text]
+                : items.map((item) => item.text)
+            }
+            active={retakeIndex != null ? 0 : active}
             recording={recording}
           />
         )}
         {waiting && (
-          <PracticeAnalysisLoading stepProgress={allAdmitted ? 66 : 0} />
+          <PracticeAnalysisLoading
+            stepProgress={allResultsReady ? 100 : allAdmitted ? 66 : 0}
+          />
         )}
         {(capture.recorder.error || (!recording && capture.error)) && (
           <p
@@ -437,104 +544,161 @@ export function SentencePracticeSequence(props: PracticeSessionProps) {
     );
   }
 
+  const activeIndex = Math.min(activeResult, items.length - 1);
   return (
-    <div className="space-y-4 px-5 py-5">
+    <div className="report-reveal pb-5">
       {guard.dialog}
-      <h2 className="text-xl font-bold">문장별 분석 결과</h2>
-      <p role="status" className="text-sm text-muted-foreground">
-        {Object.values(results).filter((item) => item.result).length}/
-        {items.length} 문장 분석 완료
-      </p>
-      {items.map((item, index) => {
-        const state = results[index];
-        const admission = admissions[index];
-        return (
-          <section
-            key={item.key}
-            aria-label={`${index + 1}번 문장 분석`}
-            className="rounded-2xl bg-white py-4"
-          >
-            <h3 className="px-4 font-semibold">{index + 1}번 문장</h3>
-            <p className="px-4 pt-2 text-sm leading-6">{item.text}</p>
-            {state?.result ? (
-              <AnalysisView
-                analysis={state.result}
-                segments={[]}
-                content={{
-                  ...content,
-                  id: item.contentId,
-                  scriptText: item.text,
-                }}
-                recordingId={admission!.recordingId}
-                reportParameter={`sentenceReport${index}`}
-                courseMode={Boolean(courseId)}
-              />
-            ) : state?.error ? (
-              <div className="space-y-3 px-4 pt-4">
-                <p role="alert" className="text-sm text-destructive">
-                  {state.error}
-                </p>
-                <button
-                  className="min-h-11 rounded-xl border px-4 text-sm"
-                  disabled={state.reading}
-                  onClick={() => observe(index, admission!)}
-                >
-                  기존 분석 상태 다시 확인
-                </button>
-              </div>
-            ) : (
-              <p className="px-4 pt-4 text-sm text-muted-foreground">
-                분석 결과를 기다리고 있어요.
-              </p>
-            )}
-            {state?.result && (state.reading || state.error) && (
-              <div className="px-4 pt-3 text-sm text-muted-foreground">
-                <p role="status">
-                  {state.error ??
-                    "피드백이 준비됐어요. 학습 이력 저장을 확인하고 있어요."}
-                </p>
-                {state.error && (
-                  <button
-                    type="button"
-                    className="min-h-11 rounded-xl border px-4"
-                    onClick={() => observe(index, admission!)}
-                  >
-                    기존 결과 저장 상태 다시 확인
-                  </button>
+      <SentenceResultTabs
+        active={activeIndex}
+        onSelect={setActiveResult}
+        tabs={items.map((item, index) => ({
+          key: item.key,
+          text: item.text,
+          state: results[index]?.result
+            ? "ready"
+            : results[index]?.error
+              ? "error"
+              : "pending",
+          score: results[index]?.result?.overallScore,
+          details: results[index]?.result?.scoreDetails,
+        }))}
+        renderPanel={(shown) => {
+          const shownState = results[shown];
+          const shownAdmission = admissions[shown];
+          const shownItem = items[shown];
+          return (
+            <>
+              {shownState?.result ? (
+                <>
+                  <AnalysisView
+                    key={shownItem.key}
+                    analysis={shownState.result}
+                    segments={[]}
+                    content={{
+                      ...content,
+                      id: shownItem.contentId,
+                      scriptText: shownItem.text,
+                    }}
+                    recordingId={shownAdmission!.recordingId}
+                    sessionId={shownAdmission!.sessionId}
+                    reportParameter={`sentenceReport${shown}`}
+                    courseMode={Boolean(courseId)}
+                    previousScore={
+                      previousTakes[shown] != null
+                        ? { score: previousTakes[shown], scope: "retake" }
+                        : undefined
+                    }
+                    comparisonExclude={runSessions}
+                  />
+                  {/* Server says whether another take is allowed; default to yes. */}
+                  {shownState.result.canonical?.actions.canRerecord !== false &&
+                    !shownState.reading && (
+                      <div className="px-5 pt-1 pb-2">
+                        <button
+                          type="button"
+                          onClick={() => setRetakeConfirm(shown)}
+                          className="flex h-12 w-full items-center justify-center gap-1.5 rounded-full bg-white text-[15px] font-bold text-[#4e5968] shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+                        >
+                          <RotateCcw
+                            size={17}
+                            strokeWidth={2.25}
+                            aria-hidden="true"
+                          />
+                          이 문장 다시 녹음
+                        </button>
+                      </div>
+                    )}
+                </>
+              ) : shownState?.error ? (
+                <SentenceResultError
+                  message={shownState.error}
+                  busy={shownState.reading}
+                  onRetry={() => observe(shown, shownAdmission!)}
+                />
+              ) : (
+                <SentenceResultPending />
+              )}
+              {shownState?.result &&
+                (shownState.reading || shownState.error) && (
+                  <div className="px-5 pt-1 text-sm text-muted-foreground">
+                    <p role="status">
+                      {shownState.error ??
+                        "피드백이 준비됐어요. 학습 이력 저장을 확인하고 있어요."}
+                    </p>
+                    {shownState.error && (
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-xl border px-4"
+                        onClick={() => observe(shown, shownAdmission!)}
+                      >
+                        기존 결과 저장 상태 다시 확인
+                      </button>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-          </section>
-        );
-      })}
-      <button
-        className="design-action"
-        disabled={!canAdvance}
-        onClick={() => {
-          setNextHref(null);
-          setSaveOpen(true);
+            </>
+          );
+        }}
+      />
+      <div className="space-y-4 px-5 pt-2">
+        <button
+          className="design-action"
+          disabled={!canAdvance}
+          onClick={() => {
+            setNextHref(null);
+            setSaveOpen(true);
+          }}
+        >
+          {allCompleted ? "완료하기" : "학습 이력 저장 확인 중…"}
+        </button>
+        {!courseId &&
+          ["NEWS", "SENTENCE", "ANNOUNCER"].includes(content.contentType) && (
+            <NextPracticeContentButton
+              content={content}
+              recordingComplete={canAdvance}
+              onNext={(href) => {
+                if (!canAdvance) return;
+                setNextHref(href);
+                setSaveOpen(true);
+              }}
+            />
+          )}
+        <button
+          className="min-h-11 w-full text-sm text-muted-foreground"
+          onClick={() => router.push("/mypage/history")}
+        >
+          학습 기록에서 확인
+        </button>
+      </div>
+      <AlertDialog
+        open={retakeConfirm != null}
+        onOpenChange={(open) => {
+          if (!open) setRetakeConfirm(null);
         }}
       >
-        {allCompleted ? "완료하기" : "학습 이력 저장 확인 중…"}
-      </button>
-      {!courseId &&
-        ["NEWS", "SENTENCE", "ANNOUNCER"].includes(content.contentType) && (
-          <NextPracticeContentButton
-            content={content}
-            recordingComplete={canAdvance}
-            onNext={(href) => {
-              if (!canAdvance) return;
-              setNextHref(href);
-              setSaveOpen(true);
-            }}
-          />
-        )}
-      <button
-        className="min-h-11 w-full text-sm text-muted-foreground"
-        onClick={() => router.push("/mypage/history")}
-      >
-        학습 기록에서 확인
-      </button>
+        <AlertDialogContent className="w-[calc(100%-40px)] max-w-[342px] rounded-[24px] border-0">
+          <AlertDialogHeader>
+            <AlertDialogTitle>이 문장을 다시 녹음할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              새로 녹음한 결과로 바뀌어요. 지금 결과는 학습 기록에 남아요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-2 grid grid-cols-2 gap-2 space-x-0">
+            <AlertDialogCancel className="mt-0 min-h-12 rounded-full">
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-12 rounded-full bg-primary text-white"
+              onClick={() => {
+                if (retakeConfirm != null) retake(retakeConfirm);
+                setRetakeConfirm(null);
+              }}
+            >
+              다시 녹음
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ReportSaveDialog
         open={saveOpen}
         onOpenChange={(open) => {

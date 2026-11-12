@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import { StateIcon } from "./state-icon";
+import { WifiOff } from "lucide-react";
 
 export function PracticeAnalysisFailure({
   onRetry,
@@ -12,13 +13,7 @@ export function PracticeAnalysisFailure({
   return (
     <div className="flex min-h-full flex-1 flex-col bg-[#f2f4f6]">
       <div className="flex flex-1 flex-col items-center justify-center px-5 py-10 text-center">
-        <Image
-          src="/figma/analysis-screen7/failed.png"
-          alt=""
-          width={140}
-          height={140}
-          className="size-[140px] object-cover"
-        />
+        <StateIcon icon={WifiOff} tone="danger" size={104} />
         <h2 className="mt-5 text-xl leading-7 font-bold text-[#191f28]">
           분석에 실패했어요
         </h2>

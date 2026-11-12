@@ -110,15 +110,13 @@ export function LandingLoginScreen() {
 
   if (entryPhase !== "login") {
     return (
-      <IPhoneFrame backgroundColor="#5f55f8">
+      <IPhoneFrame backgroundColor="#6346f6">
         <div
           role="status"
           aria-label="Speak AI 시작 화면"
           className="flex h-full w-full flex-col"
-          style={{
-            backgroundImage:
-              "linear-gradient(121.51963594881519deg, #5f55f8 14.286%, #6e44f2 85.714%)",
-          }}
+          // Flat brand purple, matching the sign-in checking screen.
+          style={{ backgroundColor: "#6346f6" }}
         >
           <div className="h-11 shrink-0" aria-hidden="true" />
           <div className="flex min-h-0 flex-1 items-center justify-center px-6">

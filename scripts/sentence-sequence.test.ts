@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   appendSentenceAdmission,
   readSentenceAdmissions,
+  releaseSentenceAdmission,
   sentencePracticeItems,
   assertSentenceSession,
 } from "../src/lib/sentence-sequence";
@@ -100,4 +101,25 @@ test("reloading preserves only validated admitted identities and rejects a chang
   assert.throws(() =>
     readSentenceAdmissions([{ ...first, recordingId: -1 }], 3),
   );
+});
+
+test("releasing one sentence lets only that slot be admitted again", () => {
+  const second = { sessionId: 11, recordingId: 21, analysisId: 31 };
+  const third = { sessionId: 12, recordingId: 22, analysisId: 32 };
+  const all = appendSentenceAdmission(
+    appendSentenceAdmission(appendSentenceAdmission([], 0, first), 1, second),
+    2,
+    third,
+  );
+  const released = releaseSentenceAdmission(all, 1);
+  assert.deepEqual(released, [first, null, third]);
+  const retaken = { sessionId: 13, recordingId: 23, analysisId: 33 };
+  assert.deepEqual(appendSentenceAdmission(released, 1, retaken), [
+    first,
+    retaken,
+    third,
+  ]);
+  // Releasing the last slot trims it, as appended sequences never store it.
+  assert.deepEqual(releaseSentenceAdmission(all, 2), [first, second]);
+  assert.equal(releaseSentenceAdmission(released, 1), released);
 });

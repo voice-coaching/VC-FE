@@ -22,9 +22,24 @@
     linear-gradient(156.6854deg, #5f55f8 14.286%, #6e44f2 85.714%);
   flex-shrink: 0;
   overflow: hidden;
-  transform: translate3d(0, 0, 0);
+  /* --offset/--hide are written from the scroll position (see home.tsx). */
+  transform: translate3d(0, calc(-1 * var(--offset, 0px)), 0);
   backface-visibility: hidden;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.homeHeader[data-settling="true"] {
+  transition: transform 280ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* Content inside the band lags and fades, so the header folds away with depth
+   instead of sliding off as one flat slab. */
+.homeHeader > * {
+  opacity: max(0, calc(1 - var(--hide, 0) * 1.4));
+  transform: translate3d(0, calc(var(--hide, 0) * 28px), 0);
+}
+.homeHeader[data-settling="true"] > * {
+  transition:
+    opacity 280ms cubic-bezier(0.2, 0, 0, 1),
+    transform 280ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .todayCard {
@@ -39,7 +54,11 @@
 
 .practiceTile {
   background:
-    radial-gradient(ellipse 65% 60% at 100% 100%, #6346f612, transparent),
+    radial-gradient(
+      ellipse 65% 60% at 100% 100%,
+      color-mix(in srgb, var(--tile-tint, #6346f6) 9%, transparent),
+      transparent
+    ),
     linear-gradient(150.05deg, #fff 14.286%, #f7f9ff 85.714%);
 }
 
@@ -117,13 +136,16 @@
 }
 
 .homeHeader[data-state="hidden"] {
-  transform: translate3d(0, -100%, 0);
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .homeHeader {
-    transition: none;
+  .homeHeader,
+  .homeHeader > * {
+    transition: none !important;
+  }
+  .homeHeader > * {
+    transform: none;
   }
 
   .newsIncoming {

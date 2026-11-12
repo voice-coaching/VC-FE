@@ -41,14 +41,9 @@ import {
 } from "@/lib/android-push";
 
 type Panel =
-  | "마이크와 음성"
-  | "공지사항"
-  | "1:1 문의하기"
-  | "개인정보 처리방침"
-  | "서비스 이용약관";
+  "공지사항" | "1:1 문의하기" | "개인정보 처리방침" | "서비스 이용약관";
 
 const SETTINGS_PANELS = [
-  "마이크와 음성",
   "공지사항",
   "1:1 문의하기",
   "개인정보 처리방침",
@@ -60,15 +55,6 @@ const GROUPS: Array<{
   title: string;
   items: Array<{ label: Panel; icon: string }>;
 }> = [
-  {
-    title: "연습 환경",
-    items: [
-      {
-        label: "마이크와 음성",
-        icon: "/figma/settings/microphone.svg",
-      },
-    ],
-  },
   {
     title: "도움말",
     items: [
@@ -438,12 +424,17 @@ export default function AccountSettings() {
               ) : null}
             </div>
           ) : null}
-          <SettingsItem
-            label={GROUPS[0].items[0].label}
-            icon={GROUPS[0].items[0].icon}
-            onClick={(event) =>
-              openPanel(GROUPS[0].items[0].label, event.currentTarget)
-            }
+          <DevicePermissionRow
+            kind="microphone"
+            label="마이크"
+            icon="/figma/settings/microphone.svg"
+            purpose="녹음 연습에 사용해요"
+          />
+          <DevicePermissionRow
+            kind="camera"
+            label="카메라"
+            icon="/figma/settings/camera.svg"
+            purpose="입모양 따라하기에 사용해요"
           />
         </section>
 
@@ -480,7 +471,7 @@ export default function AccountSettings() {
 
         <AdminEntryLink />
 
-        {GROUPS.slice(1).map((group) => (
+        {GROUPS.map((group) => (
           <section key={group.title} className="bg-white">
             <h2 className="h-8 px-5 py-2 text-[12px] leading-4 font-bold text-[#333d4b]">
               {group.title}
@@ -580,7 +571,7 @@ export default function AccountSettings() {
                   >
                     <div className="flex items-center gap-2">
                       {notice.pinned ? (
-                        <span className="rounded-full bg-[#edf2ff] px-2 py-0.5 text-xs font-medium text-primary">
+                        <span className="rounded-[6px] bg-[#edf2ff] px-2 py-0.5 text-xs font-medium text-primary">
                           중요
                         </span>
                       ) : null}
@@ -672,9 +663,7 @@ export default function AccountSettings() {
             )
           ) : (
             <p className="text-sm leading-6 text-[#6b7684]">
-              {panel === "마이크와 음성"
-                ? "녹음 화면에서 마이크 사용을 허용해 주세요."
-                : "설정을 확인해 주세요."}
+              설정을 확인해 주세요.
             </p>
           )}
         </DialogContent>
@@ -712,6 +701,135 @@ export default function AccountSettings() {
         </DialogContent>
       </Dialog>
     </AppShell>
+  );
+}
+
+type DeviceState = "granted" | "denied" | "prompt" | "unsupported";
+
+/**
+ * One device permission as a switch. The browser can grant (we ask through
+ * getUserMedia and release the stream at once) but never revoke, so turning
+ * an allowed device off, or re-allowing a blocked one, points to the device
+ * settings instead of pretending.
+ */
+function DevicePermissionRow({
+  kind,
+  label,
+  icon,
+  purpose,
+}: {
+  kind: "microphone" | "camera";
+  label: string;
+  icon: string;
+  purpose: string;
+}) {
+  const [state, setState] = useState<DeviceState>("prompt");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setState("unsupported");
+      return;
+    }
+    let status: PermissionStatus | null = null;
+    const sync = () => status && setState(status.state as DeviceState);
+    navigator.permissions
+      ?.query({ name: kind as PermissionName })
+      .then((value) => {
+        status = value;
+        sync();
+        value.addEventListener("change", sync);
+      })
+      .catch(() => {
+        // Safari cannot query camera/microphone; stay on "prompt".
+      });
+    return () => status?.removeEventListener("change", sync);
+  }, [kind]);
+
+  async function toggle() {
+    if (busy) return;
+    setNote(null);
+    if (state === "granted") {
+      setNote(`${label} 권한은 기기 설정에서 끌 수 있어요`);
+      return;
+    }
+    if (state === "denied") {
+      setNote(`${label}가 차단돼 있어요. 기기 설정에서 허용해 주세요`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(
+        kind === "camera" ? { video: true } : { audio: true },
+      );
+      stream.getTracks().forEach((track) => track.stop());
+      setState("granted");
+    } catch (reason) {
+      const blocked =
+        reason instanceof DOMException && reason.name === "NotAllowedError";
+      if (blocked) setState("denied");
+      setNote(
+        blocked
+          ? `${label}가 차단돼 있어요. 기기 설정에서 허용해 주세요`
+          : `${label}를 찾지 못했어요`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const on = state === "granted";
+  const caption =
+    state === "unsupported"
+      ? "이 기기에서는 사용할 수 없어요"
+      : state === "denied"
+        ? "차단됨"
+        : on
+          ? purpose
+          : `허용하면 ${purpose.replace("사용해요", "쓸 수 있어요")}`;
+  return (
+    <div>
+      <div className="flex h-14 items-center gap-3.5 px-5 py-2">
+        <span className="flex size-9 shrink-0 items-center justify-center">
+          <Image src={icon} alt="" width={22} height={22} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] leading-[22px] font-medium">
+            {label}
+          </span>
+          <span
+            className={`mt-[3px] block text-[13px] leading-[18px] ${
+              state === "denied" ? "text-[#f04452]" : "text-[#8b95a1]"
+            }`}
+          >
+            {caption}
+          </span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={`${label} 권한`}
+          disabled={busy || state === "unsupported"}
+          onClick={() => void toggle()}
+          className={`relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+            on ? "bg-primary" : "bg-[#dfe3e7]"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 size-5 rounded-full bg-white transition-[left] ${
+              on ? "left-[18px]" : "left-0.5"
+            }`}
+          />
+        </button>
+      </div>
+      {note ? (
+        <p role="status" className="px-5 pb-2 pl-[70px] text-xs text-[#6b7684]">
+          {note}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

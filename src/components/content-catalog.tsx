@@ -1157,7 +1157,7 @@ function CatalogItem({
       </strong>
       <span className="flex flex-wrap items-center gap-2 text-[13px] leading-[18px] text-[#8b95a1]">
         <span
-          className={`rounded-full px-[11px] py-[5px] text-xs leading-4 font-bold ${newsDifficultyStyle[item.difficulty]}`}
+          className={`rounded-[6px] px-1.5 py-0.5 text-[11px] leading-4 font-bold ${newsDifficultyStyle[item.difficulty]}`}
         >
           {difficultyLabel[item.difficulty]}
         </span>
@@ -1185,38 +1185,38 @@ function CatalogItem({
   );
 }
 
+// Same flat, divided rows as CatalogItem / AnnouncerListItem / SentenceListItem.
 function CatalogListSkeleton({ type }: { type: ContentType }) {
+  const rowClass =
+    "flex items-start gap-3 border-b border-[#f2f4f6] py-[18px] last:border-b-0";
   return (
-    <div role="status" aria-busy="true" className="mt-3 flex flex-col gap-3">
+    <div role="status" aria-busy="true" className="bg-white">
       <span className="sr-only">콘텐츠를 불러오는 중</span>
-      {[0, 1, 2, 3].map((index) =>
-        type === "ANNOUNCER" ? (
+      {[0, 1, 2, 3, 4].map((index) =>
+        type === "NEWS" ? (
           <div
             key={index}
-            className="flex min-h-20 items-center gap-3.5 rounded-2xl bg-white p-4"
+            className="flex flex-col gap-2 border-b border-[#f2f4f6] py-[18px] last:border-b-0"
           >
-            <SkeletonBlock className="size-12 shrink-0" />
-            <div className="flex-1">
-              <SkeletonBlock className="h-4 w-3/5" />
-              <SkeletonBlock className="mt-2.5 h-3 w-14" />
+            <SkeletonBlock
+              className={`my-0.5 h-[18px] ${index % 2 ? "w-1/2" : "w-3/5"}`}
+            />
+            <div className="flex items-center gap-2">
+              <SkeletonBlock className="h-5 w-9 rounded-[6px]" />
+              <SkeletonBlock className="h-3.5 w-12" />
+              <SkeletonBlock className="h-3.5 w-10" />
             </div>
           </div>
-        ) : type === "SENTENCE" ? (
-          <div
-            key={index}
-            className="flex min-h-[78px] items-center rounded-2xl bg-white px-4 py-3"
-          >
-            <SkeletonBlock className="h-4 w-4/5" />
-          </div>
         ) : (
-          <div
-            key={index}
-            className="flex items-center gap-3.5 rounded-2xl bg-white p-4"
-          >
-            <SkeletonBlock className="size-12 shrink-0 rounded-[14px]" />
-            <div className="flex-1">
-              <SkeletonBlock className="h-4 w-3/5" />
-              <SkeletonBlock className="mt-2.5 h-3 w-32" />
+          <div key={index} className={rowClass}>
+            <SkeletonBlock className="mt-[5px] h-3.5 w-[22px] shrink-0" />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <SkeletonBlock
+                className={`mt-1 h-4 ${index % 2 ? "w-2/3" : "w-4/5"}`}
+              />
+              {type === "ANNOUNCER" ? (
+                <SkeletonBlock className="h-3 w-20" />
+              ) : null}
             </div>
           </div>
         ),

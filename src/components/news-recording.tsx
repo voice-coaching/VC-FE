@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
   type ComponentProps,
+  type CSSProperties,
 } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Mic, Play } from "lucide-react";
@@ -63,10 +64,13 @@ export function NewsRecordingReader({
   return (
     <>
       <div className="flex shrink-0 items-center px-5 pt-3 pb-4">
-        <span className="rounded-full bg-[#f0edff] px-2.5 py-[5px] text-xs leading-4 font-medium text-[#6346f6]">
+        <span className="rounded-[6px] bg-[#f0edff] px-2.5 py-[5px] text-xs leading-4 font-medium text-[#6346f6]">
           {label}
         </span>
-        <span className="ml-auto text-[13px] leading-[18px] text-[#8b95a1]">
+        <span
+          key={playing ? "guide" : recording ? "progress" : "count"}
+          className={`${styles.swapIn} ml-auto text-[13px] leading-[18px] text-[#8b95a1]`}
+        >
           {playing ? (
             <span className="inline-flex items-center gap-1 text-[#6346f6]">
               <Image
@@ -91,7 +95,8 @@ export function NewsRecordingReader({
         ref={reader}
         role="region"
         aria-label="연습 문장"
-        className="mx-5 min-h-0 max-h-[45dvh] shrink-0 overflow-y-auto rounded-[16px] bg-white p-2 shadow-[0_2px_6px_rgba(23,23,23,0.05)]"
+        data-recording={recording}
+        className={`${styles.readerCard} mx-5 min-h-0 shrink-0 overflow-y-auto rounded-[16px] bg-white p-1.5 shadow-[0_2px_6px_rgba(23,23,23,0.05)]`}
       >
         <ol className="space-y-0.5">
           {sentences.map((text, index) => (
@@ -100,6 +105,8 @@ export function NewsRecordingReader({
               ref={index === active ? current : undefined}
               aria-current={recording && index === active ? "step" : undefined}
               className={styles.sentenceRow}
+              style={{ "--i": index } as CSSProperties}
+              data-recording={recording}
               data-active={recording && index === active}
               data-complete={recording && index < active}
               data-upcoming={recording && index > active}
@@ -194,35 +201,18 @@ export function NewsRecordingControls(
       </div>
       {recording && (
         <div className={styles.meter}>
-          {props.preview ? (
-            <div
-              className={styles.previewWave}
-              data-active={!paused && !playing && !busy}
-              aria-hidden="true"
-            >
-              {Array.from({ length: 20 }, (_, index) => (
-                <span
-                  key={index}
-                  style={{
-                    animationDelay: `-${index * 137}ms`,
-                    animationDuration: `${650 + (index % 5) * 110}ms`,
-                  }}
-                />
-              ))}
-            </div>
-          ) : (
-            <RecordingWaveform
-              stream={stream}
-              paused={paused || playing || busy}
-            />
-          )}
+          <RecordingWaveform
+            stream={stream}
+            simulate={props.preview}
+            paused={paused || playing || busy}
+          />
           <p
             role="timer"
             aria-label="녹음 시간"
             className="flex items-center justify-center gap-2 text-[15px] leading-[22px] font-bold tabular-nums"
           >
             <span
-              className={`size-2 rounded-full ${paused || playing ? "bg-[#b0b8c1]" : "bg-[#e32239]"}`}
+              className={`size-2 rounded-full transition-colors duration-300 ${paused || playing ? "bg-[#b0b8c1]" : "bg-[#e32239]"}`}
             />
             {elapsed}
           </p>
@@ -242,25 +232,28 @@ export function NewsRecordingControls(
             {playing ? "가이드 멈추기" : "가이드 듣기"}
           </span>
         </div>
-        {recording && (
-          <button
-            className={styles.small}
-            data-active={!paused && !playing && !busy}
-            type="button"
-            disabled={busy || playing}
-            onClick={onTogglePause}
-            aria-label={paused && !playing ? "녹음 재개" : "녹음 일시정지"}
-          >
-            <span className={styles.smallCircle}>
-              {paused && !playing ? (
-                <Play size={24} fill="currentColor" strokeWidth={0} />
-              ) : (
-                <span className={styles.stopIcon} />
-              )}
-            </span>
-            <span>{paused && !playing ? "녹음하기" : "멈추기"}</span>
-          </button>
-        )}
+        {/* Always mounted so its slot can open and close smoothly. */}
+        <button
+          className={styles.small}
+          data-slot="stop"
+          data-shown={recording}
+          data-active={recording && !paused && !playing && !busy}
+          type="button"
+          disabled={!recording || busy || playing}
+          aria-hidden={!recording}
+          tabIndex={recording ? undefined : -1}
+          onClick={onTogglePause}
+          aria-label={paused && !playing ? "녹음 재개" : "녹음 일시정지"}
+        >
+          <span className={styles.smallCircle}>
+            {paused && !playing ? (
+              <Play size={24} fill="currentColor" strokeWidth={0} />
+            ) : (
+              <span className={styles.stopIcon} />
+            )}
+          </span>
+          <span>{paused && !playing ? "녹음하기" : "멈추기"}</span>
+        </button>
         <button
           type="button"
           className={styles.primary}
@@ -270,7 +263,8 @@ export function NewsRecordingControls(
           onClick={recording ? onComplete : () => void requestStart()}
         >
           <span className={styles.primaryCircle}>
-            {!recording ? (
+            {/* Both icons stay mounted and cross-rotate between states. */}
+            <span className={styles.primaryIcon} data-shown={!recording}>
               <Mic
                 size={28}
                 fill="none"
@@ -278,7 +272,8 @@ export function NewsRecordingControls(
                 strokeWidth={2}
                 aria-hidden="true"
               />
-            ) : (
+            </span>
+            <span className={styles.primaryIcon} data-shown={recording}>
               <Image
                 src={
                   last
@@ -286,12 +281,17 @@ export function NewsRecordingControls(
                     : "/figma/record-controls/next.svg"
                 }
                 alt=""
-                width={recording && !last ? 28 : 20}
-                height={recording && !last ? 28 : 20}
+                width={!last ? 28 : 20}
+                height={!last ? 28 : 20}
               />
-            )}
+            </span>
           </span>
-          <span>
+          <span
+            key={
+              requesting ? "wait" : !recording ? "start" : last ? "end" : "next"
+            }
+            className={styles.swapIn}
+          >
             {requesting
               ? "준비 중…"
               : !recording

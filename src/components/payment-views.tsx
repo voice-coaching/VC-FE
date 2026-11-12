@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Fragment, useState, type ReactNode } from "react";
 import { BackButton } from "@/components/back-button";
 import { MembershipCard } from "@/components/membership-card";
+import { SkeletonBlock } from "@/components/skeleton-block";
 import {
   Dialog,
   DialogContent,
@@ -628,9 +629,23 @@ export function PaymentViews(props: Props) {
             ) : (
               <>
                 {loading ? (
-                  <p role="status" className={styles.empty}>
-                    결제 내역을 불러오는 중…
-                  </p>
+                  <div role="status" aria-label="결제 내역을 불러오는 중">
+                    <div className={styles.month}>
+                      <SkeletonBlock className="h-[18px] w-16" />
+                    </div>
+                    {[0, 1, 2].map((index) => (
+                      <div key={index} className={styles.historyRow}>
+                        <span>
+                          <SkeletonBlock className="h-4 w-32" />
+                          <SkeletonBlock className="mt-2 h-3 w-20" />
+                        </span>
+                        <span className="flex flex-col items-end">
+                          <SkeletonBlock className="h-4 w-16" />
+                          <SkeletonBlock className="mt-2 h-3 w-10" />
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 ) : orders.length === 0 ? (
                   <p className={styles.empty}>아직 결제 내역이 없어요.</p>
                 ) : (
@@ -741,8 +756,8 @@ export function PaymentCheckoutSheet({
       }}
     >
       <DialogContent
-        overlayClassName="bg-black/45"
-        className="top-auto bottom-0 max-h-[90dvh] max-w-[402px] translate-y-0 overflow-y-auto rounded-t-[24px] rounded-b-none border-0 bg-white px-5 pt-3 pb-[max(24px,env(safe-area-inset-bottom))] sm:rounded-t-[24px] sm:rounded-b-none [&>button]:hidden"
+        overlayClassName="app-scrim bg-black/45"
+        className="app-sheet top-auto right-0 bottom-0 left-0 mx-auto max-h-[90dvh] max-w-[402px] translate-x-0 translate-y-0 overflow-y-auto rounded-t-[24px] rounded-b-none border-0 bg-white px-5 pt-3 pb-[max(24px,env(safe-area-inset-bottom))] sm:rounded-t-[24px] sm:rounded-b-none [&>button]:hidden"
         aria-describedby="checkout-description"
       >
         <div className={styles.checkout}>

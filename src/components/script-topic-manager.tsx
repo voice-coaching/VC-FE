@@ -132,9 +132,11 @@ export function ScriptTopicManager({
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Overlay className={`app-scrim ${styles.overlay}`} />
           <Dialog.Content
-            className={panel === "menu" ? styles.sheet : styles.modal}
+            className={
+              panel === "menu" ? `app-sheet ${styles.sheet}` : styles.modal
+            }
             aria-describedby={panel === "create" ? "new-topic-help" : undefined}
           >
             {panel === "menu" ? (

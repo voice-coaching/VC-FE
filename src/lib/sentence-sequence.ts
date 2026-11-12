@@ -102,6 +102,21 @@ export function appendSentenceAdmission(
   return readSentenceAdmissions(next, next.length);
 }
 
+/**
+ * Frees one sentence slot so it can be recorded again. The earlier attempt
+ * stays on the server as its own practice; only this sequence forgets it.
+ */
+export function releaseSentenceAdmission(
+  current: (SentenceAnalysisAdmission | null)[],
+  index: number,
+) {
+  if (!current[index]) return current;
+  const next = current.map((item, i) => (i === index ? null : item));
+  // Trailing empty slots are not stored, matching appended sequences.
+  while (next.length && next[next.length - 1] == null) next.pop();
+  return readSentenceAdmissions(next, current.length);
+}
+
 export function readSentenceAdmissions(raw: unknown, count: number) {
   if (raw == null) return [];
   if (

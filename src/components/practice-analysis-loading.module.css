@@ -1,3 +1,18 @@
+/*
+ * Step hand-off is choreographed, not simultaneous:
+ *   0ms     the finished step's check pops in
+ *   120ms   the connector line grows down to the next step
+ *   380ms   the next step lights up, its halo fades in, its label brightens
+ */
+/* Step list sits on a frosted panel. */
+.steps {
+  position: relative;
+  width: 264px;
+  padding: 8px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .8);
+}
 .connector {
   position: absolute;
   top: 50%;
@@ -5,6 +20,7 @@
   width: 2px;
   height: 56px;
   overflow: hidden;
+  border-radius: 1px;
   background: #e5e8eb;
 }
 .connectorFill {
@@ -14,21 +30,28 @@
   background: linear-gradient(180deg, #876bff, #6346f6);
   transform: scaleY(0);
   transform-origin: top;
-  transition: transform 420ms cubic-bezier(.22, 1, .36, 1);
+  transition: transform 520ms cubic-bezier(.65, 0, .35, 1) 120ms;
 }
 .connectorFill[data-complete="true"] { transform: scaleY(1); }
+
 .pulse {
   position: absolute;
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: radial-gradient(circle, transparent 45%, rgba(135, 107, 255, .22) 65%, transparent 73%);
-  animation: radiate 2200ms cubic-bezier(.2, .65, .3, 1) infinite;
+  background: radial-gradient(circle, transparent 45%, rgba(135, 107, 255, .24) 65%, transparent 73%);
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 360ms ease;
+}
+.pulse[data-active="true"] {
+  opacity: 1;
+  transition-delay: 380ms;
+  animation: radiate 2200ms cubic-bezier(.2, .65, .3, 1) 380ms infinite;
 }
 @keyframes radiate {
-  0% { transform: scale(1); opacity: .7; }
-  80%, 100% { transform: scale(1.85); opacity: 0; }
+  0% { transform: scale(1); opacity: .8; }
+  80%, 100% { transform: scale(1.9); opacity: 0; }
 }
 
 .marker {
@@ -46,16 +69,25 @@
 }
 .marker[data-state="current"] {
   background: #eeeaff;
-  box-shadow: 0 0 0 3px rgba(99, 70, 246, .045);
+  box-shadow: 0 0 0 3px rgba(99, 70, 246, .06);
+  transition-delay: 380ms;
 }
-.marker[data-state="complete"] { box-shadow: none; }
+.marker[data-state="complete"] {
+  box-shadow: 0 4px 10px -4px rgba(99, 70, 246, .5);
+  animation: marker-pop 460ms cubic-bezier(.3, 1.5, .55, 1);
+}
+@keyframes marker-pop {
+  0% { transform: scale(.82); }
+  60% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
 .markerFill {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: linear-gradient(135deg, #876bff, #6346f6);
   opacity: 0;
-  transition: opacity 440ms cubic-bezier(.22, 1, .36, 1);
+  transition: opacity 360ms cubic-bezier(.22, 1, .36, 1);
 }
 .marker[data-state="complete"] .markerFill { opacity: 1; }
 .markerDot {
@@ -66,25 +98,74 @@
   background: #d1d6db;
   transition: opacity 220ms ease, transform 360ms ease, background 360ms ease;
 }
+/* The live step's dot breathes gently while it works. */
 .marker[data-state="current"] .markerDot {
   background: #795cff;
-  transform: scale(1.25);
+  transition-delay: 380ms;
+  animation: dot-breathe 1600ms ease-in-out 380ms infinite;
 }
-.marker[data-state="complete"] .markerDot { opacity: 0; transform: scale(.7); }
+@keyframes dot-breathe {
+  0%, 100% { transform: scale(1.05); }
+  50% { transform: scale(1.45); }
+}
+.marker[data-state="complete"] .markerDot { opacity: 0; transform: scale(.6); }
 .markerCheck {
   position: absolute;
   color: white;
   opacity: 0;
-  transition: opacity 280ms ease;
+  transition: opacity 200ms ease;
 }
 .markerCheck path {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  transition: stroke-dashoffset 380ms cubic-bezier(.22, 1, .36, 1);
+  transition: stroke-dashoffset 420ms cubic-bezier(.65, 0, .35, 1) 80ms;
 }
 .marker[data-state="complete"] .markerCheck { opacity: 1; }
 .marker[data-state="complete"] .markerCheck path { stroke-dashoffset: 0; }
+
+/* Labels keep one size; Pretendard's variable weight lets boldness ease too. */
+.label {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: #b0b8c1;
+  transition: color 400ms ease, font-weight 400ms ease, transform 400ms cubic-bezier(.22, 1, .36, 1);
+}
+.label[data-state="current"] {
+  color: #191f28;
+  font-weight: 700;
+  transform: translateX(2px);
+  transition-delay: 380ms;
+}
+.label[data-state="complete"] { color: #8b95a1; }
+
+/* "음성 품질 확인..." — trailing dots only on the live step. */
+.ellipsis {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 3px;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.ellipsis > span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ellipsis 1200ms ease-in-out infinite;
+}
+.ellipsis > span:nth-child(2) { animation-delay: 150ms; }
+.ellipsis > span:nth-child(3) { animation-delay: 300ms; }
+.label[data-state="current"] .ellipsis { opacity: 1; transition-delay: 500ms; }
+@keyframes ellipsis {
+  0%, 60%, 100% { opacity: .25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .pulse { animation: none; opacity: .12; }
-  .connectorFill, .marker, .markerFill, .markerDot, .markerCheck, .markerCheck path { transition: none; }
+  .pulse[data-active="true"] { animation: none; opacity: .3; }
+  .marker[data-state="complete"], .marker[data-state="current"] .markerDot, .ellipsis > span { animation: none; }
+  .connectorFill, .pulse, .marker, .markerFill, .markerDot, .markerCheck, .markerCheck path, .label, .ellipsis { transition: none; }
 }

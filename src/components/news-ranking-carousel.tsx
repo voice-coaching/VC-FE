@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import styles from "./news-ranking-carousel.module.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Carousel,
   CarouselContent,
@@ -20,6 +20,7 @@ export function NewsRankingCarousel() {
   const items = data?.items.slice(0, 5) ?? [];
   const [carousel, setCarousel] = useState<CarouselApi>();
   const [selected, setSelected] = useState(0);
+  const dots = useRef<(HTMLSpanElement | null)[]>([]);
   useEffect(() => {
     if (!carousel) return;
     const sync = () => setSelected(carousel.selectedScrollSnap());
@@ -31,6 +32,30 @@ export function NewsRankingCarousel() {
       carousel.off("reInit", sync);
     };
   }, [carousel]);
+  // Drive the active styling from the live scroll position (0 = resting, 1 = in
+  // focus) so cards morph under the finger instead of swapping after release.
+  useEffect(() => {
+    if (!carousel) return;
+    const apply = () => {
+      const snaps = carousel.scrollSnapList();
+      const step = snaps.length > 1 ? snaps[1] - snaps[0] : 1;
+      const progress = carousel.scrollProgress();
+      const slides = carousel.slideNodes();
+      snaps.forEach((snap, index) => {
+        const active = Math.max(0, 1 - Math.abs(snap - progress) / step);
+        const value = active.toFixed(3);
+        slides[index]?.style.setProperty("--active", value);
+        dots.current[index]?.style.setProperty("--active", value);
+      });
+    };
+    apply();
+    carousel.on("scroll", apply);
+    carousel.on("reInit", apply);
+    return () => {
+      carousel.off("scroll", apply);
+      carousel.off("reInit", apply);
+    };
+  }, [carousel, items.length]);
   return (
     <section
       aria-label="인기 뉴스"
@@ -46,7 +71,12 @@ export function NewsRankingCarousel() {
       </div>
       <Carousel
         setApi={setCarousel}
-        opts={{ align: "start", containScroll: false }}
+        opts={{
+          align: "start",
+          containScroll: false,
+          duration: 24,
+          dragThreshold: 6,
+        }}
         className="pl-5"
         aria-label="인기 뉴스 순위"
       >
@@ -57,11 +87,13 @@ export function NewsRankingCarousel() {
             </CarouselItem>
           ) : null}
           {items.map((item, index) => (
-            <CarouselItem key={item.id} className="basis-[242px] pl-2.5">
+            <CarouselItem
+              key={item.id}
+              className={`${styles.slide} basis-[242px] pl-2.5`}
+            >
               <Link
                 href={practiceDetailHref(item.id, "/news")}
                 aria-label={`인기 뉴스 ${item.rank}위: ${newsHeadline(item.title)}`}
-                data-active={selected === index}
                 className={`${styles.card} flex h-[164px] flex-col rounded-[20px] p-[18px]`}
               >
                 <span
@@ -111,7 +143,10 @@ export function NewsRankingCarousel() {
               className="flex h-[26px] min-w-1.5 items-center justify-center"
             >
               <span
-                className={`h-1.5 rounded-full transition-[width,background-color] duration-300 motion-reduce:transition-none ${selected === index ? "w-4 bg-[#6346f6]" : "w-1.5 bg-[#d1d6db]"}`}
+                ref={(node) => {
+                  dots.current[index] = node;
+                }}
+                className={styles.dot}
               />
             </button>
           ))}

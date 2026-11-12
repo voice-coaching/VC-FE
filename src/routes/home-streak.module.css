@@ -5,8 +5,8 @@
   padding: 20px 20px 18px;
   border-radius: 20px;
   background:
-    radial-gradient(ellipse 60% 100% at 90% 10%, #9c7bff1f, transparent),
-    linear-gradient(160.18deg, #dce7ff 14.286%, #eaddff 85.714%);
+    radial-gradient(ellipse 60% 100% at 90% 10%, rgb(140 118 255 / 14%), transparent),
+    linear-gradient(160deg, #eef0ff 0%, #f1ebff 100%);
 }
 .avatar {
   position: relative;
@@ -16,7 +16,9 @@
   overflow: hidden;
   border-radius: 36px;
   background: white;
+  box-shadow: 0 6px 14px -6px rgb(99 70 246 / 35%);
 }
+/* Stats sit on their own white panel instead of floating on the tint. */
 .mascotCrop {
   position: absolute;
   top: 0;
@@ -36,6 +38,9 @@
 .stats {
   display: flex;
   align-items: center;
+  padding: 12px 4px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 78%);
 }
 .stats > div + div {
   position: relative;
@@ -47,7 +52,7 @@
   top: 7px;
   width: 1px;
   height: 32px;
-  background: #6346f61f;
+  background: #eceef2;
 }
 .weekDot {
   display: flex;

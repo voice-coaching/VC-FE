@@ -4,20 +4,11 @@ import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import styles from "./report-design.module.css";
 
-/** The arc is data driven: the design's 67-point example is never a fixed image. */
-export function ReportScore({
-  score,
-  large = false,
-}: {
-  score: number | null;
-  large?: boolean;
-}) {
-  const gradient = useId();
-  const value =
-    score == null || !Number.isFinite(score)
-      ? null
-      : Math.max(0, Math.min(100, score));
-  const root = useRef<HTMLSpanElement>(null);
+/** Counts 0 → value once the element is first seen (instant with reduced motion). */
+function useCountUp(
+  value: number | null,
+  root: React.RefObject<HTMLElement | null>,
+) {
   const [displayed, setDisplayed] = useState(0);
   useEffect(() => {
     setDisplayed(0);
@@ -58,7 +49,76 @@ export function ReportScore({
       cancelAnimationFrame(frame);
       motion.removeEventListener("change", onMotion);
     };
-  }, [value]);
+  }, [value, root]);
+  return displayed;
+}
+
+function clampScore(score: number | null) {
+  return score == null || !Number.isFinite(score)
+    ? null
+    : Math.max(0, Math.min(100, score));
+}
+
+const formatScore = (value: number) =>
+  new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 }).format(value);
+
+/**
+ * Compact headline: label with the counting score beneath it, left aligned.
+ * Used where a chart below is the visual hero and the score is context.
+ */
+export function ReportScoreHeadline({
+  score,
+  title,
+  previous,
+}: {
+  score: number | null;
+  title: React.ReactNode;
+  /** An earlier server score to compare against; omitted when there is none. */
+  previous?: { score: number; scope: "retake" | "content" | "recent" } | null;
+}) {
+  const value = clampScore(score);
+  const root = useRef<HTMLDivElement>(null);
+  const displayed = useCountUp(value, root);
+  const shown =
+    value == null
+      ? "—"
+      : formatScore(displayed < value ? Math.floor(displayed) : value);
+  return (
+    <div
+      ref={root}
+      role="group"
+      aria-label={value == null ? "종합 점수 미제공" : `종합 점수 ${value}점`}
+    >
+      {title}
+      {/* Score sits under its label on the left, where the eye starts reading. */}
+      <p className="mt-1 flex items-baseline gap-1" aria-hidden="true">
+        <b className="text-[34px] leading-10 font-bold tracking-[-0.02em] text-[#191f28] tabular-nums">
+          {shown}
+        </b>
+        {value != null && (
+          <span className="text-[15px] font-bold text-[#191f28]">점</span>
+        )}
+        <span className="ml-1 text-[13px] text-[#b0b8c1]">/ 100</span>
+      </p>
+      {value != null && previous && (
+        <ScoreChange delta={value - previous.score} scope={previous.scope} />
+      )}
+    </div>
+  );
+}
+
+/** The arc is data driven: the design's 67-point example is never a fixed image. */
+export function ReportScore({
+  score,
+  large = false,
+}: {
+  score: number | null;
+  large?: boolean;
+}) {
+  const gradient = useId();
+  const value = clampScore(score);
+  const root = useRef<HTMLSpanElement>(null);
+  const displayed = useCountUp(value, root);
   return (
     <span
       ref={root}
@@ -131,5 +191,57 @@ export function ReportScore({
         {large && <em>{value == null ? "점수 미제공" : "100점 만점"}</em>}
       </span>
     </span>
+  );
+}
+
+/** "▲ 4.2점 지난 기록 대비": up in brand purple, down in neutral grey. */
+function ScoreChange({
+  delta,
+  scope,
+}: {
+  delta: number;
+  scope: "retake" | "content" | "recent";
+}) {
+  const rounded = Math.round(delta * 10) / 10;
+  const direction = rounded > 0 ? "up" : rounded < 0 ? "down" : "same";
+  const basis =
+    scope === "retake"
+      ? "이전 녹음 대비"
+      : scope === "content"
+        ? "지난 기록 대비"
+        : "최근 연습 대비";
+  return (
+    <p className="score-change mt-1.5 flex items-center gap-1.5 text-xs leading-4">
+      <span
+        className={`inline-flex items-center gap-0.5 rounded-[6px] px-1.5 py-[3px] font-bold tabular-nums ${
+          direction === "up"
+            ? "bg-[#f3f0ff] text-[#6346f6]"
+            : "bg-[#f2f4f6] text-[#6b7684]"
+        }`}
+      >
+        {direction === "same" ? (
+          "변화 없음"
+        ) : (
+          <>
+            <svg
+              viewBox="0 0 8 6"
+              className={`size-2 ${direction === "down" ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path d="M4 0 8 6H0z" fill="currentColor" />
+            </svg>
+            {formatScore(Math.abs(rounded))}점
+          </>
+        )}
+      </span>
+      <span className="text-[#8b95a1]">{basis}</span>
+      <span className="sr-only">
+        {direction === "up"
+          ? "올랐어요"
+          : direction === "down"
+            ? "내려갔어요"
+            : ""}
+      </span>
+    </p>
   );
 }

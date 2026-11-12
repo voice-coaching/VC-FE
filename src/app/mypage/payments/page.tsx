@@ -1,15 +1,10 @@
 import { Suspense } from "react";
+import { PaymentsRouteSkeleton } from "@/routes/mypage/skeletons";
 import PaymentsPage from "@/routes/mypage/payments";
 
 export default function MyPaymentsPage() {
   return (
-    <Suspense
-      fallback={
-        <p role="status" className="p-5">
-          결제 정보를 불러오는 중…
-        </p>
-      }
-    >
+    <Suspense fallback={<PaymentsRouteSkeleton />}>
       <PaymentsPage />
     </Suspense>
   );

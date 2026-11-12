@@ -8,7 +8,10 @@ import { useHistoryPanel } from "@/hooks/use-history-panel";
 import { ReferencePlayer } from "@/components/reference-player";
 import { GuidePlayer } from "@/components/guide-player";
 import { AnalysisSummary } from "@/components/analysis-summary";
-import { AnalysisScoreDetails } from "@/components/analysis-score-details";
+import {
+  AnalysisScoreDetails,
+  ScoreCriteriaInfo,
+} from "@/components/analysis-score-details";
 import {
   CanonicalLipResult,
   LipVisualResult,
@@ -22,7 +25,11 @@ import {
   CorrectionComparison,
   type ReportCorrection,
 } from "@/components/report-correction";
-import { ReportScore } from "@/components/report-score";
+import { ReportScoreHeadline } from "@/components/report-score";
+import {
+  usePreviousScore,
+  type PreviousScore,
+} from "@/hooks/use-previous-score";
 import styles from "./report-design.module.css";
 import type { DirectResult } from "@/lib/direct-analysis";
 import type {
@@ -82,6 +89,9 @@ export function AnalysisView({
   lipVisual,
   lipSummary,
   plainFeedback = false,
+  sessionId,
+  previousScore: previousScoreOverride,
+  comparisonExclude,
 }: {
   analysis: AnalysisResult;
   segments: AnalysisSegment[];
@@ -99,6 +109,12 @@ export function AnalysisView({
   lipVisual?: LipVisual;
   lipSummary?: BrowserVideoResult["visual"];
   plainFeedback?: boolean;
+  /** This attempt's session, used to find the user's earlier score. */
+  sessionId?: Id | null;
+  /** Fixed comparison for previews; skips the history lookup. */
+  previousScore?: PreviousScore | null;
+  /** Sibling sessions (same multi-sentence run) never count as "earlier". */
+  comparisonExclude?: ReadonlyArray<Id>;
 }) {
   const canonicalCore = analysis.canonical?.canonicalAnalysis;
   const scoreDetails =
@@ -112,7 +128,6 @@ export function AnalysisView({
       ? canonicalCore.coaching.items
       : []);
   const [report, setReport] = useHistoryPanel(reportParameter, [
-    "pronunciation",
     ...reviewItems.map((item) => `correction:${item.candidate.candidateId}`),
     ...segments.map((segment) => `sentence:${segment.id}`),
   ]);
@@ -133,6 +148,20 @@ export function AnalysisView({
       segment.pronunciationScore != null && segment.resultStatus === "NORMAL",
   );
   const overallScore = analysis.overallScore ?? analysis.pronunciationScore;
+  const previousScore = usePreviousScore(
+    content.id,
+    sessionId,
+    previousScoreOverride,
+    comparisonExclude,
+  );
+  // An accepted result with a score would only restate the score card above.
+  const outcome = practiceOutcome(
+    analysis,
+    practiceResult,
+    practiceDecisionStatus,
+  );
+  const scoreOnlyRepeats =
+    outcome.accepted && outcome.score != null && overallScore != null;
   const canonicalCoaching = analysis.canonical?.canonicalAnalysis?.coaching;
   const summary = plainFeedback
     ? (analysis.summaryFeedback ?? "제공된 AI 총평이 없습니다.")
@@ -190,102 +219,109 @@ export function AnalysisView({
     isCameraPractice,
   ]);
 
-  let overlay: ReactNode = null;
-  if (report === "pronunciation") {
-    overlay = (
-      <ReportOverlay title="발음 분석" onBack={() => setReport(null)}>
-        <div className="px-5 pt-1">
-          <section className="flex flex-col items-center gap-1.5 rounded-[18px] bg-white px-5 pt-7 pb-6">
-            <ReportScore score={overallScore} large />
-            <h2 className="text-[15px] leading-[22px] font-bold">종합 점수</h2>
-            <p className="text-xs leading-4 text-[#8b95a1]">
-              이번 녹음의 발음 분석 결과예요
+  const scoreSection = (
+    <section aria-label="종합 점수">
+      {/* Headline score and what it is made of, inline on the report. */}
+      <div>
+        <section className="rounded-[20px] bg-white px-5 pt-5 pb-5">
+          <ReportScoreHeadline
+            score={overallScore}
+            previous={previousScore}
+            title={
+              <h2 className="flex items-center gap-0.5 text-sm leading-5 font-semibold text-[#4e5968]">
+                종합 점수
+                {scoreDetails && <ScoreCriteriaInfo details={scoreDetails} />}
+              </h2>
+            }
+          />
+          {scoreDetails && (
+            <div className="mt-3">
+              <AnalysisScoreDetails details={scoreDetails} embedded />
+            </div>
+          )}
+        </section>
+      </div>
+      <div className="mt-3 space-y-2.5 empty:hidden">
+        {scoreDetails ? null : scoreRows.length ? (
+          scoreRows.map((row) => (
+            <ScoreAccordion
+              key={row.id}
+              header={
+                <>
+                  <strong className="min-w-0 flex-1 text-[16px] leading-6">
+                    {row.label}
+                    {row.label === "대본과 음성의 대응" && (
+                      <span className="mt-0.5 block text-xs leading-4 font-normal text-[#8b95a1]">
+                        기대한 소리와 녹음 소리의 대응 정도
+                      </span>
+                    )}
+                  </strong>
+                  <span className="shrink-0 text-[16px] leading-6">
+                    {row.available && row.score != null ? (
+                      <>
+                        <b>{formatPoints(row.score)}</b>
+                        <span className="font-medium text-[#8b95a1]">
+                          {row.maxScore == null
+                            ? "점"
+                            : ` / ${formatPoints(row.maxScore)}점`}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[13px] text-[#8b95a1]">
+                        {row.available ? "점수 미제공" : "평가 대상 없음"}
+                      </span>
+                    )}
+                  </span>
+                  <Image
+                    src="/figma/report/chevron.svg"
+                    alt=""
+                    width={18}
+                    height={18}
+                  />
+                </>
+              }
+            >
+              <div className={styles.criterionBody}>
+                {row.phones.length > 0 && (
+                  <>
+                    <p className="text-xs font-bold text-[#8b95a1]">
+                      이번 문장에서 분석한 소리
+                    </p>
+                    <div className={styles.phones}>
+                      {row.phones.map((phone, index) => (
+                        <span
+                          key={`${phone}-${index}`}
+                          style={{ transitionDelay: `${80 + index * 60}ms` }}
+                        >
+                          {phone}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                <p>{row.description || "세부 설명이 제공되지 않았습니다."}</p>
+                {row.sampleCount != null && (
+                  <p className="mt-3 text-xs text-[#8b95a1]">
+                    분석 대상{" "}
+                    <b className="text-[#4e5968]">{row.sampleCount}개</b>
+                  </p>
+                )}
+              </div>
+            </ScoreAccordion>
+          ))
+        ) : (
+          <section className="rounded-2xl bg-white px-5 py-8 text-center">
+            <h2 className="text-[15px] font-bold">세부 점수 데이터 미제공</h2>
+            <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
+              이번 분석에는 항목별 발음 점수가 포함되지 않았어요.
             </p>
           </section>
-        </div>
-        <div className="space-y-2.5 px-5 pt-3 pb-6">
-          {scoreDetails ? (
-            <AnalysisScoreDetails details={scoreDetails} />
-          ) : scoreRows.length ? (
-            scoreRows.map((row) => (
-              <ScoreAccordion
-                key={row.id}
-                header={
-                  <>
-                    <strong className="min-w-0 flex-1 text-[16px] leading-6">
-                      {row.label}
-                      {row.label === "대본과 음성의 대응" && (
-                        <span className="mt-0.5 block text-xs leading-4 font-normal text-[#8b95a1]">
-                          기대한 소리와 녹음 소리의 대응 정도
-                        </span>
-                      )}
-                    </strong>
-                    <span className="shrink-0 text-[16px] leading-6">
-                      {row.available && row.score != null ? (
-                        <>
-                          <b>{formatPoints(row.score)}</b>
-                          <span className="font-medium text-[#8b95a1]">
-                            {row.maxScore == null
-                              ? "점"
-                              : ` / ${formatPoints(row.maxScore)}점`}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-[13px] text-[#8b95a1]">
-                          {row.available ? "점수 미제공" : "평가 대상 없음"}
-                        </span>
-                      )}
-                    </span>
-                    <Image
-                      src="/figma/report/chevron.svg"
-                      alt=""
-                      width={18}
-                      height={18}
-                    />
-                  </>
-                }
-              >
-                <div className={styles.criterionBody}>
-                  {row.phones.length > 0 && (
-                    <>
-                      <p className="text-xs font-bold text-[#8b95a1]">
-                        이번 문장에서 분석한 소리
-                      </p>
-                      <div className={styles.phones}>
-                        {row.phones.map((phone, index) => (
-                          <span
-                            key={`${phone}-${index}`}
-                            style={{ transitionDelay: `${80 + index * 60}ms` }}
-                          >
-                            {phone}
-                          </span>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                  <p>{row.description || "세부 설명이 제공되지 않았습니다."}</p>
-                  {row.sampleCount != null && (
-                    <p className="mt-3 text-xs text-[#8b95a1]">
-                      분석 대상{" "}
-                      <b className="text-[#4e5968]">{row.sampleCount}개</b>
-                    </p>
-                  )}
-                </div>
-              </ScoreAccordion>
-            ))
-          ) : (
-            <section className="rounded-2xl bg-white px-5 py-8 text-center">
-              <h2 className="text-[15px] font-bold">세부 점수 데이터 미제공</h2>
-              <p className="mt-2 text-[13px] leading-5 text-[#8b95a1]">
-                이번 분석에는 항목별 발음 점수가 포함되지 않았어요.
-              </p>
-            </section>
-          )}
-        </div>
-      </ReportOverlay>
-    );
-  }
+        )}
+      </div>
+    </section>
+  );
 
+  let overlay: ReactNode = null;
   if (selected) {
     const index = segments.findIndex(
       (segment) => String(segment.id) === String(selected.id),
@@ -514,8 +550,6 @@ export function AnalysisView({
           />
         </section>
 
-        <AnalysisScoreDetails details={scoreDetails} />
-
         <section className="rounded-2xl bg-white p-4">
           <h2 className="text-[12px] leading-4 font-bold text-[#8b95a1]">
             연습 문장
@@ -573,22 +607,7 @@ export function AnalysisView({
           )
         )}
 
-        <button
-          type="button"
-          onClick={() => setReport("pronunciation")}
-          className={styles.scoreCard}
-        >
-          <ReportScore score={overallScore} />
-          <span className="flex items-center gap-0.5 text-[17px] leading-6 font-bold">
-            종합 점수
-            <Image
-              src="/figma/report/chevron.svg"
-              alt=""
-              width={18}
-              height={18}
-            />
-          </span>
-        </button>
+        {scoreSection}
 
         {reviewItems.length > 0 && (
           <section className="rounded-[20px] bg-white px-5 py-0.5">
@@ -671,7 +690,7 @@ export function AnalysisView({
               onSelect={openSentence}
             />
           </div>
-        ) : reviewItems.length ? null : (
+        ) : reviewItems.length || scoreOnlyRepeats ? null : (
           <section className="rounded-[20px] bg-white p-5">
             <h2 className="text-[17px] leading-6 font-bold">이번 연습 결과</h2>
             <PracticeResultSummary
@@ -698,6 +717,24 @@ export function AnalysisView({
 }
 
 /** Present only supplied utterance results; no score-to-grade thresholds. */
+/** Shared by the summary card and the decision to show it at all. */
+function practiceOutcome(
+  analysis: AnalysisResult,
+  practiceResult?: DirectResult["practiceResult"],
+  decisionStatus?: string,
+) {
+  const decision =
+    practiceResult?.decisionStatus ??
+    decisionStatus ??
+    analysis.canonical?.canonicalAnalysis?.decision.status;
+  const failed = analysis.status === "FAILED" || decision === "SYSTEM_FAILURE";
+  const accepted = !failed && (decision == null || decision === "ACCEPT");
+  const score = accepted
+    ? (practiceResult?.score.overallScore ?? analysis.overallScore)
+    : null;
+  return { failed, accepted, score };
+}
+
 function PracticeResultSummary({
   analysis,
   practiceResult,
@@ -709,15 +746,11 @@ function PracticeResultSummary({
   decisionStatus?: string;
   sentenceMode?: boolean;
 }) {
-  const decision =
-    practiceResult?.decisionStatus ??
-    decisionStatus ??
-    analysis.canonical?.canonicalAnalysis?.decision.status;
-  const failed = analysis.status === "FAILED" || decision === "SYSTEM_FAILURE";
-  const accepted = !failed && (decision == null || decision === "ACCEPT");
-  const score = accepted
-    ? (practiceResult?.score.overallScore ?? analysis.overallScore)
-    : null;
+  const { failed, accepted, score } = practiceOutcome(
+    analysis,
+    practiceResult,
+    decisionStatus,
+  );
   const feedback = accepted
     ? practiceResult?.feedback?.trim() || analysis.summaryFeedback?.trim()
     : analysis.summaryFeedback?.trim();

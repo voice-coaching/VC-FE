@@ -1,12 +1,16 @@
 .controls { position: relative; isolation: isolate; margin-top: auto; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 40px 64px; }
-.glow { position:absolute; z-index:-1; pointer-events:none; left:50%; bottom:-80px; transform:translateX(-50%); width:140%; height:640px; background:linear-gradient(180deg,rgba(233,230,255,0) 0%,rgba(230,227,255,.55) 45%,#d9dcff 100%); }
-.buttons { display:flex; align-items:flex-start; justify-content:center; gap:28px; width:100%; }
+.glow { position:absolute; z-index:-1; pointer-events:none; left:50%; bottom:-80px; transform:translateX(-50%); width:140%; height:640px; background:radial-gradient(ellipse 46% 78% at 50% 100%,#d9dcff 0%,rgba(222,219,255,.72) 38%,rgba(230,227,255,.32) 64%,rgba(233,230,255,0) 100%); }
+/* Radial, not a vertical band: the glow fades out before the frame's side edges. */
+/* Gaps live on the items so the stop slot can collapse to nothing. */
+.buttons { display:flex; align-items:flex-start; justify-content:center; gap:0; width:100%; }
+.buttons > * { margin-inline:14px; }
 .small, .primary { display:flex; flex:none; flex-direction:column; align-items:center; gap:6px; padding:0; background:transparent; font-size:12px; line-height:1.3; white-space:nowrap; }
 .small { padding-top:8px; color:#4e5968; font-weight:500; }
 .smallCircle { display:flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%; background:white; color:#191f28; box-shadow:0 2px 8px rgb(0 0 0 / 6%); }
 .stopIcon { display:block; width:18px; height:18px; border-radius:5px; background:currentColor; }
 .primary { color:#6346f6; font-weight:700; }
-.primaryCircle { display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:#6346f6; color:white; box-shadow:0 6px 16px -4px rgb(99 70 246 / 25%); }
+.primaryCircle { position:relative; display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:#6346f6; color:white; box-shadow:0 6px 16px -4px rgb(99 70 246 / 25%); transition:width 460ms cubic-bezier(.3,1.35,.55,1),height 460ms cubic-bezier(.3,1.35,.55,1),background-color 220ms ease,box-shadow 360ms ease; }
+.primary { transition:padding-top 460ms cubic-bezier(.22,1,.36,1),color 220ms ease; }
 .controls[data-recording="false"] .primary { padding-top:8px; }
 .controls[data-recording="false"] .primaryCircle { width:56px; height:56px; }
 .primary:disabled { color:#b0b8c1; }
@@ -20,17 +24,14 @@
 .guide > section > span:not([class*="sr-only"]) { display:none; }
 .guideLabel { display:block; margin-top:6px; text-align:center; white-space:nowrap; font-size:12px; line-height:1.3; color:#4e5968; }
 .meter { display:grid; gap:16px; }
-.meter > div { height:48px; gap:4px; }
-.controls .meter [data-active="true"] > span { background:#6346f6; }
-.controls .meter [data-active="false"] > span { background:#d1d6db; }
 @media(max-width:360px) { .controls { padding-inline:20px; } }
 
 .guide[data-playing="true"] > section > button { background:#191f28; color:white; box-shadow:0 4px 12px -2px rgb(25 31 40 / 18%); }
 .guide[data-playing="true"] .guideLabel { color:#4e5968; }
 .small > span:first-child { color:#191f28; }
 .small:disabled > span:first-child { color:#c9ced4; }
-.controls[data-playing="true"] .meter [data-active] > span { height:4px !important; background:#d1d6db; }
-.guide[data-playing="true"] > section > button svg { fill:currentColor; stroke-width:0; }
+/* The pause glyph ships a fixed grey; force white on the dark playing disc. */
+.guide[data-playing="true"] > section > button svg { color:white; fill:currentColor; stroke-width:0; }
 
 .glowLayer { position:absolute; left:0; right:0; bottom:0; height:560px; overflow:hidden; z-index:-1; pointer-events:none; opacity:0; transform:translateY(28px) scale(.94); transform-origin:50% 100%; transition:opacity 650ms ease,transform 850ms cubic-bezier(.22,1,.36,1); }
 .controls[data-capturing="true"] .glowLayer { opacity:1; transform:translateY(0) scale(1); }
@@ -45,26 +46,101 @@
   .glowLayer .glow { animation:none; }
 }
 
-.previewWave { display:flex; align-items:center; justify-content:center; }
-.previewWave > span { width:4px; height:4px; border-radius:2px; }
-.previewWave[data-active="true"] > span { animation:preview-speaking 850ms ease-in-out infinite alternate; }
-@keyframes preview-speaking { from { height:8px; } to { height:44px; } }
-@media(prefers-reduced-motion:reduce) { .previewWave[data-active="true"] > span { animation:none; height:24px; } }
-
+/* Same rhythm as the review screen: bar 12px inside the highlight, 8px before the text. */
 .sentenceRow { position:relative; isolation:isolate; display:flex; align-items:flex-start; gap:8px; border-radius:12px; padding:10px 12px 10px 23px; }
 .sentenceRow::before { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit; background:linear-gradient(90deg,#eee9ff,#edf2ff); opacity:0; transition:opacity 320ms ease; }
-.sentenceRow[data-active="true"]::before { opacity:1; }
-.sentenceIndicator { position:absolute; left:12px; top:10px; bottom:10px; width:3px; border-radius:2px; background:linear-gradient(180deg,#7347f2,#5b7bfa); opacity:0; transform:scaleY(.65); transition:opacity 260ms ease,transform 360ms cubic-bezier(.22,1,.36,1); }
-.sentenceRow[data-active="true"] .sentenceIndicator { opacity:1; transform:scaleY(1); }
-.sentenceText { min-width:0; flex:1; font-size:16px; line-height:24px; font-weight:500; color:#191f28; overflow-wrap:anywhere; transition:color 300ms ease; }
-.sentenceRow[data-active="true"] .sentenceText { font-weight:700; color:#111318; }
+
+.sentenceIndicator { position:absolute; left:12px; top:12px; bottom:12px; width:3px; border-radius:2px; background:linear-gradient(180deg,#7347f2,#5b7bfa); opacity:0; transform:scaleY(.65); transition:opacity 260ms ease,transform 360ms cubic-bezier(.22,1,.36,1); }
+
+.sentenceText { min-width:0; flex:1; font-size:16px; line-height:24px; font-weight:500; color:#191f28; overflow-wrap:anywhere; text-shadow:0 0 0 transparent; transition:color 300ms ease,text-shadow 300ms ease; }
+/* Emphasis without a weight change: a hairline same-colour shadow thickens
+   the glyphs but keeps their width, so lines never re-wrap between states. */
+.sentenceRow[data-active="true"] .sentenceText { color:#111318; text-shadow:0.35px 0 0 currentColor,-0.35px 0 0 currentColor; }
 .sentenceRow[data-upcoming="true"] .sentenceText { color:#b0b8c1; }
 .sentenceRow[data-complete="true"] .sentenceText { color:#4e5968; }
 .sentenceCheck { flex:none; width:20px; height:20px; opacity:0; transform:scale(.7); transition:opacity 240ms ease,transform 360ms cubic-bezier(.22,1,.36,1); }
 .sentenceRow[data-complete="true"] .sentenceCheck { opacity:1; transform:scale(1); }
+/* The check column only exists while recording, so idle text uses the full width. */
+.sentenceRow[data-recording="false"] .sentenceCheck { display:none; }
 @media(prefers-reduced-motion:reduce) { .sentenceRow::before,.sentenceIndicator,.sentenceText,.sentenceCheck { transition:none; } }
 
 .smallCircle { transition:background-color 220ms ease,color 220ms ease,box-shadow 220ms ease,transform 180ms ease; }
 .small[data-active="true"] .smallCircle { background:#191f28; color:white; box-shadow:0 4px 12px -2px rgb(25 31 40 / 18%); }
 .small:active .smallCircle { transform:scale(.94); }
 @media(prefers-reduced-motion:reduce) { .smallCircle { transition:none; } }
+
+/* ---- idle ⇄ recording transition ------------------------------------ */
+/* Stop slot opens from zero width, so guide and primary glide apart. */
+.small[data-slot="stop"] {
+  width:56px;
+  transition:width 460ms cubic-bezier(.22,1,.36,1),margin 460ms cubic-bezier(.22,1,.36,1),opacity 260ms ease 80ms,transform 520ms cubic-bezier(.3,1.45,.55,1) 60ms;
+}
+.small[data-slot="stop"][data-shown="false"] {
+  width:0; margin-inline:0; opacity:0; transform:scale(.55); pointer-events:none;
+  transition:width 380ms cubic-bezier(.22,1,.36,1),margin 380ms cubic-bezier(.22,1,.36,1),opacity 160ms ease,transform 260ms ease;
+}
+
+/* Mic rotates out while the arrow rotates in, inside the growing circle. */
+.primaryIcon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition:opacity 240ms ease,transform 460ms cubic-bezier(.3,1.35,.55,1); }
+.primaryIcon[data-shown="false"] { opacity:0; }
+.primaryIcon:first-child[data-shown="false"] { transform:rotate(-90deg) scale(.4); }
+.primaryIcon:last-child[data-shown="false"] { transform:rotate(90deg) scale(.4); }
+
+/* Waveform and timer rise in when recording begins. */
+.meter { animation:meter-in 520ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes meter-in { from { opacity:0; transform:translateY(14px) scale(.96); } to { opacity:1; transform:none; } }
+
+/* Text that changes meaning ("2문장" → "1/2 문장", "녹음 시작" → "다음 문장") slides up in place. */
+.swapIn { display:inline-block; animation:swap-in 280ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes swap-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+/* Upcoming sentences dim one after another instead of all at once. */
+.sentenceRow[data-upcoming="true"] .sentenceText { transition-delay:calc(var(--i, 0) * 45ms); }
+.sentenceRow::before { transform-origin:0 50%; transform:scaleX(.97); transition:opacity 320ms ease,transform 420ms cubic-bezier(.22,1,.36,1); }
+
+
+@media(prefers-reduced-motion:reduce) {
+  .small[data-slot="stop"], .small[data-slot="stop"][data-shown="false"], .primaryCircle, .primary, .primaryIcon, .sentenceRow::before { transition:none; }
+  .meter, .swapIn { animation:none; }
+  .sentenceText { transition-delay:0ms; }
+}
+
+/* Guide playback: a soft grey halo centred on the guide button. Neutral
+   grey keeps it clearly apart from the purple recording glow. */
+.guide::before {
+  content:""; position:absolute; z-index:-1; pointer-events:none;
+  left:50%; top:36px; width:240px; height:240px; border-radius:50%;
+  background:radial-gradient(circle, rgb(139 149 161 / 30%) 0%, rgb(176 184 193 / 14%) 38%, rgb(209 214 219 / 0%) 70%);
+  opacity:0; transform:translate(-50%, -50%) scale(.6);
+  transition:opacity 520ms ease, transform 760ms cubic-bezier(.22,1,.36,1);
+}
+.guide[data-playing="true"]::before {
+  opacity:1; transform:translate(-50%, -50%) scale(1);
+  animation:guide-halo 3.2s ease-in-out 760ms infinite;
+}
+@keyframes guide-halo {
+  0%,100% { transform:translate(-50%, -50%) scale(1); opacity:1; }
+  50% { transform:translate(-50%, -50%) scale(1.08); opacity:.8; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .guide::before { transition:none; }
+  .guide[data-playing="true"]::before { animation:none; }
+}
+
+/* Sentence hand-off: no travelling plate. The old row lets go quickly; the
+   new row settles in place a beat later — its tint grows from a hair smaller,
+   the bar draws from the middle, and the text firms up with it. */
+.sentenceRow::before { transform-origin:50% 50%; transform:scale(.985); transition:opacity 220ms ease, transform 220ms ease; }
+.sentenceRow[data-active="true"]::before { opacity:1; transform:none; transition:opacity 380ms ease 90ms, transform 480ms cubic-bezier(.22,1,.36,1) 90ms; }
+.sentenceIndicator { transform:scaleY(0); transition:opacity 160ms ease, transform 200ms ease; }
+.sentenceRow[data-active="true"] .sentenceIndicator { opacity:1; transform:scaleY(1); transition:opacity 240ms ease 160ms, transform 420ms cubic-bezier(.22,1,.36,1) 160ms; }
+.sentenceRow[data-active="true"] .sentenceText { transition:color 360ms ease 90ms, text-shadow 360ms ease 90ms; }
+@media(prefers-reduced-motion:reduce) {
+  .sentenceRow::before, .sentenceRow[data-active="true"]::before, .sentenceIndicator, .sentenceRow[data-active="true"] .sentenceIndicator, .sentenceRow[data-active="true"] .sentenceText { transition:none; }
+}
+
+/* Reader height: everything above the controls, not a fixed 45%. The controls
+   need ~250px while recording (meter + timer + buttons) and ~160px before. */
+.readerCard { max-height:max(45dvh, calc(100dvh - 400px)); transition:max-height 420ms cubic-bezier(.22,1,.36,1); }
+.readerCard[data-recording="false"] { max-height:max(45dvh, calc(100dvh - 320px)); }
+@media(prefers-reduced-motion:reduce) { .readerCard { transition:none; } }

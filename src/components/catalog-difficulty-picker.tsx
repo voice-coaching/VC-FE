@@ -53,15 +53,28 @@ function DifficultyPicker({ value, options, onChange, variant }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
   const open = panel === "difficulty";
 
+  // Shared sheet motion: slide up on open, play the exit before closing.
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
     if (open) {
+      element.removeAttribute("data-closing");
       if (!element.open) element.showModal();
-    } else if (element.open) {
+      return;
+    }
+    if (!element.open) return;
+    const finish = () => {
+      element.removeAttribute("data-closing");
       element.close();
       trigger.current?.focus({ preventScroll: true });
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      finish();
+      return;
     }
+    element.setAttribute("data-closing", "");
+    const timer = window.setTimeout(finish, 260);
+    return () => window.clearTimeout(timer);
   }, [open]);
 
   return (
@@ -107,7 +120,7 @@ function DifficultyPicker({ value, options, onChange, variant }: Props) {
           )
             setPanel(null);
         }}
-        className={`fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain bg-white text-[#191f28] backdrop:bg-black/40 ${variant === "news" ? "rounded-t-[20px] px-4 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))]" : "rounded-t-[28px] px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom,0px))]"}`}
+        className={`app-sheet fixed inset-x-0 top-auto bottom-0 m-0 mx-auto max-h-[85dvh] w-full max-w-[402px] overflow-y-auto overscroll-contain bg-white text-[#191f28] backdrop:bg-black/40 ${variant === "news" ? "rounded-t-[20px] px-4 pt-3 pb-[max(34px,env(safe-area-inset-bottom,0px))]" : "rounded-t-[28px] px-5 pt-5 pb-[max(28px,env(safe-area-inset-bottom,0px))]"}`}
       >
         {variant === "news" ? (
           <>

@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { LoginCheckingScreen } from "./login-checking-screen";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
@@ -156,17 +156,8 @@ export function OAuthCallback({
             </Link>
           </>
         ) : (
-          <div role="status" className="flex flex-col items-center">
-            <Image
-              src="/figma/brand/splash-final.svg"
-              alt="SpeakAI"
-              width={180}
-              height={80}
-              priority
-            />
-            <p className="mt-5 text-sm text-[#8b95a1]">
-              로그인 정보를 확인하고 있어요
-            </p>
+          <div className="-mx-6 self-stretch">
+            <LoginCheckingScreen />
           </div>
         )}
       </div>

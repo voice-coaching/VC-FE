@@ -76,9 +76,11 @@ export function ScriptTopicPicker({
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className={styles.overlay} />
+          <Dialog.Overlay className={`app-scrim ${styles.overlay}`} />
           <Dialog.Content
-            className={panel === "create" ? styles.modal : styles.sheet}
+            className={
+              panel === "create" ? styles.modal : `app-sheet ${styles.sheet}`
+            }
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               trigger.current?.focus();
